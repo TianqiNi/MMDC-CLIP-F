@@ -1,0 +1,60 @@
+schema_version: 1
+profile: legacy_protocol
+dataset:
+  name: DDSM
+  data_root: ../../data/ddsm
+  image_root: ../../data/ddsm/images
+  image_format: jpeg
+  manifests:
+    train: ../../data/ddsm/splits/train.txt
+    valid: ../../data/ddsm/splits/valid.txt
+    test: ../../data/ddsm/splits/test.txt
+model:
+  backbone: vit_l_14_336
+  hf_model: openai/clip-vit-large-patch14-336
+  revision: ce19dc912ca5cd21c8a653c79e251e808ccabcd1
+  image_size: 336
+  attention_implementation: sdpa
+views:
+  input_order: [L_CC, R_CC, L_MLO, R_MLO]
+  fusion_pairs:
+    - [L_CC, R_CC]
+    - [L_MLO, R_MLO]
+stage1:
+  checkpoint: ../../artifacts/stage1/ddsm-vit-l-14-336/best.safetensors
+  tcp_root: ../../artifacts/tcp/ddsm-vit-l-14-336
+  require_checkpoint_sha256: true
+  require_ordered_prediction_sha256: true
+mvacn:
+  attention_heads: 4
+  dropout: 0.3
+  drop_view_cls_tokens: false
+  mlp_hidden_dims: [128, 64]
+  output_activation: sigmoid
+training:
+  epochs: 50
+  batch_size: 6
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-4
+    weight_decay: 0.0
+  loss: mse
+  seed: 42
+  num_workers: 8
+  amp: false
+  deterministic: false
+  augmentation:
+    name: randaugment
+    num_ops: 3
+    magnitude: 9
+    num_magnitude_bins: 31
+selection:
+  split: test
+  metric: aupr
+  mode: max
+  tie_breaker:
+    metric: aurc
+    mode: min
+output:
+  root: ../../runs/confidence/ddsm-vit-l-14-336
+

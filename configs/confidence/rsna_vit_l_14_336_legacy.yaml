@@ -1,0 +1,60 @@
+schema_version: 1
+profile: legacy_protocol
+dataset:
+  name: RSNA
+  data_root: ../../data/rsna
+  image_root: ../../data/rsna/train_images
+  image_format: dicom
+  manifests:
+    train: ../../data/rsna/splits/train.csv
+    valid: ../../data/rsna/splits/valid.csv
+    test: ../../data/rsna/splits/test.csv
+model:
+  backbone: vit_l_14_336
+  hf_model: openai/clip-vit-large-patch14-336
+  revision: ce19dc912ca5cd21c8a653c79e251e808ccabcd1
+  image_size: 336
+  attention_implementation: sdpa
+views:
+  input_order: [L_CC, L_MLO, R_CC, R_MLO]
+  fusion_pairs:
+    - [L_CC, L_MLO]
+    - [R_CC, R_MLO]
+stage1:
+  checkpoint: ../../artifacts/stage1/rsna-vit-l-14-336/best.safetensors
+  tcp_root: ../../artifacts/tcp/rsna-vit-l-14-336
+  require_checkpoint_sha256: true
+  require_ordered_prediction_sha256: true
+mvacn:
+  attention_heads: 4
+  dropout: 0.3
+  drop_view_cls_tokens: false
+  mlp_hidden_dims: [128, 64]
+  output_activation: sigmoid
+training:
+  epochs: 20
+  batch_size: 6
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-4
+    weight_decay: 0.0
+  loss: mse
+  seed: 42
+  num_workers: 8
+  amp: false
+  deterministic: false
+  augmentation:
+    name: randaugment
+    num_ops: 3
+    magnitude: 9
+    num_magnitude_bins: 31
+selection:
+  split: test
+  metric: aupr
+  mode: max
+  tie_breaker:
+    metric: aurc
+    mode: min
+output:
+  root: ../../runs/confidence/rsna-vit-l-14-336
+

@@ -1,0 +1,58 @@
+schema_version: 1
+profile: legacy_protocol
+dataset:
+  name: RSNA
+  data_root: ../../data/rsna
+  image_root: ../../data/rsna/train_images
+  image_format: dicom
+  expected_counts: {train: 4647, valid: 290, test: 872}
+  manifests:
+    train: ../../data/rsna/splits/train.csv
+    valid: ../../data/rsna/splits/valid.csv
+    test: ../../data/rsna/splits/test.csv
+model:
+  backbone: vit_l_14_336
+  hf_model: openai/clip-vit-large-patch14-336
+  revision: ce19dc912ca5cd21c8a653c79e251e808ccabcd1
+  image_size: 336
+  attention_implementation: sdpa
+  prompts:
+    - almost entirely fatty tissue.
+    - scattered areas of dense tissue in the breast.
+    - heterogeneously dense.
+    - extremely dense throughout.
+views:
+  input_order: [L_CC, L_MLO, R_CC, R_MLO]
+  fusion_pairs:
+    - [L_CC, L_MLO]
+    - [R_CC, R_MLO]
+training:
+  epochs: 50
+  batch_size: 3
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-7
+    weight_decay: 1.0e-5
+  loss: cross_entropy
+  seed: 42
+  num_workers: 8
+  amp: false
+  deterministic: false
+  augmentation:
+    name: randaugment
+    num_ops: 3
+    magnitude: 9
+    num_magnitude_bins: 31
+  preprocessing:
+    dicom_scaling: per_image_minmax_uint8_rgb
+    resize: [336, 336]
+    normalization:
+      mean: [0.485, 0.456, 0.406]
+      std: [0.229, 0.224, 0.225]
+selection:
+  split: valid
+  metric: batch_mean_accuracy
+  mode: max
+output:
+  root: ../../runs/stage1/rsna-vit-l-14-336
+

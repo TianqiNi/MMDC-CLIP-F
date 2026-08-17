@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+
+# Editors, local agents, and operating systems
+.idea/
+.vscode/
+.claude/
+.codex/
+.agents/
+*.swp
+.DS_Store
+
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+
+# Medical data and identifier-bearing metadata
+data/
+datasets/
+medical_data/
+**/*.dcm
+**/*.dicom
+**/*patient*.csv
+**/*image_id*.csv
+**/splits/private/
+local_manifests/
+
+# Training outputs and model artifacts
+runs/
+artifacts/
+checkpoints/
+outputs/
+results/private/
+predictions/
+logs/
+wandb/
+mlruns/
+lightning_logs/
+events.out.tfevents.*
+*.log
+*.pth
+*.pt
+*.pth.tar
+*.ckpt
+*.safetensors
+*.onnx
+
+# Generated tables/figures and caches
+figures/generated/
+tables/generated/
+*.npy
+*.npz
+*.pkl
+*.pickle
+.cache/
+
+# Local package/model caches
+huggingface/
+torch_home/
+

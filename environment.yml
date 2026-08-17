@@ -1,0 +1,25 @@
+name: mmdc-clip-f
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.11.9
+  - pip=24.2
+  - pytorch=2.3.1
+  - torchvision=0.18.1
+  - pytorch-cuda=12.1
+  - numpy=2.0.2
+  - pillow=10.3.0
+  - pydicom=2.4.4
+  - scikit-learn=1.5.1
+  - pyyaml=6.0.1
+  - tqdm=4.66.4
+  - pip:
+      - safetensors==0.4.3
+      - transformers==4.43.4
+      - pylibjpeg==2.0.1
+      - pylibjpeg-libjpeg==2.3.0
+      - pylibjpeg-openjpeg==2.4.0
+      - -e .
+
