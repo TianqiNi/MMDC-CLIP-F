@@ -1,7 +1,6 @@
 # MMDC-CLIP-F
 
-Code for **“MMDC-CLIP-F: Vision-Language Multi-View Mammogram Density
-Classification with Uncertainty Assessment.”**
+Code for **[“MMDC-CLIP-F: Vision-Language Multi-View Mammogram Density Classification with Uncertainty Assessment.”](https://doi.org/10.1016/j.neucom.2026.134795)**
 
 <p align="center">
   <img src="Fig1a1b.png" alt="MMDC-CLIP-F framework" width="900">
