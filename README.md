@@ -198,3 +198,23 @@ mmdc-clip-f train-confidence \
   --tcp-root "$TCP_ROOT" \
   --allow-test-selection
 ```
+
+## Citation
+
+If you use this work, please cite:
+
+```bibtex
+@article{Schaffer_2026,
+  title     = {{MMDC-CLIP-F}: Vision-language multi-view mammogram density classification with uncertainty assessment},
+  author    = {Schaffer, Jacob and Zhang, Wandong and Ni, Tianqi and Yang, Yimin and Kulkarni, Ameya Madhav and Saha, Ashirbani},
+  journal   = {Neurocomputing},
+  volume    = {704},
+  pages     = {134795},
+  year      = {2026},
+  month     = dec,
+  doi       = {10.1016/j.neucom.2026.134795},
+  url       = {https://doi.org/10.1016/j.neucom.2026.134795},
+  issn      = {0925-2312},
+  publisher = {Elsevier BV}
+}
+```
