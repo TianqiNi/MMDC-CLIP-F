@@ -25,7 +25,12 @@ from mmdc_clip_f.research.view_risk.features import (
     tensor_sha256,
 )
 from mmdc_clip_f.research.view_risk.fusion import DDSM_FUSION_PAIRS, RSNA_FUSION_PAIRS
-from mmdc_clip_f.research.view_risk.perturbations import PerturbationSpec, realize_parent
+from mmdc_clip_f.research.view_risk.perturbations import (
+    PerturbationMetadata,
+    PerturbationSpec,
+    RealizedParent,
+    realize_parent,
+)
 from mmdc_clip_f.research.view_risk.roles import (
     Operation,
     PatientMappingDeclaration,
@@ -278,6 +283,39 @@ def test_rehashed_stale_targets_still_fail_semantic_validation(cache_bundle, tmp
         _load_cache(paths.metadata, bundle.provenance, manifest)
 
 
+def test_rehashed_self_consistent_wrong_label_is_rejected_by_authorized_manifest(
+    cache_bundle, tmp_path
+) -> None:
+    from mmdc_clip_f.research.view_risk.targets import build_intervention_targets
+
+    bundle, _, manifest = cache_bundle
+    paths = save_cache_bundle(bundle, tmp_path / "wrong-label.json")
+    tensors = load_file(str(paths.tensors))
+    labels = torch.tensor([3], dtype=torch.long)
+    logits = {
+        view: tensors[f"feature.logits.{view}"] for view in bundle.provenance.observed_views
+    }
+    generated = build_intervention_targets(
+        logits,
+        labels,
+        bundle.provenance.observed_views,
+        fusion_pairs=bundle.provenance.fusion_pairs,
+    )
+    tensors["target.labels"] = labels
+    tensors["target.observed_prediction"] = generated.observed_prediction
+    tensors["target.observed_error"] = generated.observed_error
+    tensors["target.omission_predictions"] = generated.omission_predictions
+    tensors["target.omission_effects"] = generated.omission_effects
+    tensors["target.omission_labels"] = generated.omission_labels
+    tensors["target.valid_removal_mask"] = generated.valid_removal_mask
+    tensors["target.tcp"] = tensors["target.probabilities"].gather(1, labels[:, None]).squeeze(1)
+    save_file(tensors, str(paths.tensors))
+    _rehash_document(paths.metadata, paths.tensors)
+
+    with pytest.raises(ArtifactIntegrityError, match="authorized manifest densities"):
+        _load_cache(paths.metadata, bundle.provenance, manifest)
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     (
@@ -363,6 +401,77 @@ def test_held_out_fit_stress_is_refused_before_encoding(cache_bundle) -> None:
             exam_key="exam-a",
             sample_key="sample-a",
             parent_loader=held_out_parent,
+            encoder=encoder,
+            implementation_revision="synthetic-revision",
+        )
+    assert encoder.classifier.clip_model.vision_model.calls == calls
+
+
+def test_realized_severity_parameters_cannot_disguise_strong_noise_as_mild(
+    cache_bundle,
+) -> None:
+    _, encoder, manifest = cache_bundle
+    calls = encoder.classifier.clip_model.vision_model.calls
+
+    def disguised_parent(_record):
+        spec = PerturbationSpec("gaussian_noise", "mild", realization_seed=9)
+        return RealizedParent(
+            images={"L_CC": torch.full((3, 8, 8), 0.5)},
+            metadata={"L_CC": PerturbationMetadata(spec, (("sigma", 0.1),))},
+        )
+
+    with pytest.raises(ValueError, match="realized perturbation parameters"):
+        build_exam_cache_with_role_access(
+            manifest,
+            operation=Operation.CONFIDENCE_FITTING,
+            role=Role.CONFIDENCE_FIT,
+            exam_key="exam-a",
+            sample_key="sample-a",
+            parent_loader=disguised_parent,
+            encoder=encoder,
+            implementation_revision="synthetic-revision",
+        )
+    assert encoder.classifier.clip_model.vision_model.calls == calls
+
+
+@pytest.mark.parametrize(
+    ("spec", "parameters"),
+    (
+        (
+            PerturbationSpec("gaussian_noise", "mild", realization_seed=9),
+            (("sigma", 0.02), ("unrecorded_gain", 2.0)),
+        ),
+        (
+            PerturbationSpec("crop", "mild", realization_seed=9),
+            (("retained_area", 0.9), ("crop_side", 7), ("top", 0)),
+        ),
+        (
+            PerturbationSpec("crop", "mild", realization_seed=9),
+            (("retained_area", 0.9), ("crop_side", 7), ("top", 2), ("left", 0)),
+        ),
+    ),
+)
+def test_realized_parameters_reject_unknown_missing_or_out_of_bounds_fields(
+    cache_bundle, spec, parameters
+) -> None:
+    _, encoder, _ = cache_bundle
+    manifest = _manifest(Role.PILOT)
+    calls = encoder.classifier.clip_model.vision_model.calls
+
+    def invalid_parent(_record):
+        return RealizedParent(
+            images={"L_CC": torch.full((3, 8, 8), 0.5)},
+            metadata={"L_CC": PerturbationMetadata(spec, parameters)},
+        )
+
+    with pytest.raises(ValueError, match="realized perturbation parameters"):
+        build_exam_cache_with_role_access(
+            manifest,
+            operation=Operation.PILOT_EVALUATION,
+            role=Role.PILOT,
+            exam_key="exam-a",
+            sample_key="sample-a",
+            parent_loader=invalid_parent,
             encoder=encoder,
             implementation_revision="synthetic-revision",
         )

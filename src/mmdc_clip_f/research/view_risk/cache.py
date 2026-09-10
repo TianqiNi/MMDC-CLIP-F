@@ -35,6 +35,7 @@ from .perturbations import (
     PerturbationMetadata,
     PerturbationSpec,
     RealizedParent,
+    resolve_parameters,
     validate_training_perturbation,
 )
 from .roles import Operation, PrivateExamRecord, Role, RoleManifest, run_with_role_access
@@ -391,6 +392,56 @@ def _parent_perturbations(
     }
 
 
+def _validate_realized_perturbation_parameters(parent: RealizedParent) -> None:
+    """Validate recorded transform parameters, not caller-authored pixel authenticity."""
+
+    for view, metadata in parent.metadata.items():
+        image = parent.images[view]
+        if (
+            not isinstance(image, Tensor)
+            or image.ndim != 3
+            or image.shape[0] != 3
+            or image.shape[1] != image.shape[2]
+        ):
+            raise ValueError(
+                "realized perturbation parameters require a square RGB parent image"
+            )
+        try:
+            entries = tuple(metadata.parameters)
+        except TypeError as exc:
+            raise ValueError("realized perturbation parameters must be key/value pairs") from exc
+        if any(not isinstance(entry, tuple) or len(entry) != 2 for entry in entries):
+            raise ValueError("realized perturbation parameters must be key/value pairs")
+        keys = tuple(entry[0] for entry in entries)
+        if any(not isinstance(key, str) or not key for key in keys) or len(set(keys)) != len(keys):
+            raise ValueError("realized perturbation parameters require unique string fields")
+        actual = dict(entries)
+        expected = resolve_parameters(metadata.spec, int(image.shape[-1]))
+        extra_fields = {"top", "left"} if metadata.spec.family == "crop" else set()
+        if set(actual) != set(expected) | extra_fields:
+            raise ValueError(
+                "realized perturbation parameters have missing or unknown fields"
+            )
+        for field, expected_value in expected.items():
+            actual_value = actual[field]
+            if type(actual_value) is not type(expected_value) or actual_value != expected_value:
+                raise ValueError(
+                    f"realized perturbation parameters disagree with spec: {field}"
+                )
+        if metadata.spec.family == "crop":
+            maximum_offset = int(image.shape[-1]) - int(expected["crop_side"])
+            for field in ("top", "left"):
+                value = actual[field]
+                if isinstance(value, bool) or not isinstance(value, int):
+                    raise ValueError(
+                        f"realized perturbation parameters require integer {field}"
+                    )
+                if value < 0 or value > maximum_offset:
+                    raise ValueError(
+                        f"realized perturbation parameters contain out-of-bounds {field}"
+                    )
+
+
 def _provenance_for_exam(
     *,
     manifest: RoleManifest,
@@ -522,6 +573,7 @@ def build_exam_cache_with_role_access(
             not isinstance(metadata, PerturbationMetadata) for metadata in parent.metadata.values()
         ):
             raise TypeError("realized parent metadata must contain PerturbationMetadata")
+        _validate_realized_perturbation_parameters(parent)
         if normalized_operation in {
             Operation.CONFIDENCE_FITTING,
             Operation.TUNE_SELECTION,
@@ -789,7 +841,10 @@ def _target_from_tensors(tensors: Mapping[str, Tensor]) -> CachedTargets:
 
 
 def _load_cache_bundle_authorized(
-    metadata_path: str | Path, *, expected_provenance: CacheProvenance
+    metadata_path: str | Path,
+    *,
+    expected_provenance: CacheProvenance,
+    authorized_densities: tuple[int, ...],
 ) -> CacheBundle:
     """Load after the public entry point has authorized the requested role."""
 
@@ -859,6 +914,15 @@ def _load_cache_bundle_authorized(
             "cache tensor set disagrees with observed view representations"
         )
     targets = _target_from_tensors(tensors)
+    authorized_labels = torch.tensor(authorized_densities, dtype=torch.long)
+    if (
+        targets.labels.dtype != authorized_labels.dtype
+        or targets.labels.shape != authorized_labels.shape
+        or not torch.equal(targets.labels, authorized_labels)
+    ):
+        raise ArtifactIntegrityError(
+            "cached labels disagree with authorized manifest densities or order"
+        )
     try:
         features = FrozenViewFeatures(
             logits_by_view={
@@ -923,10 +987,15 @@ def load_cache_bundle(
         by_exam = {record.exam_key: record for record in records}
         if any(exam_key not in by_exam for exam_key in expected_provenance.exam_keys):
             raise ProvenanceMismatchError("expected provenance mismatch: exam_keys")
-        patients = tuple(by_exam[key].patient_key for key in expected_provenance.exam_keys)
+        ordered_records = tuple(by_exam[key] for key in expected_provenance.exam_keys)
+        patients = tuple(record.patient_key for record in ordered_records)
         if patients != expected_provenance.patient_keys:
             raise ProvenanceMismatchError("expected provenance mismatch: patient_keys")
-        return _load_cache_bundle_authorized(metadata_path, expected_provenance=expected_provenance)
+        return _load_cache_bundle_authorized(
+            metadata_path,
+            expected_provenance=expected_provenance,
+            authorized_densities=tuple(record.density for record in ordered_records),
+        )
 
     return run_with_role_access(
         manifest,

@@ -57,6 +57,11 @@ class FakeCLIP(nn.Module):
         return self.visual_projection(output.pooler_output)
 
 
+class TextSensitiveCLIP(FakeCLIP):
+    def get_text_features(self, *, input_ids: Tensor) -> Tensor:
+        return self.text_embedding.roll(int(input_ids[0, 0]), dims=0)
+
+
 @pytest.fixture(params=("vit_b_32", "vit_l_14_336"))
 def verified_encoder(request: pytest.FixtureRequest, tmp_path):
     backbone = BACKBONES[request.param]
@@ -191,6 +196,76 @@ def test_weight_mutation_is_refused_before_encoding(verified_encoder) -> None:
         clip.visual_projection.weight.add_(1)
     with pytest.raises(RuntimeError, match="weights changed"):
         encoder.extract_normalized({"L_CC": _normalized_views()["L_CC"]})
+    assert len(clip.vision_model.calls) == calls
+
+
+def test_data_weight_mutation_is_refused_before_encoding(verified_encoder) -> None:
+    encoder, clip, _ = verified_encoder
+    calls = len(clip.vision_model.calls)
+    clip.visual_projection.weight.data.add_(1)
+
+    with pytest.raises(RuntimeError, match="weights changed"):
+        encoder.extract_normalized({"L_CC": _normalized_views()["L_CC"]})
+
+    assert len(clip.vision_model.calls) == calls
+
+
+def test_factory_owns_text_inputs_so_caller_mutation_cannot_change_predictions(tmp_path) -> None:
+    clip = TextSensitiveCLIP(BACKBONES["vit_b_32"].hidden_size)
+    classifier = MultiViewCLIPClassifier(
+        clip, ("L_CC", "L_MLO", "R_CC", "R_MLO"), RSNA_FUSION_PAIRS
+    )
+    checkpoint = tmp_path / "text-sensitive.safetensors"
+    save_file(
+        {name: value.detach().contiguous() for name, value in classifier.state_dict().items()},
+        str(checkpoint),
+    )
+    caller_input_ids = torch.arange(8, dtype=torch.long).reshape(4, 2)
+    encoder = load_verified_frozen_encoder(
+        classifier,
+        caller_input_ids,
+        checkpoint,
+        backbone="vit_b_32",
+        prompts=PROMPTS,
+    )
+    views = _normalized_views(batch=1)
+    before = encoder.extract_normalized(views)
+    bound_hash = encoder.identity.text_input_sha256
+
+    caller_input_ids[0, 0] = 1
+    after = encoder.extract_normalized(views)
+    with torch.no_grad():
+        caller_mutated_scores = classifier(views, caller_input_ids)
+
+    assert torch.equal(before.scores, after.scores)
+    assert torch.equal(before.prediction, after.prediction)
+    assert encoder.identity.text_input_sha256 == bound_hash
+    assert not torch.equal(before.scores, caller_mutated_scores)
+
+
+def test_stale_internal_text_binding_is_refused_before_encoding(tmp_path) -> None:
+    clip = TextSensitiveCLIP(BACKBONES["vit_b_32"].hidden_size)
+    classifier = MultiViewCLIPClassifier(
+        clip, ("L_CC", "L_MLO", "R_CC", "R_MLO"), RSNA_FUSION_PAIRS
+    )
+    checkpoint = tmp_path / "text-binding.safetensors"
+    save_file(
+        {name: value.detach().contiguous() for name, value in classifier.state_dict().items()},
+        str(checkpoint),
+    )
+    encoder = load_verified_frozen_encoder(
+        classifier,
+        torch.arange(8, dtype=torch.long).reshape(4, 2),
+        checkpoint,
+        backbone="vit_b_32",
+        prompts=PROMPTS,
+    )
+    encoder._input_ids[0, 0] = 1
+    calls = len(clip.vision_model.calls)
+
+    with pytest.raises(RuntimeError, match="text inputs changed"):
+        encoder.extract_normalized({"L_CC": _normalized_views(batch=1)["L_CC"]})
+
     assert len(clip.vision_model.calls) == calls
 
 

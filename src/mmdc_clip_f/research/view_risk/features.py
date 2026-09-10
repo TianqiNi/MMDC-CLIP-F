@@ -46,7 +46,7 @@ def _tensor_bytes(tensor: Tensor) -> bytes:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return header + b"\0" + value.view(torch.uint8).numpy().tobytes()
+    return header + b"\0" + value.reshape(-1).view(torch.uint8).numpy().tobytes()
 
 
 def tensor_sha256(tensor: Tensor) -> str:
@@ -220,29 +220,42 @@ _VERIFIED_FACTORY_TOKEN = object()
 
 
 class VerifiedFrozenEncoder:
-    """A frozen classifier whose identity comes from a strictly loaded checkpoint."""
+    """A frozen classifier whose identity comes from a strictly loaded checkpoint.
+
+    Before each extraction, the exact bytes of every parameter and persistent
+    buffer are compared with a content manifest derived from the loaded
+    checkpoint.  On an accelerator this necessarily transfers the full state to
+    CPU for SHA-256 hashing; callers should batch observed views per parent to
+    amortize that validation cost.  Version counters remain a cheap additional
+    post-extraction guard for ordinary in-place mutation.
+    """
 
     def __init__(
         self,
         classifier: MultiViewCLIPClassifier,
         input_ids: Tensor,
         identity: FrozenEncoderIdentity,
+        expected_state_sha256: Mapping[str, str],
         *,
         _factory_token: object,
     ) -> None:
         if _factory_token is not _VERIFIED_FACTORY_TOKEN:
             raise RuntimeError("VerifiedFrozenEncoder must be created by its checkpoint factory")
         self.classifier = classifier
-        self.input_ids = input_ids.detach()
+        self._input_ids = input_ids.detach().clone()
         self.identity = identity
-        self._state_versions = {
-            f"parameter:{name}": value._version for name, value in classifier.named_parameters()
-        }
-        self._state_versions.update(
-            {f"buffer:{name}": value._version for name, value in classifier.named_buffers()}
-        )
+        self._expected_state_sha256 = MappingProxyType(dict(expected_state_sha256))
+        self._state_versions = self._current_state_versions()
+        self._assert_text_inputs_unchanged()
+        self._assert_weights_unchanged(verify_content=True)
 
-    def _assert_weights_unchanged(self) -> None:
+    @property
+    def input_ids(self) -> Tensor:
+        """Return a detached copy; extraction uses private provenance-bound tokens."""
+
+        return self._input_ids.detach().clone()
+
+    def _current_state_versions(self) -> dict[str, int]:
         current = {
             f"parameter:{name}": value._version
             for name, value in self.classifier.named_parameters()
@@ -250,17 +263,36 @@ class VerifiedFrozenEncoder:
         current.update(
             {f"buffer:{name}": value._version for name, value in self.classifier.named_buffers()}
         )
-        if current != self._state_versions:
+        return current
+
+    def _assert_text_inputs_unchanged(self) -> None:
+        if _text_input_sha256(self._input_ids, self.identity.prompt_order) != (
+            self.identity.text_input_sha256
+        ):
+            raise RuntimeError("verified frozen encoder text inputs changed after binding")
+
+    def _assert_weights_unchanged(self, *, verify_content: bool) -> None:
+        if self._current_state_versions() != self._state_versions:
             raise RuntimeError("verified frozen classifier weights changed after checkpoint load")
         if any(parameter.requires_grad for parameter in self.classifier.parameters()):
             raise RuntimeError("verified frozen classifier parameters must remain frozen")
+        if verify_content:
+            current_state = self.classifier.state_dict()
+            if set(current_state) != set(self._expected_state_sha256):
+                raise RuntimeError("verified frozen classifier state changed after checkpoint load")
+            for name, value in current_state.items():
+                if tensor_sha256(value) != self._expected_state_sha256[name]:
+                    raise RuntimeError(
+                        "verified frozen classifier weights changed after checkpoint load"
+                    )
 
     def extract_normalized(self, normalized_views: Mapping[str, Tensor]) -> FrozenViewFeatures:
         """Encode only supplied named tensors, which must already be normalized."""
 
         views = _validate_normalized_views(normalized_views)
         observed = tuple(views)
-        self._assert_weights_unchanged()
+        self._assert_text_inputs_unchanged()
+        self._assert_weights_unchanged(verify_content=True)
         self.classifier.eval()
         with torch.no_grad():
             batch_size = next(iter(views.values())).shape[0]
@@ -279,7 +311,7 @@ class VerifiedFrozenEncoder:
 
             projected = dict(zip(observed, projected_all.split(batch_size, dim=0)))
             hidden = dict(zip(observed, hidden_all.split(batch_size, dim=0)))
-            text = self.classifier._text_features(self.input_ids)
+            text = self.classifier._text_features(self._input_ids)
             if text.ndim != 2 or text.shape[0] != NUM_CLASSES:
                 raise ValueError("classifier must provide four class text embeddings")
             scale = self.classifier.clip_model.logit_scale.exp()
@@ -292,7 +324,8 @@ class VerifiedFrozenEncoder:
             scores = fused.scores
             probabilities = torch.softmax(scores, dim=1)
 
-        self._assert_weights_unchanged()
+        self._assert_text_inputs_unchanged()
+        self._assert_weights_unchanged(verify_content=False)
         return FrozenViewFeatures(
             logits_by_view={view: logits[view].detach() for view in observed},
             hidden_by_view={view: hidden[view].detach() for view in observed},
@@ -396,6 +429,15 @@ def _validate_normalized_views(values: Mapping[str, Tensor]) -> Mapping[str, Ten
     return MappingProxyType({view: supplied[view] for view in observed})
 
 
+def _text_input_sha256(input_ids: Tensor, prompt_order: tuple[str, ...]) -> str:
+    material = hashlib.sha256()
+    material.update(_tensor_bytes(input_ids))
+    material.update(
+        json.dumps(prompt_order, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
+    )
+    return material.hexdigest()
+
+
 def load_verified_frozen_encoder(
     classifier: MultiViewCLIPClassifier,
     input_ids: Tensor,
@@ -432,11 +474,9 @@ def load_verified_frozen_encoder(
         raise RuntimeError("classifier checkpoint changed while it was being loaded")
     classifier.requires_grad_(False)
     classifier.eval()
-    bound_input_ids = input_ids.detach().to(device)
-    text_material = hashlib.sha256()
-    text_material.update(_tensor_bytes(bound_input_ids))
-    text_material.update(
-        json.dumps(prompt_order, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
+    bound_input_ids = input_ids.detach().to(device).clone()
+    expected_state_sha256 = MappingProxyType(
+        {name: tensor_sha256(value) for name, value in state.items()}
     )
     identity = FrozenEncoderIdentity(
         checkpoint_sha256=checkpoint_sha256,
@@ -449,11 +489,12 @@ def load_verified_frozen_encoder(
         image_mean=LEGACY_IMAGE_MEAN,
         image_std=LEGACY_IMAGE_STD,
         prompt_order=prompt_order,
-        text_input_sha256=text_material.hexdigest(),
+        text_input_sha256=_text_input_sha256(bound_input_ids, prompt_order),
     )
     return VerifiedFrozenEncoder(
         classifier,
         bound_input_ids,
         identity,
+        expected_state_sha256,
         _factory_token=_VERIFIED_FACTORY_TOKEN,
     )
