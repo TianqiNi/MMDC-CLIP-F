@@ -119,11 +119,27 @@ Planned head defaults:
    block. Use learned attention biases for same-breast and same-projection
    relations, with an explicit self relation. Mask absent keys and queries.
    Default dropout is 0.2. Relation biases use view names, not manifest position.
-4. Predict three effect logits per removable view and one global error logit
-   from masked pooled interacted features. Set `p_error = sigmoid(error_logit)`
-   and final confidence `c = 1 - p_error`. Effect probabilities are auxiliary;
-   do not describe their sum as an additive risk budget. Report inconsistency
-   with known identical-prediction cases instead of claiming joint coherence.
+4. For each removable view, form a learned 128-dimensional effect representation
+   `r_(O,v)` with a shared MLP from its interacted view representation and available
+   removal-score features. Project `r_(O,v)` to three raw `effect_logits_(O,v)`.
+   Feed the masked mean of these **learned effect representations explicitly into
+   the global risk MLP**, concatenated with masked pooled interacted view features
+   and current score/evidence features. Gradients from both error BCE and effect
+   CE reach the effect representation; do not detach it. For a singleton, use a
+   zero effect-summary vector plus an explicit no-removal indicator, retaining
+   its view/evidence inputs. Set `p_error = sigmoid(error_logit)` and final
+   confidence `c = 1 - p_error`.
+5. Compute raw effect probabilities with softmax, then enforce the deterministic
+   reporting constraint: for every valid removal with
+   `yhat_O == yhat_(O\{v})`, return exactly `[0,1,0]` in class order `[-1,0,+1]`.
+   Thus reported repair and damage probabilities are exactly zero and unchanged
+   probability is exactly one, regardless of raw logits. Otherwise return the
+   raw softmax probabilities. This label-free constraint applies during training
+   reporting and inference; missing/singleton slots remain invalid, not unchanged
+   predictions. The risk head consumes learned representations as specified
+   above, not ground-truth effects or forced probability targets. This local
+   consistency constraint does not make the remaining effect probabilities a
+   coherent joint decomposition or their sum an additive risk budget.
 
 For a minibatch of nonempty parent inputs, average the following per-parent loss:
 
@@ -131,6 +147,15 @@ For a minibatch of nonempty parent inputs, average the following per-parent loss
 L_O = BCEWithLogits(error_logit_O, e_O)
       + lambda * mean_{valid removable v} CE(effect_logits_(O,v), d_index_(O,v))
 ```
+
+CE is computed on the **raw, unconstrained effect logits** for every valid
+removal, including identical-prediction cases whose target is unchanged (index
+1). The exact `[0,1,0]` overwrite is a reported-probability constraint after
+logits; do not take logs of overwritten zeros, mask these valid CE examples, or
+replace their learned loss by a constant. Report effect classification metrics
+from constrained probabilities and label any raw-logit diagnostic separately.
+With `lambda=0`, retain the learned effect-representation path into global risk;
+it still receives error-BCE gradients, but no auxiliary CE gradients.
 
 Set the empty effect mean to zero for singletons. Average over parents before
 averaging batches so parents with more removable views do not receive extra
@@ -161,7 +186,11 @@ For conflicting labels within a patient, document the group-stratification rule
 and actual class distribution. Report requested and actual patient/exam counts,
 exclusions, and reasons separately. DDSM exam IDs require an external verified
 patient mapping; absent that evidence, patient-level independence is unverified
-and confirmatory evaluation is blocked.
+and real-data fitting/evaluation for that dataset is blocked. This readiness
+block does not prevent generic software implementation or phase acceptance on
+synthetic fixtures that verify the checks and refusal behavior. Record software
+acceptance and real-data readiness separately; passing fixtures never certifies
+actual patient independence or counts.
 
 | Role | Permitted use |
 |---|---|
@@ -169,7 +198,7 @@ and confirmatory evaluation is blocked.
 | Confidence-fit | Train every learned confidence head, auxiliary predictor, feature scaler, and logistic control using the frozen fresh classifier. These patients must also be absent from classifier checkpoint selection. |
 | Tune | Select classifier checkpoint, then confidence model/hyperparameters/checkpoints and temperature/calibration parameters. Reuse is declared development exposure, not held-out performance. |
 | Pilot | One frozen-protocol, non-test feasibility and go/no-go evaluation; no training, calibration, checkpoint selection, or choosing favorable seeds. A revision after seeing pilot results consumes that pilot as development data and needs a new independent evaluation plan. |
-| Original test | Access only after protocol/model/baselines/metrics are fixed and the orchestrator explicitly releases the lock. No role reassignment, target generation, fitting, or selection beforehand. |
+| Original test | The full study is already authorized conditional on pilot success and available time/resources. Access only after protocol/model/baselines/metrics are fixed, real-data readiness is verified, and the orchestrator records that those conditions hold and releases the lock. This is an operational gate, not a request for new user authorization. No role reassignment, target generation, fitting, or selection beforehand. |
 
 Previously fine-tuned original checkpoints cannot yield genuinely held-out
 confidence-fit predictions after repartitioning their training patients. They
@@ -295,8 +324,8 @@ Required ablations, one factor at a time with the same patient/augmentation draw
 | Effect supervision | `lambda=1` versus `lambda=0`, retaining inputs/capacity. |
 | Intervention features | Remove removal-score differences and their derived statistics while retaining effect supervision. |
 | View relationships | Remove same-breast/same-projection biases while retaining named views and comparable capacity. |
-| Signed versus magnitude effects | Replace three-way target by binary `abs(d)` while preserving the global error task. |
-| Task harm versus corruption recognition | Replace auxiliary effect task by whether each observed view was synthetically stressed, with equal weighting; inspect effect performance within clean and stressed strata. Do not equate a stressed view with a harmful view. |
+| Signed versus magnitude effects | Replace three-way target by binary `abs(d)` while preserving the learned effect-to-risk path. For identical predictions, reported magnitude probabilities are exactly `[1,0]` in order `[0,1]`; retain raw-logit CE on all valid removals. |
+| Task harm versus corruption recognition | Replace auxiliary effect task by whether each observed view was synthetically stressed, with equal weighting and the same learned auxiliary-representation input to risk; inspect effect performance for the effect model within clean and stressed strata. The identical-prediction constraint applies to effects, not corruption labels. Do not equate a stressed view with a harmful view. |
 | Evidence versus hidden features | Evidence/score-only, hidden-only (with names/masks), and combined inputs; report parameter counts and inference costs. |
 | Clean versus augmented fitting | Fit clean parents only versus the matched stress sampler; recompute all targets in both. |
 
@@ -398,7 +427,7 @@ interval crossing a progression boundary are inconclusive for this gate.
 | Fresh classifier/required data unavailable; mandatory controls or pilot not run; deadline prevents measurement | Inconclusive / pending, with blocker and remaining work. Never report success from a smoke run or diagnostic checkpoint. |
 | Clean degradation exceeds 0.005, or primary gain is nonpositive against the strongest mandatory control | No-go for this candidate under this protocol. No test-based rescue. |
 | Gain is positive but below 10%, intervals include no improvement, seed behavior is unstable, or repair/damage support is inadequate | Inconclusive; do not claim success. Any further study needs a recorded plan without reusing pilot as an unseen holdout. |
-| At least 10% gain, clean guardrail and the interval/seed criteria above pass, all mandatory controls complete, no validity failures | Go to a separately authorized locked evaluation; pilot is still preliminary evidence, not a clinical or final study claim. |
+| At least 10% gain, clean guardrail and the interval/seed criteria above pass, all mandatory controls complete, no validity failures | Proceed to the already conditionally authorized full study if time/resources and real-data readiness permit; orchestrator records gate satisfaction and releases the test lock. Pilot is still preliminary evidence, not a clinical or final study claim. |
 
 Novelty is conditional on beating **same-input capacity-matched, four-class,
 and augmentation-matched controls**, and on the supervision/feature ablations
