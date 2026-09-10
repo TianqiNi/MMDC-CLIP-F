@@ -47,3 +47,27 @@ PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff fo
 ```
 
 Outcome: exit 0; `All checks passed!`; `2 files already formatted`.
+
+## Review-1 regression fix
+
+Accepted finding: deserialized or directly constructed training draws could
+bypass fit/tune restrictions and malformed stratum/mode/view combinations were
+not validated.
+
+Focused RED command:
+
+```text
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_perturbations.py -k 'training_replay or training_realization'
+```
+
+Outcome before the fix: pytest exit 1; `12 failed, 24 deselected in 0.61s`.
+Failures showed the missing operation arguments/guards and acceptance of every
+malformed replay fixture.
+
+Focused GREEN used the same command. Outcome: pytest exit 0;
+`14 passed, 24 deselected in 0.53s`. Valid clean and allowed Gaussian replay
+fixtures remained deterministic under both confidence-fit and tune guards.
+
+Final full-suite GREEN used the full research-suite command above. Outcome:
+pytest exit 0; `78 passed in 0.63s`. Ruff lint, Ruff format check, and Python
+compilation also passed.

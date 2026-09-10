@@ -20,6 +20,7 @@ from mmdc_clip_f.research.view_risk.perturbations import (
     enumerate_training_support,
     omit_parent_view,
     realize_parent,
+    realize_training_parent,
     resolve_parameters,
     sample_training_spec,
     validate_training_perturbation,
@@ -354,6 +355,123 @@ def test_seeded_training_draws_are_replayable_and_only_stress_observed_views() -
     assert all(
         draw.perturbation is None or draw.perturbation.family in {"gaussian_noise", "gaussian_blur"}
         for draw in first
+    )
+
+
+@pytest.mark.parametrize("operation", ["confidence-fit", "tune"])
+@pytest.mark.parametrize(
+    "perturbation",
+    [
+        PerturbationSpec("contrast", "mild", realization_seed=19),
+        PerturbationSpec("gaussian_noise", "strong", realization_seed=19),
+    ],
+)
+def test_training_replay_and_realization_refuse_forbidden_stresses(
+    operation: str,
+    perturbation: PerturbationSpec,
+) -> None:
+    draw = TrainingSampleSpec(
+        stratum="stressed4",
+        observed_views=CANONICAL_VIEWS,
+        stress_mode="single",
+        stressed_views=("L_CC",),
+        perturbation=perturbation,
+    )
+    serialized = draw.to_dict()
+
+    with pytest.raises(ValueError, match="held out|strong"):
+        TrainingSampleSpec.from_dict(serialized, operation=operation)
+    with pytest.raises(ValueError, match="held out|strong"):
+        realize_training_parent(_images(), draw, operation=operation)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"stratum": "clean4", "observed_views": ["L_CC"]},
+        {"stratum": "stressed4", "stress_mode": None},
+        {"stratum": "stressed4", "stress_mode": "mistyped"},
+        {"stratum": "stressed_proper_mask", "observed_views": list(CANONICAL_VIEWS)},
+        {
+            "stratum": "stressed_proper_mask",
+            "observed_views": ["L_CC", "R_CC"],
+            "stress_mode": "common",
+            "stressed_views": ["L_CC"],
+        },
+        {
+            "stratum": "stressed_proper_mask",
+            "observed_views": ["L_CC", "R_CC"],
+            "stress_mode": "single",
+            "stressed_views": ["L_CC", "R_CC"],
+        },
+        {"perturbation": PerturbationSpec("clean").to_dict()},
+        {"stratum": "unknown"},
+    ],
+)
+def test_training_replay_refuses_inconsistent_stratum_mode_and_targets(
+    changes: dict[str, object],
+) -> None:
+    valid = TrainingSampleSpec(
+        stratum="stressed4",
+        observed_views=CANONICAL_VIEWS,
+        stress_mode="single",
+        stressed_views=("L_CC",),
+        perturbation=PerturbationSpec("gaussian_noise", "mild", realization_seed=23),
+    ).to_dict()
+    valid.update(changes)
+
+    with pytest.raises(ValueError, match="stratum|mode|observed|stressed"):
+        TrainingSampleSpec.from_dict(valid)
+
+
+def test_training_realization_refuses_direct_inconsistent_mode() -> None:
+    draw = TrainingSampleSpec(
+        stratum="stressed4",
+        observed_views=CANONICAL_VIEWS,
+        stress_mode="mistyped",
+        stressed_views=("L_CC",),
+        perturbation=PerturbationSpec("gaussian_blur", "mild", realization_seed=7),
+    )
+
+    with pytest.raises(ValueError, match="mode"):
+        realize_training_parent(_images(), draw)
+
+
+def test_valid_training_replay_remains_identical_through_fit_and_tune_guards() -> None:
+    draw = TrainingSampleSpec(
+        stratum="stressed4",
+        observed_views=CANONICAL_VIEWS,
+        stress_mode="single",
+        stressed_views=("R_CC",),
+        perturbation=PerturbationSpec("gaussian_noise", "moderate", realization_seed=29),
+    )
+    restored = TrainingSampleSpec.from_dict(
+        json.loads(json.dumps(draw.to_dict())),
+        operation="tune",
+    )
+
+    original_parent = realize_training_parent(_images(), draw, operation="confidence-fit")
+    restored_parent = realize_training_parent(_images(), restored, operation="tune")
+
+    clean_draw = TrainingSampleSpec(
+        stratum="clean_proper_mask",
+        observed_views=("L_CC", "R_MLO"),
+        stress_mode=None,
+        stressed_views=(),
+        perturbation=None,
+    )
+    clean_restored = TrainingSampleSpec.from_dict(
+        json.loads(json.dumps(clean_draw.to_dict())),
+        operation="confidence-fit",
+    )
+    clean_parent = realize_training_parent(_images(), clean_restored)
+    assert clean_restored == clean_draw
+    assert clean_parent.observed_views == ("L_CC", "R_MLO")
+    assert restored == draw
+    assert original_parent.observed_views == restored_parent.observed_views == CANONICAL_VIEWS
+    assert all(
+        torch.equal(original_parent.images[view], restored_parent.images[view])
+        for view in CANONICAL_VIEWS
     )
 
 

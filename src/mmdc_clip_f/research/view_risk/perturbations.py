@@ -197,7 +197,12 @@ class TrainingSampleSpec:
         }
 
     @classmethod
-    def from_dict(cls, value: Mapping[str, object]) -> TrainingSampleSpec:
+    def from_dict(
+        cls,
+        value: Mapping[str, object],
+        *,
+        operation: str = "confidence-fit",
+    ) -> TrainingSampleSpec:
         if not isinstance(value, Mapping):
             raise TypeError("serialized training sample spec must be a mapping")
         expected = {
@@ -213,13 +218,15 @@ class TrainingSampleSpec:
         perturbation = (
             None if perturbation_value is None else PerturbationSpec.from_dict(perturbation_value)  # type: ignore[arg-type]
         )
-        return cls(
+        draw = cls(
             stratum=value["stratum"],  # type: ignore[arg-type]
             observed_views=tuple(value["observed_views"]),  # type: ignore[arg-type]
             stress_mode=value["stress_mode"],  # type: ignore[arg-type]
             stressed_views=tuple(value["stressed_views"]),  # type: ignore[arg-type]
             perturbation=perturbation,
         )
+        validate_training_sample_spec(draw, operation=operation)
+        return draw
 
 
 @dataclass(frozen=True)
@@ -607,6 +614,66 @@ def validate_training_perturbation(
         raise ValueError(f"severity is not authorized for {operation}")
 
 
+def validate_training_sample_spec(
+    draw: TrainingSampleSpec,
+    *,
+    operation: str,
+) -> None:
+    """Validate a complete fit/tune draw, including its structural invariants."""
+
+    if not isinstance(draw, TrainingSampleSpec):
+        raise TypeError("draw must be a TrainingSampleSpec")
+    if operation not in ("confidence-fit", "tune"):
+        raise ValueError("operation must be 'confidence-fit' or 'tune'")
+
+    try:
+        observed_views = _canonical_observed(draw.observed_views)
+    except (TypeError, ValueError) as error:
+        raise ValueError("training sample has invalid observed views") from error
+    if observed_views != tuple(draw.observed_views):
+        raise ValueError("training sample observed views must use canonical order")
+
+    clean_strata = ("clean4", "clean_proper_mask")
+    stressed_strata = ("stressed4", "stressed_proper_mask")
+    if draw.stratum not in (*clean_strata, *stressed_strata):
+        raise ValueError("unknown training stratum")
+    expects_four = draw.stratum in ("clean4", "stressed4")
+    if expects_four and observed_views != tuple(CANONICAL_VIEWS):
+        raise ValueError(f"{draw.stratum} stratum requires all four observed views")
+    if not expects_four and observed_views not in enumerate_proper_masks():
+        raise ValueError(f"{draw.stratum} stratum requires a proper nonempty mask")
+
+    if draw.stratum in clean_strata:
+        if draw.stress_mode is not None or draw.stressed_views or draw.perturbation is not None:
+            raise ValueError(
+                "clean stratum cannot contain a stress mode, stressed views, or stress"
+            )
+        return
+
+    if draw.perturbation is None:
+        raise ValueError("stressed stratum requires a perturbation")
+    if draw.perturbation.family == "clean":
+        raise ValueError("stressed stratum requires a non-clean perturbation")
+    validate_training_perturbation(draw.perturbation, operation=operation)
+    if draw.stress_mode not in ("single", "common"):
+        raise ValueError("stressed stratum mode must be 'single' or 'common'")
+
+    stressed_views = tuple(draw.stressed_views)
+    canonical_stressed = tuple(view for view in CANONICAL_VIEWS if view in stressed_views)
+    if (
+        not stressed_views
+        or len(stressed_views) != len(set(stressed_views))
+        or any(view not in CANONICAL_VIEWS for view in stressed_views)
+        or stressed_views != canonical_stressed
+    ):
+        raise ValueError("stressed views must be unique known names in canonical order")
+    if draw.stress_mode == "single":
+        if len(stressed_views) != 1 or stressed_views[0] not in observed_views:
+            raise ValueError("single stress mode requires exactly one observed stressed view")
+    elif stressed_views != observed_views:
+        raise ValueError("common stress mode requires all and only observed views")
+
+
 def _choose_training_case(
     private_sample_key: str | bytes,
     cell: str,
@@ -652,23 +719,26 @@ def sample_training_spec(
             seed=seed,
         )
         validate_training_perturbation(perturbation, operation=operation)
-    return TrainingSampleSpec(
+    draw = TrainingSampleSpec(
         stratum=case.stratum,
         observed_views=case.observed_views,
         stress_mode=case.stress_mode,
         stressed_views=case.stressed_views,
         perturbation=perturbation,
     )
+    validate_training_sample_spec(draw, operation=operation)
+    return draw
 
 
 def realize_training_parent(
     images: Mapping[str, Tensor],
     draw: TrainingSampleSpec,
+    *,
+    operation: str = "confidence-fit",
 ) -> RealizedParent:
     """Realize a sampled training parent without exposing sampling metadata as input."""
 
-    if not isinstance(draw, TrainingSampleSpec):
-        raise TypeError("draw must be a TrainingSampleSpec")
+    validate_training_sample_spec(draw, operation=operation)
     if draw.perturbation is None:
         return realize_parent(images, draw.observed_views)
     if draw.stress_mode == "common":
