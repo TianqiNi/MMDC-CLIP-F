@@ -58,10 +58,11 @@ layouts. This was a path-existence check; no image was opened or decoded, and no
 content hashes were computed.
 
 No real patient role split was derived. DDSM lacks the required verified
-exam-to-patient mapping. Neither dataset had an available identity-only locked-test
-patient denylist/digest, and no custodian mapping declaration was available for the
-RSNA study manifest. Consequently patient independence and test overlap remain
-blocked for real fitting/evaluation even though generic software tests pass. See
+exam-to-patient mapping. RSNA's official schema identifies `patient_id`; no external
+custodian signoff is required, and an authorized researcher can record the
+schema-derived provenance declaration. That local binding was not executed here.
+Neither dataset had an available identity-only locked-test patient denylist/digest,
+so test overlap remains unaudited; content duplication also remains unaudited. See
 `p2-inventory.json` for sanitized aggregate counts and exact audit coverage.
 
 ## Final validation
@@ -70,3 +71,26 @@ The final complete research suite passed: `55 passed in 0.62s`. Ruff lint return
 `All checks passed!`. Ruff initially requested formatting of the two new code files;
 formatting was applied and the final format check passed. JSON parsing,
 `git diff --check`, and owned-file scope checks also passed.
+
+## Review 1 fix cycle
+
+Fresh review of candidate `2b63cf5` found that ordinary manifests could expose
+locked-test outcomes/paths before the callback guard, cross-manifest reuse of a
+same-namespace image path was not checked, and the RSNA evidence incorrectly
+required custodian signoff.
+
+Direct regressions were added before source changes. RED was `3 failed, 15 passed`:
+ordinary locked-record construction returned normally, a self-consistently rehashed
+locked manifest loaded normally, and a same-namespace path reused across
+classifier-fit and pilot manifests passed inventory validation. GREEN after the
+fixes was `19 passed in 0.56s`. A defense-in-depth case also verifies that a
+post-construction tampered manifest is refused by ordinary save without creating a
+file. Final GREEN was `20 passed in 0.56s`; the complete research suite passed with
+`60 passed in 0.61s`; the final full repository rerun passed `60 passed in 0.62s`.
+
+Ordinary record construction and private save/load paths now fail closed on
+outcome/image-bearing `locked_test` records. P2 exposes only an identity-digest
+denylist and sanitized overlap check for locked patients; it contains no outcome,
+image, generic boolean bypass, or test-release path. Cross-manifest image paths are
+now scoped by dataset namespace and rejected on reuse. RSNA readiness language was
+corrected as described above; the locked-identity and content-audit blockers remain.

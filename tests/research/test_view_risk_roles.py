@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import replace
 
@@ -7,6 +8,7 @@ import pytest
 
 from mmdc_clip_f.research.view_risk.roles import (
     DEFAULT_ROLE_COUNTS,
+    LockedPatientIdentityDenylist,
     ManifestBinding,
     Operation,
     PatientMappingDeclaration,
@@ -16,6 +18,7 @@ from mmdc_clip_f.research.view_risk.roles import (
     ViewReference,
     assign_patient_roles,
     load_private_manifest,
+    patient_identity_digest,
     run_with_role_access,
     save_private_manifest,
     validate_inventory,
@@ -279,6 +282,21 @@ def test_inventory_rejects_conflicting_provenance_within_one_dataset_namespace()
         validate_inventory((first, second))
 
 
+def test_inventory_rejects_namespaced_path_reuse_across_manifests_and_roles() -> None:
+    first_record = exam("e0", "p0", 0, role=Role.CLASSIFIER_FIT)
+    second_record = exam("e1", "p1", 1, role=Role.PILOT)
+    second_views = dict(second_record.views)
+    second_views["L_CC"] = replace(second_views["L_CC"], path=first_record.views["L_CC"].path)
+    second_record = replace(second_record, views=second_views)
+
+    first = assigned_manifest(first_record)
+    second = assigned_manifest(second_record)
+
+    with pytest.raises(ValueError, match="cross-role.*path") as caught:
+        validate_inventory((first, second))
+    assert first_record.views["L_CC"].path not in str(caught.value)
+
+
 def test_dataset_namespaces_scope_identifiers_but_content_hashes_remain_global() -> None:
     left = assigned_manifest(
         exam("same-exam", "same-patient", 0, namespace="A", role=Role.CLASSIFIER_FIT),
@@ -296,12 +314,34 @@ def test_dataset_namespaces_scope_identifiers_but_content_hashes_remain_global()
     assert summary.image_id_collision_count == 0
 
 
+def test_identity_only_locked_denylist_detects_patient_overlap_without_outcomes() -> None:
+    manifest = assigned_manifest(exam("e0", "p0", 0, role=Role.PILOT))
+    overlapping = LockedPatientIdentityDenylist(
+        dataset_namespace="synthetic",
+        source_sha256=HASH_B,
+        patient_identity_digests=frozenset({patient_identity_digest("synthetic", "p0")}),
+    )
+
+    with pytest.raises(ValueError, match="locked patient overlap") as caught:
+        validate_inventory((manifest,), locked_patient_denylists=(overlapping,))
+    assert "p0" not in str(caught.value)
+
+    disjoint = replace(
+        overlapping,
+        patient_identity_digests=frozenset(
+            {patient_identity_digest("synthetic", "another-patient")}
+        ),
+    )
+    summary = validate_inventory((manifest,), locked_patient_denylists=(disjoint,))
+    assert summary.locked_denylist_dataset_count == 1
+    assert summary.locked_identity_count == 1
+
+
 def test_role_guard_refuses_forbidden_and_locked_roles_before_loader_runs() -> None:
     manifest = assigned_manifest(
         exam("fit", "p-fit", 0, role=Role.CLASSIFIER_FIT),
         exam("confidence", "p-confidence", 1, role=Role.CONFIDENCE_FIT),
         exam("pilot", "p-pilot", 2, role=Role.PILOT),
-        exam("locked", "p-locked", 3, role=Role.LOCKED_TEST),
     )
     calls = 0
 
@@ -336,6 +376,42 @@ def test_role_guard_refuses_forbidden_and_locked_roles_before_loader_runs() -> N
         == 1
     )
     assert calls == 1
+
+
+def test_outcome_bearing_locked_record_is_rejected_during_ordinary_construction() -> None:
+    with pytest.raises(PermissionError, match="locked_test.*outcome"):
+        exam("locked", "p-locked", 3, role=Role.LOCKED_TEST)
+
+
+def test_ordinary_save_revalidates_and_refuses_a_locked_manifest(tmp_path) -> None:
+    manifest = assigned_manifest(exam("e0", "p0", 0, role=Role.CLASSIFIER_FIT))
+    object.__setattr__(manifest.records[0], "role", Role.LOCKED_TEST)
+    path = tmp_path / "private" / "roles.json"
+
+    with pytest.raises(PermissionError, match="locked_test.*outcome"):
+        save_private_manifest(manifest, path, private_root=tmp_path)
+    assert not path.exists()
+
+
+def test_self_consistently_hashed_locked_manifest_is_rejected_on_load(tmp_path) -> None:
+    manifest = assigned_manifest(exam("e0", "p0", 0, role=Role.CLASSIFIER_FIT))
+    path = tmp_path / "private" / "roles.json"
+    binding = save_private_manifest(manifest, path, private_root=tmp_path)
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["manifest"]["records"][0]["role"] = Role.LOCKED_TEST.value
+    encoded = json.dumps(
+        document["manifest"], sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    digest = hashlib.sha256(encoded).hexdigest()
+    document["manifest_sha256"] = digest
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(PermissionError, match="locked_test.*outcome"):
+        load_private_manifest(
+            path,
+            expected=replace(binding, manifest_sha256=digest),
+            private_root=tmp_path,
+        )
 
 
 def test_private_manifest_round_trip_and_tamper_or_stale_binding_refusal(tmp_path) -> None:

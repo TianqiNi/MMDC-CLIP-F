@@ -171,9 +171,14 @@ class PrivateExamRecord:
         object.__setattr__(self, "views", MappingProxyType(ordered))
         if self.role is not None:
             try:
-                object.__setattr__(self, "role", Role(self.role))
+                role = Role(self.role)
             except (TypeError, ValueError) as exc:
                 raise ValueError("private exam has an invalid role") from exc
+            if role == Role.LOCKED_TEST:
+                raise PermissionError(
+                    "locked_test outcome/image records are unavailable to ordinary P2 manifests"
+                )
+            object.__setattr__(self, "role", role)
 
 
 @dataclass(frozen=True)
@@ -544,10 +549,92 @@ class InventorySummary:
     image_count: int
     content_hash_count: int
     image_id_collision_count: int
+    image_path_collision_count: int
     content_collision_count: int
+    locked_denylist_dataset_count: int
+    locked_identity_count: int
 
 
-def validate_inventory(manifests: Iterable[RoleManifest]) -> InventorySummary:
+_LOCKED_DENYLIST_SCHEMA_VERSION = "view-risk-locked-patient-denylist/v1"
+
+
+@dataclass(frozen=True)
+class LockedPatientIdentityDenylist:
+    """Private identity-only locked-test patient digests, without outcomes or images.
+
+    These digests remain linkable private data and must stay outside git.  They
+    support overlap auditing only; they do not release locked-test access.
+    """
+
+    dataset_namespace: str
+    source_sha256: str
+    patient_identity_digests: frozenset[str]
+    schema_version: str = _LOCKED_DENYLIST_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        namespace = _required_private_string(
+            self.dataset_namespace, "locked denylist dataset namespace"
+        )
+        if self.schema_version != _LOCKED_DENYLIST_SCHEMA_VERSION:
+            raise ValueError("unsupported locked patient denylist schema")
+        if not _is_sha256(self.source_sha256):
+            raise ValueError("locked patient denylist requires a valid source SHA-256")
+        try:
+            digests = frozenset(self.patient_identity_digests)
+        except TypeError as exc:
+            raise ValueError("locked patient denylist digests must be iterable") from exc
+        if any(not _is_sha256(digest) for digest in digests):
+            raise ValueError("locked patient denylist contains an invalid identity digest")
+        object.__setattr__(self, "dataset_namespace", namespace)
+        object.__setattr__(self, "patient_identity_digests", digests)
+
+
+def patient_identity_digest(dataset_namespace: str, patient_key: str) -> str:
+    """Return the namespaced identity digest used by the private test denylist."""
+
+    namespace = _required_private_string(dataset_namespace, "dataset namespace")
+    key = _required_private_string(patient_key, "patient key")
+    material = f"{_LOCKED_DENYLIST_SCHEMA_VERSION}\0{namespace}\0{key}".encode("utf-8")
+    return hashlib.sha256(material).hexdigest()
+
+
+@dataclass(frozen=True)
+class LockedPatientIsolationSummary:
+    non_test_patient_count: int
+    locked_identity_count: int
+    overlap_count: int
+
+
+def validate_locked_patient_isolation(
+    manifest: RoleManifest, denylist: LockedPatientIdentityDenylist
+) -> LockedPatientIsolationSummary:
+    """Reject overlap against identity-only locked-test data without reading outcomes."""
+
+    if not isinstance(manifest, RoleManifest):
+        raise TypeError("manifest must be a RoleManifest")
+    if not isinstance(denylist, LockedPatientIdentityDenylist):
+        raise TypeError("denylist must be a LockedPatientIdentityDenylist")
+    if manifest.dataset_namespace != denylist.dataset_namespace:
+        raise ValueError("manifest and locked patient denylist namespaces disagree")
+    patient_digests = {
+        patient_identity_digest(manifest.dataset_namespace, record.patient_key)
+        for record in manifest.records
+    }
+    overlap_count = len(patient_digests.intersection(denylist.patient_identity_digests))
+    if overlap_count:
+        raise ValueError(f"locked patient overlap detected ({overlap_count} patient(s))")
+    return LockedPatientIsolationSummary(
+        non_test_patient_count=len(patient_digests),
+        locked_identity_count=len(denylist.patient_identity_digests),
+        overlap_count=0,
+    )
+
+
+def validate_inventory(
+    manifests: Iterable[RoleManifest],
+    *,
+    locked_patient_denylists: Iterable[LockedPatientIdentityDenylist] = (),
+) -> InventorySummary:
     """Validate one or more private manifests and return only aggregate counts."""
 
     materialized = tuple(manifests)
@@ -557,6 +644,7 @@ def validate_inventory(manifests: Iterable[RoleManifest]) -> InventorySummary:
     patients: set[tuple[str, str]] = set()
     patient_roles: dict[tuple[str, str], Role] = {}
     image_roles: dict[tuple[str, str], Role] = {}
+    path_roles: dict[tuple[str, str], Role] = {}
     content_roles: dict[str, Role] = {}
     roles: Counter[Role] = Counter()
     classes: Counter[int] = Counter()
@@ -594,6 +682,12 @@ def validate_inventory(manifests: Iterable[RoleManifest]) -> InventorySummary:
                     kind = "cross-role " if prior != record.role else ""
                     raise ValueError(f"inventory contains a {kind}image ID collision")
                 image_roles[image_identity] = record.role  # type: ignore[assignment]
+                path_identity = (manifest.dataset_namespace, reference.path)
+                if path_identity in path_roles:
+                    prior = path_roles[path_identity]
+                    kind = "cross-role " if prior != record.role else ""
+                    raise ValueError(f"inventory contains a {kind}image path collision")
+                path_roles[path_identity] = record.role  # type: ignore[assignment]
                 if reference.content_sha256 is not None:
                     content_count += 1
                     if reference.content_sha256 in content_roles:
@@ -601,6 +695,31 @@ def validate_inventory(manifests: Iterable[RoleManifest]) -> InventorySummary:
                         kind = "cross-role " if prior != record.role else ""
                         raise ValueError(f"inventory contains a {kind}content hash collision")
                     content_roles[reference.content_sha256] = record.role  # type: ignore[assignment]
+    denylists = tuple(locked_patient_denylists)
+    denylists_by_namespace: dict[str, LockedPatientIdentityDenylist] = {}
+    for denylist in denylists:
+        if not isinstance(denylist, LockedPatientIdentityDenylist):
+            raise TypeError("locked patient denylists must contain identity-only denylists")
+        if denylist.dataset_namespace in denylists_by_namespace:
+            raise ValueError("inventory received duplicate locked denylists for one namespace")
+        denylists_by_namespace[denylist.dataset_namespace] = denylist
+    manifests_by_namespace: dict[str, list[RoleManifest]] = defaultdict(list)
+    for manifest in materialized:
+        manifests_by_namespace[manifest.dataset_namespace].append(manifest)
+    for namespace, denylist in denylists_by_namespace.items():
+        if namespace not in manifests_by_namespace:
+            raise ValueError("locked patient denylist has no matching manifest namespace")
+        combined_records = tuple(
+            record for manifest in manifests_by_namespace[namespace] for record in manifest.records
+        )
+        combined = RoleManifest(
+            dataset_namespace=namespace,
+            source_hashes=manifests_by_namespace[namespace][0].source_hashes,
+            patient_mapping=manifests_by_namespace[namespace][0].patient_mapping,
+            records=combined_records,
+        )
+        validate_locked_patient_isolation(combined, denylist)
+
     return InventorySummary(
         dataset_count=len(namespaces),
         exam_count=len(exams),
@@ -610,7 +729,10 @@ def validate_inventory(manifests: Iterable[RoleManifest]) -> InventorySummary:
         image_count=image_count,
         content_hash_count=content_count,
         image_id_collision_count=0,
+        image_path_collision_count=0,
         content_collision_count=0,
+        locked_denylist_dataset_count=len(denylists),
+        locked_identity_count=sum(len(item.patient_identity_digests) for item in denylists),
     )
 
 
@@ -704,6 +826,10 @@ def save_private_manifest(
 
     if not isinstance(manifest, RoleManifest):
         raise TypeError("manifest must be a RoleManifest")
+    if any(record.role == Role.LOCKED_TEST for record in manifest.records):
+        raise PermissionError(
+            "locked_test outcome/image records cannot be saved by ordinary P2 manifest APIs"
+        )
     target = _private_path(path, private_root)
     payload = _manifest_payload(manifest)
     digest = _hash_payload(payload)
@@ -803,6 +929,14 @@ def load_private_manifest(
     digest = _hash_payload(payload)
     if document.get("manifest_sha256") != digest or expected.manifest_sha256 != digest:
         raise ValueError("private manifest integrity check failed")
+    raw_records = payload.get("records")
+    if isinstance(raw_records, list) and any(
+        isinstance(record, dict) and record.get("role") == Role.LOCKED_TEST.value
+        for record in raw_records
+    ):
+        raise PermissionError(
+            "locked_test outcome/image records cannot be loaded by ordinary P2 manifest APIs"
+        )
     if payload.get("schema_version") != expected.schema_version:
         raise ValueError("private manifest schema binding is stale")
     if payload.get("dataset_namespace") != expected.dataset_namespace:

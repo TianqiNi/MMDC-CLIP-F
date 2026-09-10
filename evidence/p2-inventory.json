@@ -1,6 +1,6 @@
 {
   "schema_version": "view-risk-aggregate-inventory/v1",
-  "generated_at_utc": "2026-09-10T22:41:38Z",
+  "generated_at_utc": "2026-09-10T23:00:03Z",
   "scope": {
     "metadata_splits_inspected": [
       "RSNA train",
@@ -26,9 +26,24 @@
       "protocol_non_test_target_total": 4937
     },
     "density_counts": {
-      "train": {"0": 446, "1": 1998, "2": 1967, "3": 236},
-      "valid": {"0": 31, "1": 129, "2": 113, "3": 17},
-      "non_test_total": {"0": 477, "1": 2127, "2": 2080, "3": 253}
+      "train": {
+        "0": 446,
+        "1": 1998,
+        "2": 1967,
+        "3": 236
+      },
+      "valid": {
+        "0": 31,
+        "1": 129,
+        "2": 113,
+        "3": 17
+      },
+      "non_test_total": {
+        "0": 477,
+        "1": 2127,
+        "2": 2080,
+        "3": 253
+      }
     },
     "metadata_validation": {
       "missing_or_malformed_rows": 0,
@@ -44,10 +59,15 @@
     },
     "real_split_readiness": "blocked",
     "blockers": [
-      "No custodian verification declaration binding the non-test patient column to the study manifest was available.",
       "No identity-only locked-test patient denylist or digest was available, so test-patient overlap was not audited.",
       "Image content hashes were not computed, so cross-record and cross-dataset content duplication remains unaudited."
-    ]
+    ],
+    "patient_mapping_readiness": {
+      "official_manifest_field": "patient_id",
+      "external_custodian_signoff_required": false,
+      "schema_derived_provenance_may_be_recorded_by_authorized_researcher": true,
+      "local_schema_derived_binding_recorded": false
+    }
   },
   "ddsm": {
     "source_manifest_sha256": {
@@ -61,9 +81,24 @@
       "protocol_non_test_target_total": 1353
     },
     "density_counts": {
-      "train": {"0": 141, "1": 398, "2": 333, "3": 210},
-      "valid": {"0": 35, "1": 100, "2": 83, "3": 53},
-      "non_test_total": {"0": 176, "1": 498, "2": 416, "3": 263}
+      "train": {
+        "0": 141,
+        "1": 398,
+        "2": 333,
+        "3": 210
+      },
+      "valid": {
+        "0": 35,
+        "1": 100,
+        "2": 83,
+        "3": 53
+      },
+      "non_test_total": {
+        "0": 176,
+        "1": 498,
+        "2": 416,
+        "3": 263
+      }
     },
     "metadata_validation": {
       "missing_or_malformed_rows": 0,
@@ -82,7 +117,11 @@
       "The first manifest field is an examination ID; no external verified exam-to-patient mapping was available.",
       "No identity-only locked-test patient denylist or digest was available, so test-patient overlap was not audited.",
       "Image content hashes were not computed, so cross-record and cross-dataset content duplication remains unaudited."
-    ]
+    ],
+    "patient_mapping_readiness": {
+      "manifest_identity_field": "examination_id_only",
+      "external_verified_exam_to_patient_mapping_available": false
+    }
   },
   "conclusions": {
     "target_total_disagreement_found": false,
@@ -93,7 +132,7 @@
     "notes": [
       "Counts are observed non-test metadata rows, not proof of patient independence or final eligibility.",
       "Resource checks tested path existence only and do not establish readable or valid image content.",
-      "No real role counts are claimed because required identity verification artifacts are absent."
+      "No real role counts are claimed because locked-test identity and content audits are absent; DDSM additionally lacks verified patient mapping."
     ]
   }
 }
