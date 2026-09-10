@@ -1,0 +1,99 @@
+{
+  "schema_version": "view-risk-aggregate-inventory/v1",
+  "generated_at_utc": "2026-09-10T22:41:38Z",
+  "scope": {
+    "metadata_splits_inspected": [
+      "RSNA train",
+      "RSNA valid",
+      "DDSM train",
+      "DDSM valid"
+    ],
+    "original_test_manifests_or_outcomes_inspected": false,
+    "original_test_images_inspected": false,
+    "image_content_opened": false,
+    "image_content_hash_audit_performed": false,
+    "private_role_manifest_generated": false
+  },
+  "rsna": {
+    "source_manifest_sha256": {
+      "train": "7730215a6751ae0085f5dca4d7c42af12fb86e86d792fe787e48c3f608edc734",
+      "valid": "dd02bb5d2dde3aba59d65dbe1253a40c920e2099030b44957a56339c3bbe8ecd"
+    },
+    "exam_counts": {
+      "train": 4647,
+      "valid": 290,
+      "non_test_total": 4937,
+      "protocol_non_test_target_total": 4937
+    },
+    "density_counts": {
+      "train": {"0": 446, "1": 1998, "2": 1967, "3": 236},
+      "valid": {"0": 31, "1": 129, "2": 113, "3": 17},
+      "non_test_total": {"0": 477, "1": 2127, "2": 2080, "3": 253}
+    },
+    "metadata_validation": {
+      "missing_or_malformed_rows": 0,
+      "duplicate_exam_keys_within_or_across_non_test_splits": 0,
+      "within_exam_repeated_view_identifiers": 0,
+      "repeated_view_identifiers_within_or_across_non_test_splits": 0
+    },
+    "resource_presence_only": {
+      "expected_named_views": 19748,
+      "legacy_dicom_paths_present": 19748,
+      "available_png_cache_paths_present": 19748,
+      "files_opened_or_decoded": 0
+    },
+    "real_split_readiness": "blocked",
+    "blockers": [
+      "No custodian verification declaration binding the non-test patient column to the study manifest was available.",
+      "No identity-only locked-test patient denylist or digest was available, so test-patient overlap was not audited.",
+      "Image content hashes were not computed, so cross-record and cross-dataset content duplication remains unaudited."
+    ]
+  },
+  "ddsm": {
+    "source_manifest_sha256": {
+      "train": "0c41127090fa42c775571d0e8b181847a941205a5643ac4927c5f5a63f3a8f26",
+      "valid": "5971a559d40b0f2aa58547ae6f4d9d08fd617b1c159b6322ef968d5d811a76be"
+    },
+    "exam_counts": {
+      "train": 1082,
+      "valid": 271,
+      "non_test_total": 1353,
+      "protocol_non_test_target_total": 1353
+    },
+    "density_counts": {
+      "train": {"0": 141, "1": 398, "2": 333, "3": 210},
+      "valid": {"0": 35, "1": 100, "2": 83, "3": 53},
+      "non_test_total": {"0": 176, "1": 498, "2": 416, "3": 263}
+    },
+    "metadata_validation": {
+      "missing_or_malformed_rows": 0,
+      "duplicate_exam_keys_within_or_across_non_test_splits": 0,
+      "within_exam_repeated_view_identifiers": 0,
+      "repeated_view_identifiers_within_or_across_non_test_splits": 0
+    },
+    "resource_presence_only": {
+      "expected_named_views": 5412,
+      "legacy_processed_png_paths_present": 5412,
+      "raw_jpeg_paths_present": 5412,
+      "files_opened_or_decoded": 0
+    },
+    "real_split_readiness": "blocked",
+    "blockers": [
+      "The first manifest field is an examination ID; no external verified exam-to-patient mapping was available.",
+      "No identity-only locked-test patient denylist or digest was available, so test-patient overlap was not audited.",
+      "Image content hashes were not computed, so cross-record and cross-dataset content duplication remains unaudited."
+    ]
+  },
+  "conclusions": {
+    "target_total_disagreement_found": false,
+    "raw_resource_presence_blocker_found": false,
+    "real_patient_role_assignment_performed": false,
+    "generic_software_acceptance_blocked_by_real_data": false,
+    "content_hashes_checked": 0,
+    "notes": [
+      "Counts are observed non-test metadata rows, not proof of patient independence or final eligibility.",
+      "Resource checks tested path existence only and do not establish readable or valid image content.",
+      "No real role counts are claimed because required identity verification artifacts are absent."
+    ]
+  }
+}
