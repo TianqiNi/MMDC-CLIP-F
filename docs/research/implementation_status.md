@@ -85,7 +85,7 @@ not failed or complete.
 |---|---|---|---|
 | P1A — protocol documentation | These two documents; ground definitions in existing README/package/source. No predecessor within P1. | Correct signed targets and score contract; role/test isolation; explicit numerical stresses, fair controls, metrics, kill rules, task map; documentation review at candidate commit. | Accepted task; G1 passed at integration candidate `86031e5`. |
 | P1B — combined subset fusion and intervention targets | One task and one implementer: named nonempty subsets using the legacy fusion tree, empty-input unavailable contract, error/correctness and signed three-way removal targets with validity masks. Uses P1A scientific contract; target construction follows fusion within this task. | Red/green fixtures for all 15 nonempty masks, both fusion trees, singleton/empty/invalid inputs, full-view numerical/prediction equivalence, repairs/damages/unchanged, identical predictions imply zero, wrong-to-different-wrong is zero, and no labels in inference features. | Accepted task; 40 tests passed; G1 passed at `86031e5`. |
-| P2A — patient roles and inventory | Deterministic stratified patient manifests, private test denylist/lock, inventory/duplicate audit and sanitized counts; depends on accepted P1. | Software: synthetic patient-group isolation, count/duplicate checks, no eager test outcome access, and missing-mapping/mismatch refusal. Real data: verify patient mapping, inventory, and actual counts before fitting/evaluation; record unavailable prerequisites separately. | Software pending; real-data inventory and patient mapping unverified by P1A. |
+| P2A — patient roles and inventory | Deterministic stratified patient manifests, private test denylist/lock, inventory/duplicate audit and sanitized counts; depends on accepted P1. | Software: synthetic patient-group isolation, count/duplicate checks, no eager test outcome access, and missing-mapping/mismatch refusal. Real data: verify patient mapping, inventory, and actual counts before fitting/evaluation; record unavailable prerequisites separately. | Task review passed at `85c8d30`; real-data readiness blockers recorded in `evidence/p2-inventory.json`. |
 | P2B — perturbations and masks | Reproducible parent/child transforms and sampling manifest; depends on P2A role schema and P1 subset contract. | Deterministic seeds; intensity/resolution defaults; held-out family/severity separation; common-mode control; all 14 proper clean masks; child retains exactly the parent's surviving tensors. | Pending. |
 | P2C — provenance-bound artifacts | Frozen feature/target cache and role/checkpoint/mask/transform bindings; depends on P2A, P2B, P1B. | Tamper/stale/order/checkpoint/role rejection; all targets regenerated from realized inputs; external private records; prediction identity and finite-value checks. | Pending. |
 | P3A — relation head and loss | 128-dimensional pooled views, two four-head relation layers, learned effect representations feeding global risk, constrained reported effects and raw-logit auxiliary CE plus error BCE; depends on accepted P2. | Frozen encoder gradients/parameters; both backbone dimensions; missing-view masks; parent-normalized raw-logit CE including deterministic-unchanged cases; exact reported `[0,1,0]` for identical predictions; effect-to-risk gradient path; singleton finite loss; lambda zero retains risk gradients; unchanged classifier predictions. | Pending. |
@@ -243,3 +243,14 @@ after publication; software acceptance does not imply a measured research result
 Completed task/gate worktrees and Herdr workspaces were removed; required evidence
 is retained under `evidence/`. Shared environment and orchestration remain for
 dependent phases.
+
+## Phase 2 foundation task acceptance
+
+P2A passed fresh Sol xhigh review at `85c8d30a981ae25559596521b86aba654bbbb729`
+after the original implementer fixed locked-record exposure, cross-manifest path
+collisions, and the unsupported RSNA sign-off wording. P2B passed fresh Sol xhigh
+review at `1ee5555db5ec9222e9306d62334aa02ff3017579` after the original implementer
+closed training-replay policy bypasses. Combined foundations: 98 tests passed.
+Both tasks used red/green TDD; evidence is in `evidence/phase2/`. Their temporary
+worktrees and Herdr workspaces are removed. P2C cache work is next; G2 and phase
+publication remain pending. No real patient split or training is claimed.
