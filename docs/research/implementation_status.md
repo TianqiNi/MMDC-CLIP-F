@@ -233,3 +233,13 @@ accepted P1B. See `evidence/phase1/p1-gate.md` and `integration-checks.md`.
 Final publication commit/PR information is recorded in the PR and subsequent
 publication record. P2 starts only after the phase is committed, pushed, and
 the PR is open. P2–P5 remain unexecuted at this boundary.
+
+## Phase 1 publication
+
+Phase commit `641b144` is pushed to `origin/research/intervention-supervised-confidence`.
+Draft PR: https://github.com/TianqiNi/MMDC-CLIP-F/pull/1. Task and gate candidate
+refs were also pushed so reviewed commits remain inspectable. G1 releases P2
+after publication; software acceptance does not imply a measured research result.
+Completed task/gate worktrees and Herdr workspaces were removed; required evidence
+is retained under `evidence/`. Shared environment and orchestration remain for
+dependent phases.
