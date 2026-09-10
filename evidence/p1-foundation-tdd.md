@@ -32,3 +32,33 @@ PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff ch
 ```
 
 Outcome: exit 0; `All checks passed!`.
+
+## Accepted-review fix cycle
+
+Regression tests were added before source edits for configured RSNA/DDSM fusion trees and
+nonfinite legacy DS states.
+
+### Red
+
+Command:
+
+```text
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research
+```
+
+Outcome: expected pytest exit 1; `13 failed, 27 passed in 0.61s`. Failures showed the absent
+`fusion_pairs` API/provenance, absent invalid-DS error, and therefore missing configured-tree
+support and target propagation.
+
+### Green
+
+Command:
+
+```text
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research
+```
+
+Outcome: pytest exit 0; `40 passed in 0.60s`.
+
+The complete available suite also passed: `40 passed in 0.61s`. Ruff lint returned
+`All checks passed!`; Ruff format check reported `9 files already formatted`.
