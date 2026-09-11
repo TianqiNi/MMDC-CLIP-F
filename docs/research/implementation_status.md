@@ -3,7 +3,8 @@
 Current status: P1 is accepted, published in draft PR #1, and passed remote CI.
 P2A and P2B passed fresh task review and are staged for Phase 2 integration.
 P2C passed fresh review at `b176bb5`; integrated Phase 2 has 164 passing tests.
-G2 passed at `96a4845`; final Phase 2 publication is being recorded. No classifier training, confidence training, or patient evaluation
+G2 passed at `96a4845`; Phase 2 commit `a13f9d2` is pushed and PR #1 updated.
+Remote CI is the remaining prerequisite for P3. No classifier training, confidence training, or patient evaluation
 has run. Later sections preserve dated drafting and review history; the latest
 orchestrator record governs current status.
 
@@ -274,3 +275,11 @@ passed 256 synthetic sampler-to-cache integration cases across both trees, all
 recorded check commands. Source/tests remain identical for final publication.
 No real-data readiness or research result is implied. P3 begins only after the
 phase commit, push, PR update, and required remote CI pass.
+
+## Phase 2 publication
+
+Phase commit `a13f9d2791565b42b2b8b494e2c2db8c2bd0d2c0` is pushed to
+`origin/research/intervention-supervised-confidence`; draft PR #1 now describes
+P1 and P2. Reviewed task and phase-candidate refs are also pushed. All completed
+P2 task/gate workspaces were cleaned after retaining essential evidence. Remote
+CI on the final publication head must pass before P3 starts.
