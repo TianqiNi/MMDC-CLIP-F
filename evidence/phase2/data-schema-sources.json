@@ -1,0 +1,16 @@
+{
+  "checked_at_utc": "2026-09-10",
+  "rsna": {
+    "primary_source": "https://www.kaggle.com/c/rsna-breast-cancer-detection/data",
+    "supported_claim": "patient_id identifies the patient; authorized researcher can record schema-derived grouping provenance",
+    "local_binding_verified": false
+  },
+  "mini_ddsm": {
+    "primary_source": "https://ardisdataset.github.io/MiniDDSM/",
+    "supporting_paper": "https://arxiv.org/abs/2010.00494",
+    "supported_claim": "Authors document patient folders, original filenames, and companion spreadsheet metadata",
+    "inference": "These resources may support verifying the local exam-to-patient mapping without private institutional data",
+    "local_mapping_verified": false
+  },
+  "scope": "Source documentation only. No spreadsheet records, test labels, patient outcomes, or image pixels inspected. No readiness blocker cleared by this note alone."
+}

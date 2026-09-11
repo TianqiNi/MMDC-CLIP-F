@@ -1,18 +1,15 @@
 # Intervention-supervised MV-ACN implementation ledger
 
-Snapshot: 2026-09-10, P1A documentation handoff. Scope is the single
-intervention-supervised confidence project described in
+Current status: P1 is accepted, published in draft PR #1, and passed remote CI.
+P2A and P2B passed fresh task review and are staged for Phase 2 integration.
+P2C passed fresh review at `b176bb5`; integrated Phase 2 has 164 passing tests.
+G2 and Phase 2 publication remain pending. No classifier training, confidence training, or patient evaluation
+has run. Later sections preserve dated drafting and review history; the latest
+orchestrator record governs current status.
+
+Scope is the single intervention-supervised confidence project described in
 [view_risk_protocol.md](view_risk_protocol.md). Related evidence-gating and
 conformal projects are alternatives and are not scheduled here.
-
-**No phase is accepted or released by this document. No training, pilot result,
-or test result is claimed.** The orchestrator committed P1A candidate
-`2e9aebb68ea2bd67119d497d9b598f5de4388f48`; independent review 1 requested changes
-with five substantive findings. This revision addresses those findings locally
-and remains uncommitted, awaiting a new orchestrator candidate and fresh review.
-Integration, push/PR evidence, and phase acceptance remain unverified here and
-owned by the orchestrator. Sibling task status must be verified there; absence
-of evidence here is not evidence of completion.
 
 ## 1. Rules and dependency map
 
@@ -85,9 +82,9 @@ not failed or complete.
 |---|---|---|---|
 | P1A — protocol documentation | These two documents; ground definitions in existing README/package/source. No predecessor within P1. | Correct signed targets and score contract; role/test isolation; explicit numerical stresses, fair controls, metrics, kill rules, task map; documentation review at candidate commit. | Accepted task; G1 passed at integration candidate `86031e5`. |
 | P1B — combined subset fusion and intervention targets | One task and one implementer: named nonempty subsets using the legacy fusion tree, empty-input unavailable contract, error/correctness and signed three-way removal targets with validity masks. Uses P1A scientific contract; target construction follows fusion within this task. | Red/green fixtures for all 15 nonempty masks, both fusion trees, singleton/empty/invalid inputs, full-view numerical/prediction equivalence, repairs/damages/unchanged, identical predictions imply zero, wrong-to-different-wrong is zero, and no labels in inference features. | Accepted task; 40 tests passed; G1 passed at `86031e5`. |
-| P2A — patient roles and inventory | Deterministic stratified patient manifests, private test denylist/lock, inventory/duplicate audit and sanitized counts; depends on accepted P1. | Software: synthetic patient-group isolation, count/duplicate checks, no eager test outcome access, and missing-mapping/mismatch refusal. Real data: verify patient mapping, inventory, and actual counts before fitting/evaluation; record unavailable prerequisites separately. | Software pending; real-data inventory and patient mapping unverified by P1A. |
-| P2B — perturbations and masks | Reproducible parent/child transforms and sampling manifest; depends on P2A role schema and P1 subset contract. | Deterministic seeds; intensity/resolution defaults; held-out family/severity separation; common-mode control; all 14 proper clean masks; child retains exactly the parent's surviving tensors. | Pending. |
-| P2C — provenance-bound artifacts | Frozen feature/target cache and role/checkpoint/mask/transform bindings; depends on P2A, P2B, P1B. | Tamper/stale/order/checkpoint/role rejection; all targets regenerated from realized inputs; external private records; prediction identity and finite-value checks. | Pending. |
+| P2A — patient roles and inventory | Deterministic stratified patient manifests, private test denylist/lock, inventory/duplicate audit and sanitized counts; depends on accepted P1. | Software: synthetic patient-group isolation, count/duplicate checks, no eager test outcome access, and missing-mapping/mismatch refusal. Real data: verify patient mapping, inventory, and actual counts before fitting/evaluation; record unavailable prerequisites separately. | Task review passed at `85c8d30`; real-data readiness blockers recorded in `evidence/p2-inventory.json`. |
+| P2B — perturbations and masks | Reproducible parent/child transforms and sampling manifest; depends on P2A role schema and P1 subset contract. | Deterministic seeds; intensity/resolution defaults; held-out family/severity separation; common-mode control; all 14 proper clean masks; child retains exactly the parent's surviving tensors. | Task review passed at `1ee5555`; combined role/stress foundations passed 98 tests. |
+| P2C — provenance-bound artifacts | Frozen feature/target cache and role/checkpoint/mask/transform bindings; depends on P2A, P2B, P1B. | Tamper/stale/order/checkpoint/role rejection; all targets regenerated from realized inputs; external private records; prediction identity and finite-value checks. | Task review accepted `b176bb5`; 164 integrated tests passed. |
 | P3A — relation head and loss | 128-dimensional pooled views, two four-head relation layers, learned effect representations feeding global risk, constrained reported effects and raw-logit auxiliary CE plus error BCE; depends on accepted P2. | Frozen encoder gradients/parameters; both backbone dimensions; missing-view masks; parent-normalized raw-logit CE including deterministic-unchanged cases; exact reported `[0,1,0]` for identical predictions; effect-to-risk gradient path; singleton finite loss; lambda zero retains risk gradients; unchanged classifier predictions. | Pending. |
 | P3B — fair baselines and ablations | All controls and ablations in protocol section 6, including same-input MLP/four-class and regenerated-target augmentation controls; depends on P3A input/loss contracts. | Input/exposure/capacity audit; score orientation; original four-view MV-ACN equivalence with labeled subset adaptation; auxiliary classifier never replaces frozen predictions; ViLU adaptation documented. | Pending. |
 | P4A — metrics and paired inference | AURC/tie policy, both AP orientations, risk at coverage, Brier, effects, patient-paired bootstrap and seed summaries; depends on accepted P3. | Hand-computable ranking/tie/sign fixtures; one-class AP handling; all variants retained within patient clusters; paired difference and seed/patient separation. | Pending. |
@@ -243,3 +240,26 @@ after publication; software acceptance does not imply a measured research result
 Completed task/gate worktrees and Herdr workspaces were removed; required evidence
 is retained under `evidence/`. Shared environment and orchestration remain for
 dependent phases.
+
+## Phase 2 foundation task acceptance
+
+P2A passed fresh Sol xhigh review at `85c8d30a981ae25559596521b86aba654bbbb729`
+after the original implementer fixed locked-record exposure, cross-manifest path
+collisions, and the unsupported RSNA sign-off wording. P2B passed fresh Sol xhigh
+review at `1ee5555db5ec9222e9306d62334aa02ff3017579` after the original implementer
+closed training-replay policy bypasses. Combined foundations: 98 tests passed.
+Both tasks used red/green TDD; evidence is in `evidence/phase2/`. Their temporary
+worktrees and Herdr workspaces are removed. P2C cache work is next; G2 and phase
+publication remain pending. No real patient split or training is claimed.
+
+## Phase 2 cache task acceptance
+
+P2C passed fresh Sol xhigh review at `b176bb5eeed0b96c0485a42a0f68298abe309659`.
+The same implementer fixed manifest label binding, realized-parameter consistency,
+text aliasing, direct weight mutation, and final/staging artifact-path protection.
+Four fresh review rounds are retained under `evidence/phase2/`, along with
+red/green regressions and exact launch/session records. All 164 integrated
+research tests, lint, compilation, and legacy CLI checks passed. Completed P2
+task worktrees and Herdr workspaces were removed after acceptance. G2 and
+publication are pending at this integration candidate. Real-data readiness is
+still unverified; no fitting or patient evaluation has run.
