@@ -1,13 +1,12 @@
 # Intervention-supervised MV-ACN implementation ledger
 
-Current status: P1 and P2 are accepted and published in draft PR #1.
-Both remote CI runs passed on Phase 2 publication head `b19fb9c`.
-P3A passed fresh review at `c3e7a67` and is staged for Phase 3 integration.
-P3B passed fresh review at `8dc66ca`; integrated Phase 3 has 211 passing tests.
-G3 passed at `07df30a`; Phase 3 publication is being recorded. P4 and P5 remain pending. No classifier training,
-confidence training, or patient evaluation has run. Later sections preserve
-dated drafting and review history; this summary and the latest orchestrator
-record govern current status.
+Current status: **P1–P3 are accepted and published in draft PR #1.**
+Phase 3 implementation is `a178ef9`; both release CI runs passed. The protocol,
+data/stress/cache contracts, relation head, and matched-control interfaces are
+implemented and reviewed. **P4 and P5 remain pending and unstarted** under the
+five-hour active-work limit. No classifier/confidence training, patient evaluation,
+measured uncertainty gain, or successful pilot is claimed. Later sections preserve
+dated drafting history; this summary and the final handoff govern current status.
 
 Scope is the single intervention-supervised confidence project described in
 [view_risk_protocol.md](view_risk_protocol.md). Related evidence-gating and
@@ -358,3 +357,23 @@ The shared project environment remains available at `.venv`; use
 `PYTHONPATH=src .venv/bin/python -m pytest -q` for research checks. No original
 repository files, pretrained weights, or private patient artifacts were changed
 or committed by this implementation run.
+
+## Final publication and cleanup record
+
+Phase 3 implementation `a178ef984687d4ca78b202edbdbc43b093a53537` is pushed to
+`origin/research/intervention-supervised-confidence`; draft PR #1 is updated.
+Both release CI runs passed: PR 34553283001 (1m58s) and push 34553279680 (1m57s).
+Source/tests are unchanged from G3. A following metadata-only commit records
+publication and this handoff; its checks are available on the PR.
+
+All completed implementation/review worktrees and Herdr workspaces are removed,
+the dedicated Herdr session is stopped, and task-owned orchestration scratch,
+bytecode, test/lint caches and generated package build metadata are cleaned.
+The project `.venv` is retained and its CLI remains functional. Original checkout
+`MMDC-CLIP_original/MMDC-CLIP-F` is clean at `b791722`. Essential review, mutation,
+integration, CI, and resource-estimate evidence is committed.
+
+The next task is P4A. Its required implementation and independent review cannot
+fit the remaining window after this release, so no unreviewed P4 task was started.
+This run stops within the effective cutoff of 2026-09-11 02:24:55 UTC; it does not
+mark the full implementation plan or research study complete.
