@@ -78,3 +78,41 @@ version check), so callers should batch the observed views of each parent to
 amortize this unavoidable integrity-validation cost. Transform metadata checks
 detect spec/record mismatches; they do not authenticate arbitrary caller-authored
 pixels.
+
+## Review 2 destination-sibling regression
+
+The accepted finding was converted to a refusal regression before source changes.
+A temporary Git repository ignored only `artifact.json`; saving had to fail before
+either the JSON or its patient-bearing safetensors sibling was created. A paired
+positive case ignored both final paths. Existing external-destination coverage was
+retained.
+
+### RED
+
+```text
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_cache.py -k "ignored_metadata_with_unignored_tensor_sibling or fully_ignored_cache_siblings"
+```
+
+Result: `1 failed, 1 passed, 41 deselected in 0.59s`. The mixed-ignore case did
+not refuse and created the unignored sibling under the temporary fixture repo;
+the fully ignored control passed.
+
+### GREEN
+
+The same focused command passed: `2 passed, 41 deselected in 0.57s`.
+
+```text
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_features.py tests/research/test_view_risk_cache.py
+```
+
+Result: `63 passed in 0.91s`.
+
+```text
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research
+```
+
+Result: `161 passed in 1.00s`.
+
+`save_cache_bundle` now resolves the final metadata destination, derives its final
+`.safetensors` sibling, and validates both destinations before writing either.
+Fully external and fully Git-ignored destinations remain supported.

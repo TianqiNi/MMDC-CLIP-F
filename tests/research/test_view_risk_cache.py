@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from dataclasses import replace
 from types import SimpleNamespace
@@ -345,6 +346,39 @@ def test_unignored_worktree_destination_is_refused(cache_bundle) -> None:
     with pytest.raises(ValueError, match="gitignore"):
         save_cache_bundle(bundle, destination)
     assert not destination.exists()
+
+
+def test_ignored_metadata_with_unignored_tensor_sibling_is_refused_before_write(
+    cache_bundle, tmp_path
+) -> None:
+    bundle, _, _ = cache_bundle
+    repository = tmp_path / "private-cache-repository"
+    repository.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(repository)], check=True)
+    (repository / ".gitignore").write_text("artifact.json\n", encoding="utf-8")
+    metadata = repository / "artifact.json"
+    tensors = repository / "artifact.safetensors"
+
+    with pytest.raises(ValueError, match="gitignore"):
+        save_cache_bundle(bundle, metadata)
+
+    assert not metadata.exists()
+    assert not tensors.exists()
+
+
+def test_fully_ignored_cache_siblings_are_saved(cache_bundle, tmp_path) -> None:
+    bundle, _, _ = cache_bundle
+    repository = tmp_path / "ignored-cache-repository"
+    repository.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(repository)], check=True)
+    (repository / ".gitignore").write_text(
+        "artifact.json\nartifact.safetensors\n", encoding="utf-8"
+    )
+
+    paths = save_cache_bundle(bundle, repository / "artifact.json")
+
+    assert paths.metadata.exists()
+    assert paths.tensors.exists()
 
 
 def test_reordered_private_keys_and_tree_or_mask_metadata_fail_even_if_rehashed(

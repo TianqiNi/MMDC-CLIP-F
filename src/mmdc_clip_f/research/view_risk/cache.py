@@ -763,13 +763,14 @@ def save_cache_bundle(bundle: CacheBundle, metadata_path: str | Path) -> CachePa
     if not isinstance(bundle, CacheBundle):
         raise TypeError("bundle must be a CacheBundle")
     _validate_bundle(bundle)
-    metadata = Path(metadata_path)
+    metadata = Path(metadata_path).resolve()
     if metadata.suffix != ".json":
         raise ValueError("cache metadata destination must end in .json")
     if not metadata.parent.exists():
         raise ValueError("caller-supplied cache destination directory must already exist")
-    _require_external_or_ignored_destination(metadata)
     tensors_path = metadata.with_suffix(".safetensors")
+    _require_external_or_ignored_destination(metadata)
+    _require_external_or_ignored_destination(tensors_path)
     tensors = {
         name: tensor.detach().cpu().contiguous() for name, tensor in _bundle_tensors(bundle).items()
     }
