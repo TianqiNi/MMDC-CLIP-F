@@ -116,3 +116,51 @@ Result: `161 passed in 1.00s`.
 `save_cache_bundle` now resolves the final metadata destination, derives its final
 `.safetensors` sibling, and validates both destinations before writing either.
 Fully external and fully Git-ignored destinations remain supported.
+
+## Review 3 complete-destination regression
+
+The accepted finding was converted to child-process interruption regressions
+before source changes. The tests stop the process immediately before the tensor
+or metadata replacement and inspect the concrete files left behind. Worktree
+saves with exact final-filename ignore rules must refuse before writing private
+bytes; an ignored-directory control is allowed to reach each forced interruption,
+and every surviving final or staging artifact must itself be Git-ignored.
+
+### RED
+
+```text
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_cache.py -k 'exact_filename_ignore_rules or fully_ignored_directory or atomic_replacement_cannot_strand'
+```
+
+Result: `3 failed, 1 passed, 42 deselected in 0.65s`. The filename-only save did
+not refuse, and both tensor- and metadata-replacement children reached the forced
+exit instead of being rejected by staging-path preflight. This reproduced the
+possibility of an unignored named staging file surviving abrupt termination.
+
+### GREEN
+
+The same focused command passed: `4 passed, 42 deselected in 0.68s`.
+
+```text
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_features.py tests/research/test_view_risk_cache.py
+```
+
+Result: `66 passed in 1.01s`.
+
+```text
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research
+```
+
+Result: `164 passed in 1.13s`.
+
+Ruff and `py_compile` on the owned cache source/test files, plus
+`git diff --check`, passed.
+
+`save_cache_bundle` now checks both resolved final destinations and both concrete
+named staging destinations before writing tensor or metadata bytes. The tensor
+stage remains `.artifact.safetensors.<pid>.tmp`; the JSON stage is the concrete
+random sibling allocated by `mkstemp`. Fully external destinations and ordinary
+fully ignored directories remain supported. Compatibility detail: ignore rules
+covering only the two final filenames may now be insufficient and are rejected;
+callers should normally ignore the complete private cache directory (or explicitly
+cover every staging-name pattern as well as both final names).

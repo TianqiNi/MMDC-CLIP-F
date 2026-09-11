@@ -722,18 +722,6 @@ def _validate_bundle(bundle: CacheBundle) -> None:
     _same_tensor(targets.tcp, tcp, "tcp")
 
 
-def _write_atomic_json(path: Path, value: Mapping[str, object]) -> None:
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(_canonical_json(value))
-            handle.write(b"\n")
-        os.replace(temporary_name, path)
-    finally:
-        if os.path.exists(temporary_name):
-            os.unlink(temporary_name)
-
-
 def _require_external_or_ignored_destination(path: Path) -> None:
     resolved = path.resolve()
     repository: Path | None = None
@@ -771,27 +759,41 @@ def save_cache_bundle(bundle: CacheBundle, metadata_path: str | Path) -> CachePa
     tensors_path = metadata.with_suffix(".safetensors")
     _require_external_or_ignored_destination(metadata)
     _require_external_or_ignored_destination(tensors_path)
-    tensors = {
-        name: tensor.detach().cpu().contiguous() for name, tensor in _bundle_tensors(bundle).items()
-    }
-    temporary = tensors_path.with_name(f".{tensors_path.name}.{os.getpid()}.tmp")
+    tensors_temporary = tensors_path.with_name(f".{tensors_path.name}.{os.getpid()}.tmp")
+    descriptor, metadata_temporary_name = tempfile.mkstemp(
+        prefix=f".{metadata.name}.", dir=metadata.parent
+    )
+    metadata_temporary = Path(metadata_temporary_name)
+    metadata_handle = os.fdopen(descriptor, "wb")
     try:
-        save_file(tensors, str(temporary))
-        os.replace(temporary, tensors_path)
+        _require_external_or_ignored_destination(tensors_temporary)
+        _require_external_or_ignored_destination(metadata_temporary)
+        tensors = {
+            name: tensor.detach().cpu().contiguous()
+            for name, tensor in _bundle_tensors(bundle).items()
+        }
+        save_file(tensors, str(tensors_temporary))
+        os.replace(tensors_temporary, tensors_path)
+        manifest = _tensor_manifest(tensors)
+        document: dict[str, object] = {
+            "provenance": bundle.provenance.to_dict(),
+            "tensor_file": tensors_path.name,
+            "tensor_file_sha256": sha256_file(tensors_path),
+            "tensor_manifest": manifest,
+            "feature_content_sha256": _selected_tensor_hash(tensors, "feature."),
+            "labels_sha256": tensor_sha256(tensors["target.labels"]),
+        }
+        document["record_integrity_sha256"] = _hash_json(document)
+        with metadata_handle:
+            metadata_handle.write(_canonical_json(document))
+            metadata_handle.write(b"\n")
+        os.replace(metadata_temporary, metadata)
     finally:
-        if temporary.exists():
-            temporary.unlink()
-    manifest = _tensor_manifest(tensors)
-    document: dict[str, object] = {
-        "provenance": bundle.provenance.to_dict(),
-        "tensor_file": tensors_path.name,
-        "tensor_file_sha256": sha256_file(tensors_path),
-        "tensor_manifest": manifest,
-        "feature_content_sha256": _selected_tensor_hash(tensors, "feature."),
-        "labels_sha256": tensor_sha256(tensors["target.labels"]),
-    }
-    document["record_integrity_sha256"] = _hash_json(document)
-    _write_atomic_json(metadata, document)
+        metadata_handle.close()
+        if tensors_temporary.exists():
+            tensors_temporary.unlink()
+        if metadata_temporary.exists():
+            metadata_temporary.unlink()
     return CachePaths(metadata=metadata, tensors=tensors_path)
 
 

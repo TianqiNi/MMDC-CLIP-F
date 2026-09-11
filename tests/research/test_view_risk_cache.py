@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from pathlib import Path
 from dataclasses import replace
@@ -14,6 +15,7 @@ from torch import Tensor, nn
 
 from mmdc_clip_f.backbones import PROMPTS
 from mmdc_clip_f.model import MultiViewCLIPClassifier
+from mmdc_clip_f.research.view_risk import cache as cache_module
 from mmdc_clip_f.research.view_risk.cache import (
     ArtifactIntegrityError,
     ProvenanceMismatchError,
@@ -366,7 +368,9 @@ def test_ignored_metadata_with_unignored_tensor_sibling_is_refused_before_write(
     assert not tensors.exists()
 
 
-def test_fully_ignored_cache_siblings_are_saved(cache_bundle, tmp_path) -> None:
+def test_exact_filename_ignore_rules_that_omit_staging_are_refused_before_write(
+    cache_bundle, tmp_path
+) -> None:
     bundle, _, _ = cache_bundle
     repository = tmp_path / "ignored-cache-repository"
     repository.mkdir()
@@ -374,11 +378,107 @@ def test_fully_ignored_cache_siblings_are_saved(cache_bundle, tmp_path) -> None:
     (repository / ".gitignore").write_text(
         "artifact.json\nartifact.safetensors\n", encoding="utf-8"
     )
+    metadata = repository / "artifact.json"
 
-    paths = save_cache_bundle(bundle, repository / "artifact.json")
+    with pytest.raises(ValueError, match="gitignore"):
+        save_cache_bundle(bundle, metadata)
+
+    assert not list(repository.glob("*artifact*"))
+
+
+def test_cache_in_fully_ignored_directory_covers_final_and_staging_paths(
+    cache_bundle, tmp_path
+) -> None:
+    bundle, _, _ = cache_bundle
+    repository = tmp_path / "ignored-cache-repository"
+    repository.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(repository)], check=True)
+    (repository / ".gitignore").write_text("private-cache/\n", encoding="utf-8")
+    destination = repository / "private-cache"
+    destination.mkdir()
+
+    paths = save_cache_bundle(bundle, destination / "artifact.json")
 
     assert paths.metadata.exists()
     assert paths.tensors.exists()
+
+
+def _save_in_child_with_abrupt_replacement(
+    bundle, metadata: Path, *, replacement_number: int
+) -> int:
+    child = os.fork()
+    if child == 0:
+        original_replace = os.replace
+        replacements = 0
+
+        def interrupt(source, destination) -> None:
+            nonlocal replacements
+            replacements += 1
+            if replacements == replacement_number:
+                os._exit(88)
+            original_replace(source, destination)
+
+        cache_module.os.replace = interrupt
+        try:
+            save_cache_bundle(bundle, metadata)
+        except ValueError as exc:
+            os._exit(89 if "gitignore" in str(exc) else 90)
+        except BaseException:
+            os._exit(91)
+        os._exit(92)
+    _, status = os.waitpid(child, 0)
+    assert os.WIFEXITED(status)
+    return os.WEXITSTATUS(status)
+
+
+def _git_ignored(repository: Path, path: Path) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(repository), "check-ignore", "--quiet", "--", str(path)],
+        check=False,
+    )
+    return result.returncode == 0
+
+
+@pytest.mark.parametrize("replacement_number", (1, 2), ids=("tensor", "metadata"))
+def test_atomic_replacement_cannot_strand_unignored_private_staging_files(
+    cache_bundle, tmp_path, replacement_number
+) -> None:
+    bundle, _, _ = cache_bundle
+
+    exact_repository = tmp_path / f"exact-ignore-{replacement_number}"
+    exact_repository.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(exact_repository)], check=True)
+    exact_ignore = "artifact.json\nartifact.safetensors\n"
+    if replacement_number == 2:
+        exact_ignore += ".artifact.safetensors.*.tmp\n"
+    (exact_repository / ".gitignore").write_text(exact_ignore, encoding="utf-8")
+    exact_metadata = exact_repository / "artifact.json"
+
+    assert (
+        _save_in_child_with_abrupt_replacement(
+            bundle, exact_metadata, replacement_number=replacement_number
+        )
+        == 89
+    )
+    assert not list(exact_repository.glob("*artifact*"))
+
+    ignored_repository = tmp_path / f"directory-ignore-{replacement_number}"
+    ignored_repository.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(ignored_repository)], check=True)
+    (ignored_repository / ".gitignore").write_text("private-cache/\n", encoding="utf-8")
+    ignored_destination = ignored_repository / "private-cache"
+    ignored_destination.mkdir()
+    ignored_metadata = ignored_destination / "artifact.json"
+
+    assert (
+        _save_in_child_with_abrupt_replacement(
+            bundle, ignored_metadata, replacement_number=replacement_number
+        )
+        == 88
+    )
+    survivors = list(ignored_destination.iterdir())
+    assert survivors
+    assert all(_git_ignored(ignored_repository, path) for path in survivors)
 
 
 def test_reordered_private_keys_and_tree_or_mask_metadata_fail_even_if_rehashed(
