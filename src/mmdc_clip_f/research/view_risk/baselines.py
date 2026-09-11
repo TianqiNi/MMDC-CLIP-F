@@ -103,19 +103,20 @@ def _authorize_rows(
     role: Role,
     row_count: int,
     exam_keys: Sequence[str],
-) -> None:
-    """Bind fitting data to records selected by the accepted role-access API."""
+) -> tuple[int, ...]:
+    """Bind fitting rows to selected records and return authoritative densities."""
 
     if not isinstance(manifest, RoleManifest):
         raise TypeError("manifest must be a RoleManifest")
-    selected_keys = run_with_role_access(
+    selected_records = run_with_role_access(
         manifest,
         operation=operation,
         roles=(role,),
-        loader=lambda records: tuple(record.exam_key for record in records),
+        loader=lambda records: tuple(records),
     )
-    if not selected_keys:
+    if not selected_records:
         raise PermissionError(f"manifest has no records authorized for {operation.value}")
+    selected_keys = tuple(record.exam_key for record in selected_records)
     supplied_keys = tuple(exam_keys)
     if (
         len(supplied_keys) != row_count
@@ -123,6 +124,7 @@ def _authorize_rows(
         or supplied_keys != selected_keys
     ):
         raise ValueError("tensor rows are not identity-bound in manifest-selected record order")
+    return tuple(record.density for record in selected_records)
 
 
 class TemperatureScaler:
@@ -155,13 +157,16 @@ class TemperatureScaler:
             raise ValueError("temperature labels must be in range 0..3")
         if not isinstance(max_iter, int) or max_iter <= 0:
             raise ValueError("max_iter must be positive")
-        _authorize_rows(
+        manifest_labels = _authorize_rows(
             manifest,
             operation=Operation.TUNE_SELECTION,
             role=Role.TUNE,
             row_count=scores.shape[0],
             exam_keys=exam_keys,
         )
+        authoritative = torch.tensor(manifest_labels, dtype=torch.long, device=labels.device)
+        if not torch.equal(labels.long(), authoritative):
+            raise ValueError("temperature labels disagree with manifest densities")
         log_temperature = torch.zeros(
             (), dtype=scores.dtype, device=scores.device, requires_grad=True
         )
@@ -568,14 +573,31 @@ class MVACNOutput:
     confidence_logit: Tensor
     confidence: Tensor
     classifier_prediction: Tensor
+    current_scores: Tensor
     observed_mask: Tensor
+    removal_valid_mask: Tensor
+
+
+def _validate_legacy_view_order(value: Sequence[str]) -> tuple[str, ...]:
+    if isinstance(value, (str, bytes)):
+        raise ValueError("legacy_view_order must list each canonical view exactly once")
+    order = tuple(value)
+    if len(order) != len(CANONICAL_VIEWS) or set(order) != set(CANONICAL_VIEWS):
+        raise ValueError("legacy_view_order must list each canonical view exactly once")
+    return order
 
 
 class MaskedMVACNAdapter(nn.Module):
-    """Owned legacy MV-ACN head with an omission-only missing-view adaptation."""
+    """Owned legacy MV-ACN head with explicit configured token order."""
 
-    def __init__(self, config: MVACNConfig) -> None:
+    def __init__(
+        self,
+        config: MVACNConfig,
+        *,
+        legacy_view_order: Sequence[str],
+    ) -> None:
         super().__init__()
+        self.legacy_view_order = _validate_legacy_view_order(legacy_view_order)
         self.head = MVACNHead(config)
 
     @property
@@ -583,31 +605,56 @@ class MaskedMVACNAdapter(nn.Module):
         return self.head.config
 
     @classmethod
-    def for_backbone(cls, backbone: str) -> "MaskedMVACNAdapter":
+    def for_backbone(
+        cls,
+        backbone: str,
+        *,
+        legacy_view_order: Sequence[str],
+    ) -> "MaskedMVACNAdapter":
         spec = get_backbone(backbone)
         if spec.name == "vit_b_32":
             config = MVACNConfig(hidden_dim=spec.hidden_size, dropout=0.2, drop_cls_tokens=True)
         else:
             config = MVACNConfig(hidden_dim=spec.hidden_size, dropout=0.3, drop_cls_tokens=False)
-        return cls(config)
+        return cls(config, legacy_view_order=legacy_view_order)
 
     @classmethod
-    def from_legacy(cls, legacy: MVACNHead) -> "MaskedMVACNAdapter":
+    def from_legacy(
+        cls,
+        legacy: MVACNHead,
+        *,
+        legacy_view_order: Sequence[str],
+    ) -> "MaskedMVACNAdapter":
         if not isinstance(legacy, MVACNHead):
             raise TypeError("legacy must be an MVACNHead")
-        result = cls(legacy.config)
+        result = cls(legacy.config, legacy_view_order=legacy_view_order)
         result.head.load_state_dict(legacy.state_dict(), strict=True)
         return result
 
     @staticmethod
-    def output_from_logit(logit: Tensor, classifier_prediction: Tensor) -> MVACNOutput:
+    def output_from_logit(
+        logit: Tensor,
+        classifier_prediction: Tensor,
+        *,
+        current_scores: Tensor,
+        observed_mask: Tensor,
+    ) -> MVACNOutput:
         if logit.ndim != 1 or classifier_prediction.shape != logit.shape:
             raise ValueError("logit and classifier prediction must have shape [batch]")
+        removal_valid_mask = observed_mask & (observed_mask.sum(1, keepdim=True) > 1)
+        _validate_output_input_binding(
+            classifier_prediction,
+            current_scores,
+            observed_mask,
+            removal_valid_mask,
+        )
         return MVACNOutput(
             confidence_logit=logit,
             confidence=torch.sigmoid(logit),
             classifier_prediction=classifier_prediction,
-            observed_mask=torch.ones(logit.shape[0], 4, dtype=torch.bool, device=logit.device),
+            current_scores=current_scores,
+            observed_mask=observed_mask,
+            removal_valid_mask=removal_valid_mask,
         )
 
     def forward(
@@ -616,12 +663,16 @@ class MaskedMVACNAdapter(nn.Module):
         observed: Iterable[str] | Sequence[bool] | Tensor,
         *,
         classifier_prediction: Tensor,
+        current_scores: Tensor,
     ) -> MVACNOutput:
         observed_views = canonicalize_observed_views(observed)
         missing = set(observed_views).difference(hidden_by_view)
         if missing:
             raise ValueError(f"hidden_by_view is missing observed views: {sorted(missing)}")
-        views = tuple(hidden_by_view[view] for view in observed_views)
+        ordered_observed_views = tuple(
+            view for view in self.legacy_view_order if view in observed_views
+        )
+        views = tuple(hidden_by_view[view] for view in ordered_observed_views)
         reference = views[0]
         if reference.ndim != 3:
             raise ValueError("each hidden view must have shape [batch, tokens, hidden_dim]")
@@ -637,7 +688,7 @@ class MaskedMVACNAdapter(nn.Module):
             raise ValueError("classifier_prediction must be long with shape [batch]")
         if set(observed_views) == set(CANONICAL_VIEWS):
             # This direct legacy branch is the exact compatibility contract.
-            confidence_logit = self.head(*(hidden_by_view[view] for view in CANONICAL_VIEWS))
+            confidence_logit = self.head(*(hidden_by_view[view] for view in self.legacy_view_order))
         else:
             prepared = (
                 tuple(view[:, 1:] for view in views) if self.config.drop_cls_tokens else views
@@ -657,17 +708,70 @@ class MaskedMVACNAdapter(nn.Module):
             .unsqueeze(0)
             .expand(batch, -1)
         )
-        return MVACNOutput(
-            confidence_logit,
-            torch.sigmoid(confidence_logit),
+        removal_valid_mask = mask & (mask.sum(1, keepdim=True) > 1)
+        _validate_output_input_binding(
             classifier_prediction,
+            current_scores,
             mask,
+            removal_valid_mask,
+        )
+        return MVACNOutput(
+            confidence_logit=confidence_logit,
+            confidence=torch.sigmoid(confidence_logit),
+            classifier_prediction=classifier_prediction,
+            current_scores=current_scores,
+            observed_mask=mask,
+            removal_valid_mask=removal_valid_mask,
         )
 
 
-def _validate_current_cached_targets(targets: CachedTargets, prediction: Tensor) -> None:
+def _validate_output_input_binding(
+    prediction: Tensor,
+    current_scores: Tensor,
+    observed_mask: Tensor,
+    removal_valid_mask: Tensor,
+) -> None:
+    """Validate the label-free current parent identity carried by an output."""
+
+    _validate_scores(current_scores)
+    batch = current_scores.shape[0]
+    if prediction.shape != (batch,) or prediction.dtype != torch.long:
+        raise ValueError("classifier_prediction must be long with shape [batch]")
+    if observed_mask.shape != (batch, 4) or observed_mask.dtype != torch.bool:
+        raise ValueError("current observed mask must be boolean with shape [batch, 4]")
+    if removal_valid_mask.shape != (batch, 4) or removal_valid_mask.dtype != torch.bool:
+        raise ValueError("current removal mask must be boolean with shape [batch, 4]")
+    if any(
+        value.device != current_scores.device
+        for value in (prediction, observed_mask, removal_valid_mask)
+    ):
+        raise ValueError("current score, prediction, and masks must share one device")
+    if not observed_mask.any(1).all():
+        raise ValueError("current observed mask must retain at least one view")
+    if not torch.equal(observed_mask, observed_mask[:1].expand_as(observed_mask)):
+        raise ValueError("current observed mask must be batch-shared")
+    expected_removal = observed_mask & (observed_mask.sum(1, keepdim=True) > 1)
+    if not torch.equal(removal_valid_mask, expected_removal):
+        raise ValueError("current removal mask disagrees with observed views")
+    if not torch.equal(prediction, current_scores.argmax(1)):
+        raise ValueError("classifier prediction disagrees with current input scores")
+
+
+def _validate_current_cached_targets(
+    targets: CachedTargets,
+    prediction: Tensor,
+    current_scores: Tensor,
+    observed_mask: Tensor,
+    removal_valid_mask: Tensor,
+) -> None:
     if not isinstance(targets, CachedTargets):
         raise TypeError("objectives require current realized CachedTargets")
+    _validate_output_input_binding(
+        prediction,
+        current_scores,
+        observed_mask,
+        removal_valid_mask,
+    )
     batch = prediction.shape[0]
     if (
         targets.scores.shape != (batch, NUM_CLASSES)
@@ -676,6 +780,17 @@ def _validate_current_cached_targets(targets: CachedTargets, prediction: Tensor)
         raise ValueError("current realized CachedTargets have invalid score shapes")
     if targets.labels.shape != (batch,) or targets.tcp.shape != (batch,):
         raise ValueError("current realized CachedTargets have invalid target shapes")
+    if (
+        targets.valid_removal_mask.shape != (4,)
+        or targets.valid_removal_mask.dtype != torch.bool
+        or targets.valid_removal_mask.device != current_scores.device
+    ):
+        raise ValueError("current realized CachedTargets have an invalid removal mask")
+    if not torch.equal(current_scores, targets.scores):
+        raise ValueError("current input scores disagree with CachedTargets scores")
+    target_removal = targets.valid_removal_mask.unsqueeze(0).expand(batch, -1)
+    if not torch.equal(removal_valid_mask, target_removal):
+        raise ValueError("current input mask disagrees with CachedTargets removal mask")
     expected_prediction = targets.scores.argmax(1)
     expected_probabilities = targets.scores.softmax(1)
     expected_error = (expected_prediction != targets.labels).long()
@@ -704,7 +819,13 @@ def compute_mvacn_objective(
     if not isinstance(output, MVACNOutput):
         raise TypeError("output must be MVACNOutput")
     objective = MVACNObjective(objective)
-    _validate_current_cached_targets(targets, output.classifier_prediction)
+    _validate_current_cached_targets(
+        targets,
+        output.classifier_prediction,
+        output.current_scores,
+        output.observed_mask,
+        output.removal_valid_mask,
+    )
     if objective is MVACNObjective.TCP_MSE:
         return F.mse_loss(output.confidence, targets.tcp.to(output.confidence.dtype))
     correctness = 1 - targets.observed_error.to(output.confidence_logit.dtype)
@@ -719,6 +840,9 @@ class ViLUOutput:
     attention_weights: Tensor
     classifier_prediction: Tensor
     predicted_text_embedding: Tensor
+    current_scores: Tensor
+    observed_mask: Tensor
+    removal_valid_mask: Tensor
 
 
 class ViLUFailureAdapter(nn.Module):
@@ -768,6 +892,7 @@ class ViLUFailureAdapter(nn.Module):
         observed_mask: Tensor,
         *,
         classifier_prediction: Tensor,
+        current_scores: Tensor,
     ) -> ViLUOutput:
         if (
             projected_visual_embeddings.ndim != 3
@@ -805,13 +930,23 @@ class ViLUFailureAdapter(nn.Module):
         representation = torch.cat((pooled_visual, predicted_text, attended_text), dim=1)
         error_logit = self.failure_mlp(representation).squeeze(1)
         error_probability = torch.sigmoid(error_logit)
-        return ViLUOutput(
-            error_logit,
-            error_probability,
-            1 - error_probability,
-            attention_weights,
+        removal_valid_mask = observed_mask & (observed_mask.sum(1, keepdim=True) > 1)
+        _validate_output_input_binding(
             classifier_prediction,
-            predicted_text,
+            current_scores,
+            observed_mask,
+            removal_valid_mask,
+        )
+        return ViLUOutput(
+            error_logit=error_logit,
+            error_probability=error_probability,
+            confidence=1 - error_probability,
+            attention_weights=attention_weights,
+            classifier_prediction=classifier_prediction,
+            predicted_text_embedding=predicted_text,
+            current_scores=current_scores,
+            observed_mask=observed_mask,
+            removal_valid_mask=removal_valid_mask,
         )
 
 
@@ -820,7 +955,13 @@ def compute_vilu_failure_loss(output: ViLUOutput, targets: CachedTargets) -> Ten
 
     if not isinstance(output, ViLUOutput):
         raise TypeError("output must be ViLUOutput")
-    _validate_current_cached_targets(targets, output.classifier_prediction)
+    _validate_current_cached_targets(
+        targets,
+        output.classifier_prediction,
+        output.current_scores,
+        output.observed_mask,
+        output.removal_valid_mask,
+    )
     return F.binary_cross_entropy_with_logits(
         output.error_logit, targets.observed_error.to(output.error_logit.dtype)
     )
@@ -863,6 +1004,9 @@ class SameInputOutput:
     error_probability: Tensor
     confidence: Tensor
     classifier_prediction: Tensor
+    current_scores: Tensor
+    observed_mask: Tensor
+    removal_valid_mask: Tensor
 
 
 @dataclass(frozen=True)
@@ -871,6 +1015,9 @@ class DensityControlOutput:
     frozen_prediction_probability: Tensor
     confidence: Tensor
     classifier_prediction: Tensor
+    current_scores: Tensor
+    observed_mask: Tensor
+    removal_valid_mask: Tensor
 
 
 def candidate_parameter_count(backbone: str) -> int:
@@ -936,11 +1083,20 @@ class SameInputMLP(_CapacityMatchedBase):
         features, prepared = self._features(raw)
         error_logit = self.network(features).squeeze(1)
         error_probability = torch.sigmoid(error_logit)
-        return SameInputOutput(
-            error_logit,
-            error_probability,
-            1 - error_probability,
+        _validate_output_input_binding(
             prepared.current_prediction,
+            raw.current_scores,
+            prepared.observed_mask,
+            prepared.removal_valid_mask,
+        )
+        return SameInputOutput(
+            error_logit=error_logit,
+            error_probability=error_probability,
+            confidence=1 - error_probability,
+            classifier_prediction=prepared.current_prediction,
+            current_scores=raw.current_scores,
+            observed_mask=prepared.observed_mask,
+            removal_valid_mask=prepared.removal_valid_mask,
         )
 
 
@@ -971,8 +1127,20 @@ class SameInputDensityControl(_CapacityMatchedBase):
         probability = gather_frozen_prediction_probability(
             class_logits, prepared.current_prediction
         )
+        _validate_output_input_binding(
+            prepared.current_prediction,
+            raw.current_scores,
+            prepared.observed_mask,
+            prepared.removal_valid_mask,
+        )
         return DensityControlOutput(
-            class_logits, probability, probability, prepared.current_prediction
+            class_logits=class_logits,
+            frozen_prediction_probability=probability,
+            confidence=probability,
+            classifier_prediction=prepared.current_prediction,
+            current_scores=raw.current_scores,
+            observed_mask=prepared.observed_mask,
+            removal_valid_mask=prepared.removal_valid_mask,
         )
 
 
@@ -981,7 +1149,13 @@ def compute_same_input_error_loss(output: SameInputOutput, targets: CachedTarget
 
     if not isinstance(output, SameInputOutput):
         raise TypeError("output must be SameInputOutput")
-    _validate_current_cached_targets(targets, output.classifier_prediction)
+    _validate_current_cached_targets(
+        targets,
+        output.classifier_prediction,
+        output.current_scores,
+        output.observed_mask,
+        output.removal_valid_mask,
+    )
     return F.binary_cross_entropy_with_logits(
         output.error_logit, targets.observed_error.to(output.error_logit.dtype)
     )
@@ -992,7 +1166,13 @@ def compute_density_control_loss(output: DensityControlOutput, targets: CachedTa
 
     if not isinstance(output, DensityControlOutput):
         raise TypeError("output must be DensityControlOutput")
-    _validate_current_cached_targets(targets, output.classifier_prediction)
+    _validate_current_cached_targets(
+        targets,
+        output.classifier_prediction,
+        output.current_scores,
+        output.observed_mask,
+        output.removal_valid_mask,
+    )
     return F.cross_entropy(output.class_logits, targets.labels.long())
 
 

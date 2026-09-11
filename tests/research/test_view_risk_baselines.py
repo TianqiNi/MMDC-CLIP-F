@@ -115,7 +115,12 @@ def _raw(hidden_width: int = 768, batch: int = 2) -> RawHeadInputs:
     )
 
 
-def _cached(scores: torch.Tensor, labels: torch.Tensor) -> CachedTargets:
+def _cached(
+    scores: torch.Tensor,
+    labels: torch.Tensor,
+    *,
+    valid_removal_mask: torch.Tensor | None = None,
+) -> CachedTargets:
     probabilities = scores.softmax(1)
     prediction = scores.argmax(1)
     error = (prediction != labels).long()
@@ -127,7 +132,9 @@ def _cached(scores: torch.Tensor, labels: torch.Tensor) -> CachedTargets:
         omission_predictions=torch.full((batch, 4), -1, dtype=torch.long),
         omission_effects=torch.full((batch, 4), -1, dtype=torch.long),
         omission_labels=torch.full((batch, 4), -1, dtype=torch.long),
-        valid_removal_mask=torch.zeros(4, dtype=torch.bool),
+        valid_removal_mask=(
+            torch.zeros(4, dtype=torch.bool) if valid_removal_mask is None else valid_removal_mask
+        ),
         scores=scores,
         probabilities=probabilities,
         tcp=probabilities.gather(1, labels[:, None]).squeeze(1),
@@ -165,7 +172,7 @@ def test_scalar_signs_status_and_singleton_omission_behavior() -> None:
 
 def test_temperature_is_tune_only_positive_and_preserves_classifier_argmax() -> None:
     scores = torch.tensor([[4.0, 1.0, 0.0, -2.0], [0.0, 3.0, 1.0, -1.0], [2.0, 0.0, 1.0, -3.0]])
-    labels = torch.tensor([0, 2, 0])
+    labels = torch.tensor([0, 1, 2])
     scaler = TemperatureScaler().fit(
         scores,
         labels,
@@ -186,6 +193,21 @@ def test_temperature_is_tune_only_positive_and_preserves_classifier_argmax() -> 
             manifest=_manifest(Role.CONFIDENCE_FIT, 3),
             exam_keys=_exam_keys(_manifest(Role.CONFIDENCE_FIT, 3)),
         )
+
+
+def test_temperature_refuses_labels_that_disagree_with_manifest_densities() -> None:
+    manifest = _manifest(Role.TUNE, 2)
+    scaler = TemperatureScaler()
+
+    with pytest.raises(ValueError, match="manifest.*densit"):
+        scaler.fit(
+            torch.tensor([[9.0, 1.0, 1.0, 1.0], [1.0, 9.0, 1.0, 1.0]]),
+            torch.tensor([3, 3]),
+            manifest=manifest,
+            exam_keys=_exam_keys(manifest),
+        )
+    with pytest.raises(RuntimeError, match="not been tune-fitted"):
+        _ = scaler.temperature
 
 
 def test_arbitrary_sigmoid_is_not_a_calibrated_scalar_probability() -> None:
@@ -289,27 +311,90 @@ def test_ds_fit_and_regularization_roles_come_from_manifests() -> None:
         MVACNConfig(hidden_dim=1024, dropout=0.3, drop_cls_tokens=False),
     ],
 )
-def test_masked_mvacn_is_exact_on_four_views_and_finite_on_subsets(config) -> None:
+@pytest.mark.parametrize(
+    "legacy_view_order",
+    [
+        ("L_CC", "L_MLO", "R_CC", "R_MLO"),
+        ("L_CC", "R_CC", "L_MLO", "R_MLO"),
+    ],
+    ids=("rsna", "ddsm"),
+)
+def test_masked_mvacn_is_exact_for_each_legacy_order_and_finite_on_subsets(
+    config, legacy_view_order
+) -> None:
     torch.manual_seed(12)
     legacy = MVACNHead(config).eval()
-    adapter = MaskedMVACNAdapter.from_legacy(legacy).eval()
+    adapter = MaskedMVACNAdapter.from_legacy(legacy, legacy_view_order=legacy_view_order).eval()
     views = {view: torch.randn(2, 3, config.hidden_dim) for view in CANONICAL_VIEWS}
     prediction = torch.tensor([1, 3])
+    current_scores = torch.tensor([[0.0, 4.0, 1.0, -1.0], [0.0, 1.0, 2.0, 4.0]])
 
-    expected = legacy(*(views[view] for view in CANONICAL_VIEWS))
-    actual = adapter(views, CANONICAL_VIEWS, classifier_prediction=prediction)
+    expected = legacy(*(views[view] for view in legacy_view_order))
+    actual = adapter(
+        views,
+        CANONICAL_VIEWS,
+        classifier_prediction=prediction,
+        current_scores=current_scores,
+    )
     torch.testing.assert_close(actual.confidence_logit, expected, rtol=0, atol=0)
     assert torch.equal(actual.classifier_prediction, prediction)
     for observed in (("L_CC",), ("L_MLO", "R_CC"), ("L_CC", "R_CC", "R_MLO")):
-        subset = adapter(views, observed, classifier_prediction=prediction)
+        subset = adapter(
+            views,
+            observed,
+            classifier_prediction=prediction,
+            current_scores=current_scores,
+        )
         assert torch.isfinite(subset.confidence_logit).all()
+
+
+def test_masked_mvacn_filters_configured_order_for_subsets_and_refuses_invalid_order() -> None:
+    ddsm_order = ("L_CC", "R_CC", "L_MLO", "R_MLO")
+    config = MVACNConfig(hidden_dim=8, dropout=0.3, drop_cls_tokens=False)
+    adapter = MaskedMVACNAdapter(config, legacy_view_order=ddsm_order).eval()
+    views = {
+        view: torch.full((1, 1, 8), float(column + 1))
+        for column, view in enumerate(CANONICAL_VIEWS)
+    }
+    captured = []
+    handle = adapter.head.attention.register_forward_pre_hook(
+        lambda _module, arguments: captured.append(arguments[0].detach().clone())
+    )
+    try:
+        adapter(
+            views,
+            ("L_CC", "L_MLO", "R_CC"),
+            classifier_prediction=torch.tensor([0]),
+            current_scores=torch.tensor([[4.0, 1.0, 0.0, -1.0]]),
+        )
+    finally:
+        handle.remove()
+
+    expected_tokens = torch.cat((views["L_CC"], views["R_CC"], views["L_MLO"]), dim=1)
+    torch.testing.assert_close(captured[0][:, 1:], expected_tokens)
+    for invalid in (
+        ("L_CC", "L_MLO", "R_CC"),
+        ("L_CC", "L_MLO", "R_CC", "R_CC"),
+        ("L_CC", "L_MLO", "R_CC", "UNKNOWN"),
+    ):
+        with pytest.raises(ValueError, match="legacy_view_order"):
+            MaskedMVACNAdapter(config, legacy_view_order=invalid)
 
 
 def test_mvacn_objectives_use_current_cached_targets_and_frozen_prediction() -> None:
     scores = torch.tensor([[3.0, 1.0, 0.0, -1.0], [2.0, 1.0, 0.0, -1.0]])
-    targets = _cached(scores, torch.tensor([0, 1]))
+    targets = _cached(
+        scores,
+        torch.tensor([0, 1]),
+        valid_removal_mask=torch.ones(4, dtype=torch.bool),
+    )
     logit = torch.tensor([0.4, -0.7], requires_grad=True)
-    output = MaskedMVACNAdapter.output_from_logit(logit, targets.observed_prediction)
+    output = MaskedMVACNAdapter.output_from_logit(
+        logit,
+        targets.observed_prediction,
+        current_scores=scores,
+        observed_mask=torch.ones(2, 4, dtype=torch.bool),
+    )
 
     tcp = compute_mvacn_objective(output, targets, MVACNObjective.TCP_MSE)
     correctness = compute_mvacn_objective(output, targets, MVACNObjective.CORRECTNESS_BCE)
@@ -323,14 +408,83 @@ def test_mvacn_objectives_use_current_cached_targets_and_frozen_prediction() -> 
         compute_mvacn_objective(output, stale, MVACNObjective.TCP_MSE)
 
 
+def test_learned_objectives_reject_stale_same_argmax_scores_and_current_mask() -> None:
+    clean_scores = torch.tensor([[9.0, 1.0, 1.0, 1.0], [1.0, 9.0, 1.0, 1.0]])
+    current_scores = torch.tensor([[2.0, 1.9, 1.8, 1.7], [1.9, 2.0, 1.8, 1.7]])
+    labels = torch.tensor([0, 1])
+    observed_mask = torch.tensor([[True, True, False, False]]).expand(2, -1)
+    valid_removal_mask = observed_mask[0]
+    current_targets = _cached(
+        current_scores,
+        labels,
+        valid_removal_mask=valid_removal_mask,
+    )
+    stale_clean_targets = _cached(
+        clean_scores,
+        labels,
+        valid_removal_mask=valid_removal_mask,
+    )
+    assert torch.equal(clean_scores.argmax(1), current_scores.argmax(1))
+    assert not torch.allclose(stale_clean_targets.tcp, current_targets.tcp)
+
+    logit = torch.tensor([0.4, -0.7], requires_grad=True)
+    mvacn = MaskedMVACNAdapter.output_from_logit(
+        logit,
+        current_targets.observed_prediction,
+        current_scores=current_scores,
+        observed_mask=observed_mask,
+    )
+    text = torch.randn(4, 6)
+    vilu = ViLUFailureAdapter(visual_width=5, text_embeddings=text, hidden_dim=7)(
+        torch.randn(2, 4, 5),
+        observed_mask,
+        classifier_prediction=current_targets.observed_prediction,
+        current_scores=current_scores,
+    )
+    raw = replace(
+        _raw(),
+        current_scores=current_scores,
+        current_probabilities=current_scores.softmax(1),
+        current_prediction=current_targets.observed_prediction,
+        observed_mask=observed_mask,
+        removal_valid_mask=observed_mask,
+    )
+    same_input = SameInputMLP("vit_b_32")(raw)
+    density = SameInputDensityControl("vit_b_32")(raw)
+    objectives = (
+        lambda target: compute_mvacn_objective(mvacn, target, MVACNObjective.TCP_MSE),
+        lambda target: compute_vilu_failure_loss(vilu, target),
+        lambda target: compute_same_input_error_loss(same_input, target),
+        lambda target: compute_density_control_loss(density, target),
+    )
+
+    for objective in objectives:
+        assert torch.isfinite(objective(current_targets))
+        with pytest.raises(ValueError, match="current.*scores"):
+            objective(stale_clean_targets)
+        with pytest.raises(ValueError, match="current.*mask"):
+            objective(
+                replace(
+                    current_targets,
+                    valid_removal_mask=torch.tensor([True, False, False, False]),
+                )
+            )
+
+
 def test_vilu_attention_is_learned_image_conditioned_and_selects_frozen_prediction_text() -> None:
     torch.manual_seed(23)
     text = torch.randn(4, 6)
     model = ViLUFailureAdapter(visual_width=5, text_embeddings=text, hidden_dim=7).eval()
     visual = torch.randn(2, 4, 5)
-    observed = torch.tensor([[True, True, False, False], [False, True, True, True]])
+    observed = torch.tensor([[True, True, False, False]]).expand(2, -1)
     prediction = torch.tensor([3, 1])
-    output = model(visual, observed, classifier_prediction=prediction)
+    current_scores = torch.tensor([[0.0, 0.0, 0.0, 4.0], [0.0, 4.0, 0.0, 0.0]])
+    output = model(
+        visual,
+        observed,
+        classifier_prediction=prediction,
+        current_scores=current_scores,
+    )
 
     torch.testing.assert_close(output.predicted_text_embedding, text[prediction])
     assert not torch.allclose(output.attention_weights[0], output.attention_weights[1])
@@ -341,12 +495,18 @@ def test_vilu_attention_is_learned_image_conditioned_and_selects_frozen_predicti
     changed = visual.clone()
     changed[~observed] = 1e6
     torch.testing.assert_close(
-        model(changed, observed, classifier_prediction=prediction).error_logit,
+        model(
+            changed,
+            observed,
+            classifier_prediction=prediction,
+            current_scores=current_scores,
+        ).error_logit,
         output.error_logit,
     )
     targets = _cached(
-        torch.tensor([[0.0, 0.0, 0.0, 4.0], [0.0, 4.0, 0.0, 0.0]]),
+        current_scores,
         torch.tensor([0, 1]),
+        valid_removal_mask=observed[0],
     )
     loss = compute_vilu_failure_loss(output, targets)
     torch.testing.assert_close(
@@ -400,7 +560,11 @@ def test_same_input_controls_own_independent_projections_and_match_candidate_cap
     assert abs(count_trainable_parameters(density) - target) / target <= 0.10
 
     raw = _raw(768 if backbone == "vit_b_32" else 1024)
-    targets = _cached(raw.current_scores, torch.tensor([0, 2]))
+    targets = _cached(
+        raw.current_scores,
+        torch.tensor([0, 2]),
+        valid_removal_mask=torch.ones(4, dtype=torch.bool),
+    )
     output = binary(raw)
     compute_same_input_error_loss(output, targets).backward()
     assert all(parameter.grad is not None for parameter in binary.parameters())
