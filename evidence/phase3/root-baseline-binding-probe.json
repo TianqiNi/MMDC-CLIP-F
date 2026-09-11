@@ -1,0 +1,23 @@
+{
+  "candidate": "7ead473ed9d874480afc23557645ddffe9764012",
+  "stale_tcp_same_argmax_accepted": true,
+  "clean_tcp": [
+    0.9989946484565735,
+    0.9989946484565735
+  ],
+  "current_tcp": [
+    0.28865140676498413,
+    0.28865140676498413
+  ],
+  "loss_using_stale_target": 0.24899566173553467,
+  "manifest_densities": [
+    0,
+    1
+  ],
+  "supplied_temperature_labels": [
+    3,
+    3
+  ],
+  "mismatched_manifest_temperature_labels_accepted": true,
+  "fitted_temperature": 1.1764068603515625
+}
