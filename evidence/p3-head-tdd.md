@@ -42,6 +42,65 @@ PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff ch
 All checks passed.
 ```
 
+## Review-1 regression coverage follow-up
+
+The accepted implementation already passed both new tests.  The following RED
+results came from deliberate, temporary local mutations to prove the new tests'
+sensitivity; they are not preexisting implementation failures.
+
+1. Corruption-mask mutation: in the corruption branch only, replaced
+   `prepared.observed_mask` with `prepared.removal_valid_mask`, then ran:
+
+   ```text
+   PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q \
+     tests/research/test_view_risk_head.py::test_singleton_corruption_supervises_its_only_observed_view
+
+   1 failed: the singleton produced no auxiliary-valid slot instead of supervising
+   its sole observed `R_CC` view.
+   ```
+
+2. Loss-normalization mutation: replaced
+   `auxiliary_ce = per_parent_auxiliary.mean()` with global valid-slot averaging
+   `auxiliary_ce = per_slot_ce[valid].mean()`, then ran:
+
+   ```text
+   PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q \
+     tests/research/test_view_risk_head.py::test_mixed_masks_average_each_parents_auxiliary_mean_equally
+
+   1 failed: global-slot CE was 0.3908577 versus the hand-computed
+   mean-of-parent-means 0.2435988 for valid-removal counts `[3,2,0]`.
+   ```
+
+After each RED run, `head.py` was restored from the accepted copy and compared
+byte-for-byte.  Both files had SHA-256
+`46bd7ff775d99204e43d95170b507fceac788dd97a2413c4f1601a28532693bf`.
+No source change remains.
+
+Final GREEN:
+
+```text
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q \
+  tests/research/test_view_risk_head_inputs.py tests/research/test_view_risk_head.py
+27 passed in 0.79s
+
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q
+191 passed in 1.34s
+
+PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check \
+  src/mmdc_clip_f/research/view_risk/head.py \
+  src/mmdc_clip_f/research/view_risk/head_inputs.py \
+  tests/research/test_view_risk_head.py \
+  tests/research/test_view_risk_head_inputs.py
+All checks passed.
+```
+
+The singleton corruption regression verifies positive raw auxiliary CE and
+nonzero CE gradients at its sole observed view (including the learned auxiliary
+representation), while all absent slots have zero gradients and removal validity
+is empty.  The mixed-mask regression derives counts `[3,2,0]` from triple, pair,
+and singleton observed masks, hand-computes each parent's mean raw CE (zero for
+the singleton), and then averages the three parents equally.
+
 ## Public contract and counts
 
 `prepare_raw_head_inputs(FrozenViewFeatures, *, backbone) -> RawHeadInputs`

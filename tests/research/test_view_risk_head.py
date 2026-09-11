@@ -168,6 +168,38 @@ def test_magnitude_constraint_and_corruption_reporting_semantics() -> None:
     )
 
 
+def test_singleton_corruption_supervises_its_only_observed_view() -> None:
+    torch.manual_seed(17)
+    raw, _ = _raw(("R_CC",))
+    model = RelationAwareConfidenceHead(
+        RelationAwareHeadConfig(backbone="vit_b_32", auxiliary_task="corruption")
+    ).eval()
+    output = model(raw)
+    output.raw_auxiliary_logits.retain_grad()
+    output.effect_representations.retain_grad()
+    corruption_targets = torch.tensor([[-1, -1, 1, -1], [-1, -1, 0, -1]], dtype=torch.long)
+
+    assert not raw.removal_valid_mask.any()
+    assert torch.equal(output.auxiliary_valid_mask, raw.observed_mask)
+
+    loss = compute_view_risk_loss(
+        output,
+        torch.tensor([0, 1]),
+        corruption_targets=corruption_targets,
+    )
+    expected = F.cross_entropy(output.raw_auxiliary_logits[:, 2], corruption_targets[:, 2])
+    torch.testing.assert_close(loss.auxiliary_ce, expected)
+    assert loss.auxiliary_ce.item() > 0
+
+    loss.auxiliary_ce.backward()
+    assert output.raw_auxiliary_logits.grad is not None
+    assert output.raw_auxiliary_logits.grad[:, 2].abs().sum() > 0
+    assert output.raw_auxiliary_logits.grad[:, [0, 1, 3]].count_nonzero() == 0
+    assert output.effect_representations.grad is not None
+    assert output.effect_representations.grad[:, 2].abs().sum() > 0
+    assert output.effect_representations.grad[:, [0, 1, 3]].count_nonzero() == 0
+
+
 def test_parent_normalized_loss_uses_raw_logits_for_identical_predictions() -> None:
     valid = torch.tensor([[True, True, False, False], [True, True, False, False]])
     raw_logits = torch.tensor(
@@ -212,6 +244,66 @@ def test_parent_normalized_loss_uses_raw_logits_for_identical_predictions() -> N
     torch.testing.assert_close(result.total, expected_bce + 0.6 * expected_ce)
     result.total.backward()
     assert raw_logits.grad is not None and raw_logits.grad.abs().sum() > 0
+
+
+def test_mixed_masks_average_each_parents_auxiliary_mean_equally() -> None:
+    observed = torch.tensor(
+        [
+            [True, True, True, False],
+            [True, True, False, False],
+            [False, False, True, False],
+        ]
+    )
+    valid = observed & (observed.sum(dim=1, keepdim=True) > 1)
+    assert torch.equal(observed.sum(dim=1), torch.tensor([3, 2, 1]))
+    assert torch.equal(valid.sum(dim=1), torch.tensor([3, 2, 0]))
+    raw_logits = torch.tensor(
+        [
+            [[3.0, -1.0, 0.0], [0.0, 1.0, 2.0], [-2.0, 0.5, 1.0], [0.0, 0.0, 0.0]],
+            [[-1.0, 2.0, 0.0], [1.5, -0.5, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+        ],
+        requires_grad=True,
+    )
+    output = RelationAwareHeadOutput(
+        error_logit=torch.tensor([0.2, -0.4, 0.7], requires_grad=True),
+        confidence=torch.tensor([0.4, 0.6, 0.3]),
+        effect_representations=torch.zeros(3, 4, 128),
+        raw_auxiliary_logits=raw_logits,
+        reported_auxiliary_probabilities=raw_logits.softmax(dim=-1),
+        auxiliary_valid_mask=valid,
+        auxiliary_task="signed",
+    )
+    labels = torch.tensor([[0, 2, 1, -1], [1, 0, -1, -1], [-1, -1, -1, -1]])
+    targets = InterventionTargets(
+        observed_views=CANONICAL_VIEWS,
+        observed_prediction=torch.tensor([0, 1, 2]),
+        observed_error=torch.tensor([0, 1, 0]),
+        omission_predictions=torch.full((3, 4), -1),
+        omission_effects=torch.where(valid, labels - 1, labels),
+        omission_labels=labels,
+        valid_removal_mask=valid,
+        fusion_pairs=RSNA_FUSION_PAIRS,
+    )
+
+    result = compute_view_risk_loss(output, targets)
+    parent_0 = torch.stack(
+        [
+            F.cross_entropy(raw_logits[0, slot : slot + 1], labels[0, slot : slot + 1])
+            for slot in range(3)
+        ]
+    ).mean()
+    parent_1 = torch.stack(
+        [
+            F.cross_entropy(raw_logits[1, slot : slot + 1], labels[1, slot : slot + 1])
+            for slot in range(2)
+        ]
+    ).mean()
+    parent_2 = raw_logits.new_zeros(())
+    expected_per_parent = torch.stack((parent_0, parent_1, parent_2))
+
+    torch.testing.assert_close(result.per_parent_auxiliary_ce, expected_per_parent)
+    torch.testing.assert_close(result.auxiliary_ce, expected_per_parent.mean())
 
 
 def test_singleton_auxiliary_loss_is_zero_and_global_loss_finite() -> None:
