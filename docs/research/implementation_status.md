@@ -1,12 +1,13 @@
 # Intervention-supervised MV-ACN implementation ledger
 
-Current status: P1 is accepted, published in draft PR #1, and passed remote CI.
-P2A and P2B passed fresh task review and are staged for Phase 2 integration.
-P2C passed fresh review at `b176bb5`; integrated Phase 2 has 164 passing tests.
-G2 passed at `96a4845`; Phase 2 commit `a13f9d2` is pushed and PR #1 updated.
-Remote CI is the remaining prerequisite for P3. No classifier training, confidence training, or patient evaluation
-has run. Later sections preserve dated drafting and review history; the latest
-orchestrator record governs current status.
+Current status: P1 and P2 are accepted and published in draft PR #1.
+Both remote CI runs passed on Phase 2 publication head `b19fb9c`.
+P3A passed fresh review at `c3e7a67` and is staged for Phase 3 integration.
+P3B passed fresh review at `8dc66ca`; integrated Phase 3 has 211 passing tests.
+G3 passed at `07df30a`; Phase 3 publication is being recorded. P4 and P5 remain pending. No classifier training,
+confidence training, or patient evaluation has run. Later sections preserve
+dated drafting and review history; this summary and the latest orchestrator
+record govern current status.
 
 Scope is the single intervention-supervised confidence project described in
 [view_risk_protocol.md](view_risk_protocol.md). Related evidence-gating and
@@ -86,8 +87,8 @@ not failed or complete.
 | P2A — patient roles and inventory | Deterministic stratified patient manifests, private test denylist/lock, inventory/duplicate audit and sanitized counts; depends on accepted P1. | Software: synthetic patient-group isolation, count/duplicate checks, no eager test outcome access, and missing-mapping/mismatch refusal. Real data: verify patient mapping, inventory, and actual counts before fitting/evaluation; record unavailable prerequisites separately. | Task review passed at `85c8d30`; real-data readiness blockers recorded in `evidence/p2-inventory.json`. |
 | P2B — perturbations and masks | Reproducible parent/child transforms and sampling manifest; depends on P2A role schema and P1 subset contract. | Deterministic seeds; intensity/resolution defaults; held-out family/severity separation; common-mode control; all 14 proper clean masks; child retains exactly the parent's surviving tensors. | Task review passed at `1ee5555`; combined role/stress foundations passed 98 tests. |
 | P2C — provenance-bound artifacts | Frozen feature/target cache and role/checkpoint/mask/transform bindings; depends on P2A, P2B, P1B. | Tamper/stale/order/checkpoint/role rejection; all targets regenerated from realized inputs; external private records; prediction identity and finite-value checks. | Task review accepted `b176bb5`; 164 integrated tests passed. |
-| P3A — relation head and loss | 128-dimensional pooled views, two four-head relation layers, learned effect representations feeding global risk, constrained reported effects and raw-logit auxiliary CE plus error BCE; depends on accepted P2. | Frozen encoder gradients/parameters; both backbone dimensions; missing-view masks; parent-normalized raw-logit CE including deterministic-unchanged cases; exact reported `[0,1,0]` for identical predictions; effect-to-risk gradient path; singleton finite loss; lambda zero retains risk gradients; unchanged classifier predictions. | Pending. |
-| P3B — fair baselines and ablations | All controls and ablations in protocol section 6, including same-input MLP/four-class and regenerated-target augmentation controls; depends on P3A input/loss contracts. | Input/exposure/capacity audit; score orientation; original four-view MV-ACN equivalence with labeled subset adaptation; auxiliary classifier never replaces frozen predictions; ViLU adaptation documented. | Pending. |
+| P3A — relation head and loss | 128-dimensional pooled views, two four-head relation layers, learned effect representations feeding global risk, constrained reported effects and raw-logit auxiliary CE plus error BCE; depends on accepted P2. | Frozen encoder gradients/parameters; both backbone dimensions; missing-view masks; parent-normalized raw-logit CE including deterministic-unchanged cases; exact reported `[0,1,0]` for identical predictions; effect-to-risk gradient path; singleton finite loss; lambda zero retains risk gradients; unchanged classifier predictions. | Fresh task review accepted `c3e7a67`; 191 tests passed; G3 pending. |
+| P3B — fair baselines and ablations | All controls and ablations in protocol section 6, including same-input MLP/four-class and regenerated-target augmentation controls; depends on P3A input/loss contracts. | Input/exposure/capacity audit; score orientation; original four-view MV-ACN equivalence with labeled subset adaptation; auxiliary classifier never replaces frozen predictions; ViLU adaptation documented. | Fresh review accepted `8dc66ca`; 211 integrated tests passed; actual exposure matching remains P4/P5. |
 | P4A — metrics and paired inference | AURC/tie policy, both AP orientations, risk at coverage, Brier, effects, patient-paired bootstrap and seed summaries; depends on accepted P3. | Hand-computable ranking/tie/sign fixtures; one-class AP handling; all variants retained within patient clusters; paired difference and seed/patient separation. | Pending. |
 | P4B — training/evaluation/CLI | Explicit role access, fresh-classifier initialization path, confidence fitting, tune selection, immutable pilot plan and lock enforcement; depends on P4A and P2/P3 artifacts. | Forbidden-role negative tests; deterministic resume/provenance; regenerated targets; fresh public CLIP versus diagnostic checkpoint distinction; no test-selection bypass. | Pending. |
 | P4C — smoke integration and costs | End-to-end synthetic tiny run plus external-resource preflight; depends on P4B. | Synthetic nonempty masks and corruptions flow through target/head/control/metrics; CLI/config sanity; CPU smoke feasible without downloading weights; latency/memory procedure ready. Smoke outputs labeled non-scientific. | Pending. |
@@ -110,7 +111,7 @@ Record the exact completed subset and retain the rest as pending.
 |---|---|---|
 | G1: release P2 | P1A and combined P1B scientifically consistent; four-view legacy score/prediction compatibility and target edge cases verified; no source work inferred from documentation. | PASS: Astra medium reviewed `86031e5822680d223bed0175a83cc61280885056`, no actionable findings. | |
 | G2: release P3 | P2 role/grouping, inventory-validation, lock/stress/provenance contracts pass synthetic positive/negative checks, including refusal of absent patient mappings. Record actual inventory evidence or real-data blockers separately; unavailable patient metadata does not block generic P3 software. No fabricated inventory. | PASS: Astra medium accepted `96a4845`; publication and CI precede P3. |
-| G3: release P4 | Head/loss and all matched control interfaces tested; frozen predictions, singleton/mask handling, capacity/input fairness demonstrated. | Pending. |
+| G3: release P4 | Head/loss and all matched control interfaces tested; frozen predictions, singleton/mask handling, capacity/input fairness demonstrated. | PASS at `07df30a`; publication/CI required before P4, which remains unstarted in this time-limited run. |
 | G4: release P5 | Full synthetic pipeline and metric checks pass; real-data readiness is separately recorded as verified or blocked per dataset. Unknown/unavailable resources do not prevent software acceptance, but block dependent real-data execution. No real-data success inferred from smoke. | Pending. |
 | G5: close pilot phase | P5 has measured outcomes with required controls or a truthful incomplete/blocker report; scientific go/no-go is separate from software acceptance. Full study is already authorized conditional on measured pilot success and time/resources; orchestrator releases tests only after those conditions and real-data readiness are verified. | Pending. |
 
@@ -283,3 +284,77 @@ Phase commit `a13f9d2791565b42b2b8b494e2c2db8c2bd0d2c0` is pushed to
 P1 and P2. Reviewed task and phase-candidate refs are also pushed. All completed
 P2 task/gate workspaces were cleaned after retaining essential evidence. Remote
 CI on the final publication head must pass before P3 starts.
+
+## Phase 3 release and start
+
+Both CI runs passed on `b19fb9c5b411fb63ce165c9eb88eab8cfba6e219`: PR run
+34546805581 (1m40s) and push run 34546802228 (1m50s). P2 is complete as a software
+phase. P3A started with a fresh GPT-5.6-Sol xhigh agent through Herdr after those
+passes. Baselines wait for the reviewed head interfaces; no later-phase work has
+started. `evidence/phase2/remote-ci.json` records the exact runs.
+
+## Phase 3 head task acceptance
+
+P3A passed fresh Sol xhigh review at `c3e7a675f51085bd8648d7a2f1a29cd503d7eed8`.
+The original implementation thread strengthened singleton-corruption and unequal
+parent-weighting regressions after review; deliberate mutations proved each test's
+sensitivity, and source was restored byte-for-byte. The full synthetic suite has
+191 passing tests. Default candidate parameters are 433,436 for ViT-B and 466,204
+for ViT-L. No empirical gain is claimed. The task branch was pushed and completed
+workspaces cleaned; evidence is retained under `evidence/phase3/`. P3B has started
+with a fresh Sol xhigh agent against the accepted input/loss contract.
+
+## Phase 3 baseline task acceptance
+
+P3B passed fresh Sol xhigh review at `8dc66ca2c51e4ff8d0a011d0de28ad333c65b983`.
+The original thread fixed stale current-score/mask binding, temperature label
+alignment with tune-manifest densities, and exact configured MV-ACN input order.
+All four learned control objectives reject consistent stale targets sharing the
+current argmax. RSNA/DDSM and B/L exact parity tests pass. Same-input parameter
+counts are B: candidate 433,436, binary 433,651, four-class 433,243; L: 466,204,
+466,419, 466,011. The maximum deviation is 0.050%. All 211 integrated tests, lint,
+compilation and original CLI checks pass. Task resources were cleaned after
+retaining evidence. G3 and publication remain pending; P4/P5 have not started.
+
+## Phase 3 gate and time-bound handoff
+
+G3 passed at `07df30ac114056f5f4d6ceaea8af6933ff7acd8c` with a fresh
+GPT-6-Astra medium reviewer. No actionable findings. The gate verified unchanged
+accepted source/tests, independently passed 16 focused regressions and 60
+synthetic integrations spanning both backbones, both trees, and all 15 masks.
+See `evidence/phase3/p3-gate.md` and recorded check commands.
+
+P4 and P5 remain **pending and unstarted**. The remaining time before the
+02:24:55 UTC cutoff cannot accommodate their required implementation/review
+cycles after Phase 3 publication. This is incomplete planned work, not a failed
+empirical pilot or a completed research study. Original test outcomes remain
+locked; no classifier/confidence training or patient evaluation has run.
+
+Resume with P4A metrics and paired patient inference, then P4B role-safe research
+training/evaluation and fresh-classifier initialization, then P4C synthetic
+end-to-end smoke and cost measurement. Gate and publish P4 before P5 readiness
+audits, fresh classifier fitting, matched confidence/control training, and the
+frozen measured pilot. Preserve all scientific acceptance criteria in the protocol.
+
+Integration details for the next implementation tasks:
+
+- Head loss expects `InterventionTargets`; adapt or regenerate these from the
+  authorized current cache, with checked alignment and mixed-mask collation.
+- MV-ACN constructors require explicit `legacy_view_order`: RSNA
+  `(L_CC, L_MLO, R_CC, R_MLO)`; DDSM `(L_CC, R_CC, L_MLO, R_MLO)`.
+- MV-ACN and ViLU forward calls require current classifier scores as well as
+  predictions; control losses check current score and mask bindings.
+- Candidate feature scaling is currently identity. Any fitted replacement must
+  use confidence-fit only and be owned independently by each method.
+- Bound/stream parent caches and reuse their features for omission children.
+  The ViT-L float32 hidden-token estimate is 43.47 GiB for 4,937 four-view
+  parents before additional tensors or stress realizations. Measure full-state
+  validation cost and full inference latency before efficiency claims.
+- Verify actual patient grouping, locked-identity overlap, content inventory,
+  and fresh-checkpoint exposure before real-data fitting. Published dataset
+  schemas and path existence are not completed local provenance audits.
+
+The shared project environment remains available at `.venv`; use
+`PYTHONPATH=src .venv/bin/python -m pytest -q` for research checks. No original
+repository files, pretrained weights, or private patient artifacts were changed
+or committed by this implementation run.
