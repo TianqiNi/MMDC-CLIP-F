@@ -1,0 +1,10 @@
+{
+  "name": "p4-training-resume1",
+  "model": "gpt-5.6-sol",
+  "effort": "xhigh",
+  "cwd": "/home/tianqini/research/.ivr-p4-worktrees/p4-training",
+  "pane": "w4:p1",
+  "deadline": "2026-09-12T01:22:31Z",
+  "resume": "01a09172-4253-74b1-9029-76254f159a8c",
+  "ref": "HEAD"
+}
