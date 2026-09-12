@@ -1,0 +1,7 @@
+[
+  {
+    "command": "/bin/bash -lc 'date -u +%Y-%m-%dT%H:%M:%SZ; git status --short; git diff --stat; git diff --check; PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_artifacts.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_training.py; /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/ruff check src/mmdc_clip_f/research/view_risk/artifacts.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/cli.py tests/research/test_view_risk_artifacts.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_training.py tests/research/test_view_risk_cache.py'",
+    "exit_code": 0,
+    "output": "........................                                                 [100%]\n24 passed in 1.14s\nAll checks passed!\n"
+  }
+]

@@ -233,7 +233,7 @@ def test_role_bound_confidence_fit_uses_exact_schedule_and_verified_fresh_encode
         implementation_revision="synthetic-scheduled-revision",
     )
     classifier_fit_manifest = _manifest(Role.CLASSIFIER_FIT)
-    initialization = ClassifierProvenance.public_pretrained(
+    initialization = ClassifierProvenance.synthetic_injected(
         "vit_b_32", encoder.identity.checkpoint_sha256
     )
     classifier = ClassifierProvenance.fresh_selected(
