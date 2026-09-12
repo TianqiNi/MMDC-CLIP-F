@@ -1,32 +1,29 @@
 {
-  "status": "P4A accepted; P4B not accepted; fix interrupted before validation or re-review",
-  "accepted_metrics_commit": "6d2da0fa50682be9be43901950cd25d3283667c6",
-  "accepted_remote_source_head": "8562a4b0b6fe5c3baf0e463c9ab213e00aae1dcd",
-  "reviewed_unaccepted_candidate": "ed093038b9a5f7e297a8f55c3df821c7c72350be",
-  "review_findings": {
-    "critical": 1,
-    "high": 3,
-    "medium": 0,
-    "low": 0
-  },
+  "status": "P4A accepted; P4B latest partial-fix candidate NOT ACCEPTED after fresh bounded review",
+  "recorded_at_utc": "2026-09-12T03:39:13Z",
+  "latest_local_candidate": "fcdb2532eaaf9906644cfcff3dafe8f3087d6df0",
+  "prior_rejected_candidate": "ed093038b9a5f7e297a8f55c3df821c7c72350be",
+  "source_integrated_to_remote": false,
   "unfinished_implementation_worktree": "/home/tianqini/research/.ivr-p4-worktrees/p4-training",
   "implementation_thread": "01a09172-4253-74b1-9029-76254f159a8c",
   "implementation_model": "gpt-5.6-sol",
   "implementation_effort": "xhigh",
-  "last_agent_stop_utc": "2026-09-12T00:36:29.841414Z",
-  "effective_deadline_before_usage_stop_utc": "2026-09-12T01:22:31Z",
-  "remaining_active_work_seconds_at_agent_stop": 2761,
-  "blocker": "Usage limit interrupted automatic approval review of an edit to the authoritative-prediction artifact. Rejected edit not retried by orchestrator.",
-  "provider_retry_message": "try again at 9:25 PM",
-  "partial_fix_uncommitted": true,
-  "tests_after_partial_fix": "not established; 244 passing tests applied to rejected candidate before fixes",
+  "latest_review": "evidence/phase4/p4-training-review2.md",
+  "open_findings": [
+    "Critical: plan reload restores production provenance from unverified self-hashed fields instead of verified initialization and readiness artifacts.",
+    "High: multiple authoritative prediction sets with different classifier decisions can be accepted under the same plan.",
+    "High: verified learned-selection reload and production freeze remain incomplete.",
+    "High: production classifier/batch CLI, per-epoch inference-to-selection wiring, analytic dispatch/reload and model-to-prediction workflows remain disconnected."
+  ],
+  "local_test_status": "250 research tests passed; lint and compile passed. Fresh bounded review independently reproduced two remaining failures. Test success does not establish acceptance.",
+  "effective_deadline_utc": "2026-09-12T03:42:00Z",
+  "stop_reason": "Remaining active-work allowance cannot fit another implementation and fresh-review cycle. No further agent work started.",
   "pending": [
-    "P4B fixes",
-    "fresh P4B re-review",
+    "P4B fixes and fresh full acceptance review",
     "P4C",
     "G4",
     "P5"
   ],
   "no_real_data_training_or_pilot": true,
-  "next_action": "Resume the same implementation thread after resolving the approval/usage blocker, finish all four findings with meaningful tests, then obtain a fresh review of the next exact commit. Do not publish or mark P4B accepted before that passes."
+  "next_action": "Reuse the original implementation thread to fix the exact new review findings and complete the still-required production workflows. Then freeze a new local candidate and obtain a fresh independent Sol xhigh review. No P4C/P5 release or source publication before P4B acceptance."
 }

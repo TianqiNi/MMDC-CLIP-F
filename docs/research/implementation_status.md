@@ -1,14 +1,15 @@
 # Intervention-supervised MV-ACN implementation ledger
 
 Current status: **P1-P3 and task P4A are accepted and pushed in draft PR #1.**
-P4A's independent review passed at `6d2da0f`; the integrated research suite had
-223 passing tests. **P4B is NOT accepted:** review of local candidate `ed09303`
-found one critical and three high issues. The same implementer started fixes,
-but a Codex usage limit interrupted automatic approval review before completion.
-Partial fixes remain in the preserved task worktree, uncommitted and unreviewed.
-P4C, G4 and P5 remain pending. No real classifier/confidence training, patient
-pilot evaluation, or measured uncertainty gain is claimed. The newest handoff is
-`evidence/phase4/handoff.json`; earlier deadline/status records are historical.
+P4A passed independent review with 223 research tests. **P4B remains NOT
+ACCEPTED:** partial-fix candidate `fcdb253` passes 250 tests, but fresh bounded
+review reproduced critical plan-reload provenance and high shared-prediction
+identity failures. Verified selection reload and connected production workflows
+also remain unfinished. The unaccepted candidate is committed only in the
+preserved local implementation worktree. P4C, G4 and P5 remain pending. No real
+classifier/confidence training, patient pilot or empirical improvement is claimed.
+The newest continuation state is `evidence/phase4/handoff.json`; earlier status
+and quota/deadline records are historical.
 
 Scope is the single intervention-supervised confidence project described in
 [view_risk_protocol.md](view_risk_protocol.md). Related evidence-gating and
@@ -411,3 +412,22 @@ or a fresh five-hour authorization. No subsequent test pass or fresh review is
 claimed. The candidate and partial changes are preserved at the worktree and
 thread recorded in `evidence/phase4/handoff.json`. No unaccepted P4B source is
 integrated or pushed. P4C/G4/P5 have not started.
+
+## Partial-fix review and bounded stop: 2026-09-12
+
+The same implementation thread produced local candidate
+`fcdb2532eaaf9906644cfcff3dafe8f3087d6df0`. Current local checks passed 250
+research tests, Ruff and compilation. The implementer explicitly acknowledged
+that production workflow integration and verified selection reload were incomplete.
+A fresh Sol xhigh reviewer independently assessed the claimed safeguard fixes.
+The bounded review returned NOT ACCEPTED: production provenance could still be
+restored from self-hashed plan fields, and different authoritative prediction
+artifacts were accepted for different methods under one plan. These are remaining
+failures of the original findings, not new features. See
+`evidence/phase4/p4-training-review2.md` for exact commit and reproductions.
+
+The continuation stops within its remaining active-work allowance ending
+2026-09-12 03:42:00 UTC. Another implementation and fresh-review cycle cannot
+fit. The latest candidate and original implementation thread are preserved for
+that cycle. Only review/test/status evidence is published on the accepted branch;
+no unaccepted P4B source is integrated or pushed. No P4C, G4 or P5 work starts.
