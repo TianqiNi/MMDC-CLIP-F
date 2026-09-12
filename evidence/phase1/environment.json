@@ -1,0 +1,17 @@
+{
+  "python": "3.11.15",
+  "packages": {
+    "torch": "2.3.1",
+    "torchvision": "0.18.1",
+    "transformers": "4.43.4",
+    "numpy": "2.0.2",
+    "scikit-learn": "1.6.1",
+    "pydicom": "3.0.2",
+    "safetensors": "0.5.3",
+    "pytest": "8.3.5",
+    "ruff": "0.8.6"
+  },
+  "installation": "Isolated project venv; existing environments unchanged",
+  "dependency_check": "pip check passed at environment creation",
+  "validation_scope": "Synthetic CPU tests; no patient study or model training"
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "item_8",
+    "type": "command_execution",
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_metrics.py'",
+    "aggregated_output": "\n==================================== ERRORS ====================================\n__________ ERROR collecting tests/research/test_view_risk_metrics.py ___________\nImportError while importing test module '/home/tianqini/research/.ivr-p4-worktrees/p4-metrics/tests/research/test_view_risk_metrics.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\n../../../anaconda3/envs/te-clip/lib/python3.11/importlib/__init__.py:126: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\ntests/research/test_view_risk_metrics.py:9: in <module>\n    from mmdc_clip_f.research.view_risk.metrics import (\nE   ModuleNotFoundError: No module named 'mmdc_clip_f.research.view_risk.metrics'\n=========================== short test summary info ============================\nERROR tests/research/test_view_risk_metrics.py\n!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 error in 0.61s\n",
+    "exit_code": 2,
+    "status": "failed"
+  },
+  {
+    "id": "item_10",
+    "type": "command_execution",
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_metrics.py'",
+    "aggregated_output": "F...........                                                             [100%]\n=================================== FAILURES ===================================\n_ test_aurc_uses_expected_order_inside_exact_ties_and_is_input_order_invariant _\n\n    def test_aurc_uses_expected_order_inside_exact_ties_and_is_input_order_invariant() -> None:\n        correct = np.array([1, 0, 1])\n        confidence = np.array([0.9, 0.9, 0.1])\n    \n        forward = confidence_panel_metrics(correct, confidence, confidence_kind=\"probability\")\n        reverse = confidence_panel_metrics(\n            correct[::-1], confidence[::-1], confidence_kind=\"probability\"\n        )\n    \n        # The first tie has one error in two items, so both expected prefix risks are 1/2.\n        assert forward.aurc == pytest.approx((0.5 + 0.5 + 1 / 3) / 3)\n        assert reverse.aurc == forward.aurc\n        assert forward.risk_at_80.risk == pytest.approx(1 / 3)\n        assert forward.risk_at_80.realized_coverage == 1.0\n>       assert forward.risk_at_90 == forward.risk_at_80\nE       AssertionError: assert CoverageRisk(...3333333333333) == CoverageRisk(...3333333333333)\nE         \nE         Omitting 4 identical items, use -vv to show\nE         Differing attributes:\nE         ['requested_coverage']\nE         \nE         Drill down into differing attribute requested_coverage:\nE           requested_coverage: 0.9 != 0.8\n\ntests/research/test_view_risk_metrics.py:34: AssertionError\n=========================== short test summary info ============================\nFAILED tests/research/test_view_risk_metrics.py::test_aurc_uses_expected_order_inside_exact_ties_and_is_input_order_invariant\n1 failed, 11 passed in 0.62s\n",
+    "exit_code": 1,
+    "status": "failed"
+  },
+  {
+    "id": "item_12",
+    "type": "command_execution",
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/ruff check src/mmdc_clip_f/research/view_risk/metrics.py tests/research/test_view_risk_metrics.py'",
+    "aggregated_output": "All checks passed!\n",
+    "exit_code": 0,
+    "status": "completed"
+  },
+  {
+    "id": "item_15",
+    "type": "command_execution",
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_metrics.py'",
+    "aggregated_output": "............                                                             [100%]\n12 passed in 0.62s\n",
+    "exit_code": 0,
+    "status": "completed"
+  },
+  {
+    "id": "item_17",
+    "type": "command_execution",
+    "command": "/bin/bash -lc 'git status --short && git diff --stat && wc -l src/mmdc_clip_f/research/view_risk/metrics.py tests/research/test_view_risk_metrics.py && git diff --check && /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/ruff check src/mmdc_clip_f/research/view_risk/metrics.py tests/research/test_view_risk_metrics.py'",
+    "aggregated_output": "?? src/mmdc_clip_f/research/view_risk/metrics.py\n?? tests/research/test_view_risk_metrics.py\n 1042 src/mmdc_clip_f/research/view_risk/metrics.py\n  346 tests/research/test_view_risk_metrics.py\n 1388 total\nAll checks passed!\n",
+    "exit_code": 0,
+    "status": "completed"
+  },
+  {
+    "id": "item_21",
+    "type": "command_execution",
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q'",
+    "aggregated_output": "........................................................................ [ 32%]\n........................................................................ [ 64%]\n........................................................................ [ 96%]\n.......                                                                  [100%]\n223 passed in 2.08s\n",
+    "exit_code": 0,
+    "status": "completed"
+  },
+  {
+    "id": "item_22",
+    "type": "command_execution",
+    "command": "/bin/bash -lc \"git status --short && git diff --check && /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/ruff check src/mmdc_clip_f/research/view_risk/metrics.py tests/research/test_view_risk_metrics.py && rg -n '\"'^def (confidence_panel_metrics|effect_metrics|evaluate_aurc_panel|evaluate_primary_endpoint|patient_paired_bootstrap_aurc_difference)|''^class (EvaluationPrediction|PairedBootstrapResult|ConfidencePanelMetrics|EffectMetrics|PanelAURC)'\"' src/mmdc_clip_f/research/view_risk/metrics.py\"",
+    "aggregated_output": "?? src/mmdc_clip_f/research/view_risk/metrics.py\n?? tests/research/test_view_risk_metrics.py\nAll checks passed!\n59:class ConfidencePanelMetrics:\n223:def confidence_panel_metrics(\n298:class EffectMetrics:\n361:def effect_metrics(\n428:class EvaluationPrediction:\n503:class PanelAURC:\n688:def evaluate_aurc_panel(records: Sequence[EvaluationPrediction]) -> PanelAURC:\n694:def evaluate_primary_endpoint(records: Sequence[EvaluationPrediction]) -> PanelAURC:\n731:class PairedBootstrapResult:\n879:def patient_paired_bootstrap_aurc_difference(\n",
+    "exit_code": 0,
+    "status": "completed"
+  }
+]

@@ -1,0 +1,23 @@
+{
+  "phase_commit": "a178ef984687d4ca78b202edbdbc43b093a53537",
+  "gate_candidate": "07df30ac114056f5f4d6ceaea8af6933ff7acd8c",
+  "gate": "PASS",
+  "branch": "research/intervention-supervised-confidence",
+  "remote": "origin",
+  "pr": "https://github.com/TianqiNi/MMDC-CLIP-F/pull/1",
+  "pr_updated": true,
+  "source_and_tests_unchanged_since_gate": true,
+  "ci": {
+    "head": "a178ef984687d4ca78b202edbdbc43b093a53537",
+    "pr_run": 34553283001,
+    "pr_conclusion": "success",
+    "pr_duration": "1m58s",
+    "push_run": 34553279680,
+    "push_conclusion": "success",
+    "push_duration": "1m57s"
+  },
+  "completed_task_workspaces_cleaned": true,
+  "herdr_session_stopped": true,
+  "project_environment_retained": "/home/tianqini/research/MMDC-CLIP-IVR/.venv",
+  "real_data_training_started": false
+}

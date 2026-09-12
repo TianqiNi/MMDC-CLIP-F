@@ -1,0 +1,13 @@
+{
+  "phase_commit": "a13f9d2791565b42b2b8b494e2c2db8c2bd0d2c0",
+  "gate_candidate": "96a4845848ee8cfd5b77dbf2ad4a5d8f0215731c",
+  "gate": "PASS",
+  "branch": "research/intervention-supervised-confidence",
+  "remote": "origin",
+  "pr": "https://github.com/TianqiNi/MMDC-CLIP-F/pull/1",
+  "pr_updated": true,
+  "source_and_tests_unchanged_since_gate": true,
+  "completed_task_workspaces_cleaned": true,
+  "remote_ci": "pending on final publication head; must pass before P3",
+  "real_data_training_started": false
+}

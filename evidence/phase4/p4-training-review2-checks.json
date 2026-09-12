@@ -1,0 +1,12 @@
+[
+  {
+    "command": "/bin/bash -lc \"rg -n \\\"def evaluate_aurc_panel|class EvaluationPrediction|clean_four_view|strong_seen|common_mode\\\" src/mmdc_clip_f/research/view_risk -g '*.py' && PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py::test_injected_classifier_is_explicitly_synthetic_and_not_pilot_eligible tests/research/test_view_risk_training.py::test_production_loader_uses_exact_public_pins_and_weight_content tests/research/test_view_risk_training.py::test_real_readiness_rejects_unverified_empty_locked_evidence_before_paths tests/research/test_view_risk_evaluation.py::test_pilot_requires_exact_cohort_and_shared_classifier_predictions\"",
+    "exit_code": 0,
+    "output": "....                                                                     [100%]\n4 passed in 0.71s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'git diff --check ed093038b9a5f7e297a8f55c3df821c7c72350be fcdb2532eaaf9906644cfcff3dafe8f3087d6df0 && git status --short'",
+    "exit_code": 2,
+    "output": "evidence/phase4/p4-training-review1.md:3: trailing whitespace.\n+Reviewed commit: **`ed093038b9a5f7e297a8f55c3df821c7c72350be`**  \nevidence/phase4/p4-training-review1.md:4: trailing whitespace.\n+Accepted base: `8562a4b0b6fe5c3baf0e463c9ab213e00aae1dcd`  \n"
+  }
+]
