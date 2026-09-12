@@ -1,12 +1,14 @@
 # Intervention-supervised MV-ACN implementation ledger
 
-Current status: **P1–P3 are accepted and published in draft PR #1.**
-Phase 3 implementation is `a178ef9`; both release CI runs passed. The protocol,
-data/stress/cache contracts, relation head, and matched-control interfaces are
-implemented and reviewed. **P4 and P5 remain pending and unstarted** under the
-five-hour active-work limit. No classifier/confidence training, patient evaluation,
-measured uncertainty gain, or successful pilot is claimed. Later sections preserve
-dated drafting history; this summary and the final handoff govern current status.
+Current status: **P1-P3 and task P4A are accepted and pushed in draft PR #1.**
+P4A's independent review passed at `6d2da0f`; the integrated research suite had
+223 passing tests. **P4B is NOT accepted:** review of local candidate `ed09303`
+found one critical and three high issues. The same implementer started fixes,
+but a Codex usage limit interrupted automatic approval review before completion.
+Partial fixes remain in the preserved task worktree, uncommitted and unreviewed.
+P4C, G4 and P5 remain pending. No real classifier/confidence training, patient
+pilot evaluation, or measured uncertainty gain is claimed. The newest handoff is
+`evidence/phase4/handoff.json`; earlier deadline/status records are historical.
 
 Scope is the single intervention-supervised confidence project described in
 [view_risk_protocol.md](view_risk_protocol.md). Related evidence-gating and
@@ -389,3 +391,23 @@ Independent exact-tie, integer-weight expansion, grouped-AP and literal patient
 bootstrap probes passed. See `evidence/phase4/p4-metrics-review1.md`. No source
 changes were needed in review. P4B is next, P4C and G4 remain pending; P5
 real-data work has not started. Original test outcomes remain locked.
+
+## P4B failed review and preserved fix: 2026-09-12
+
+Fresh Sol xhigh review of `ed093038b9a5f7e297a8f55c3df821c7c72350be`
+returned NOT ACCEPTED: synthetic/public initialization and readiness were not
+reliably separated; pilot completeness/shared predictions were not enforced;
+selected artifact hashes were not evidence of completed eligible controls; and
+required production workflows remained disconnected. The orchestrator accepted
+all four findings for correction. See `evidence/phase4/p4-training-review1.md`.
+The candidate's 244 passing tests did not establish these required invariants.
+
+The original implementation thread resumed for fixes. It was interrupted at
+2026-09-12 00:36:29 UTC by another Codex usage-limit failure during automatic
+approval review of an artifact edit. The rejected edit was not retried by the
+orchestrator. There was approximately 46 minutes of active-work allowance at
+that stop, before handoff bookkeeping; elapsed blocked time is not new work
+or a fresh five-hour authorization. No subsequent test pass or fresh review is
+claimed. The candidate and partial changes are preserved at the worktree and
+thread recorded in `evidence/phase4/handoff.json`. No unaccepted P4B source is
+integrated or pushed. P4C/G4/P5 have not started.
