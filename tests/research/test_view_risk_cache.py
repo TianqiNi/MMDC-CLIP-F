@@ -33,6 +33,7 @@ from mmdc_clip_f.research.view_risk.perturbations import (
     PerturbationSpec,
     RealizedParent,
     realize_parent,
+    realize_training_parent,
 )
 from mmdc_clip_f.research.view_risk.roles import (
     Operation,
@@ -41,6 +42,22 @@ from mmdc_clip_f.research.view_risk.roles import (
     Role,
     RoleManifest,
     ViewReference,
+)
+from mmdc_clip_f.research.view_risk.head import (
+    RelationAwareConfidenceHead,
+    RelationAwareHeadConfig,
+)
+from mmdc_clip_f.research.view_risk.training import (
+    ClassifierProvenance,
+    ConfidenceFitBatch,
+    ResearchRunConfig,
+    TrainingBinding,
+    audit_software_fixture,
+    build_learned_method,
+    build_method_training_schedule,
+    confidence_bundle_loss,
+    fit_confidence_method_with_role_access,
+    module_state_sha256,
 )
 
 
@@ -153,6 +170,157 @@ def _load_cache(path, expected, manifest):
         operation=Operation.CONFIDENCE_FITTING,
         role=Role.CONFIDENCE_FIT,
     )
+
+
+def test_candidate_optimizer_uses_checked_current_cache_and_keeps_classifier_frozen(
+    cache_bundle,
+) -> None:
+    bundle, encoder, _manifest_value = cache_bundle
+    model = RelationAwareConfidenceHead(RelationAwareHeadConfig(backbone="vit_b_32"))
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=0)
+    before_classifier = module_state_sha256(encoder.classifier)
+    before_head = module_state_sha256(model)
+
+    optimizer.zero_grad(set_to_none=True)
+    loss = confidence_bundle_loss(model, "candidate", bundle)
+    loss.backward()
+    optimizer.step()
+
+    assert torch.isfinite(loss)
+    assert module_state_sha256(model) != before_head
+    assert module_state_sha256(encoder.classifier) == before_classifier
+
+
+def test_role_bound_confidence_fit_uses_exact_schedule_and_verified_fresh_encoder(
+    tmp_path,
+) -> None:
+    manifest = _manifest(Role.CONFIDENCE_FIT)
+    schedule = build_method_training_schedule(
+        manifest.records, epoch=1, seed=42, method="candidate"
+    )
+    draw = schedule[0].draw
+    clip = TinyCLIP()
+    frozen_classifier = MultiViewCLIPClassifier(
+        clip, ("L_CC", "L_MLO", "R_CC", "R_MLO"), RSNA_FUSION_PAIRS
+    )
+    checkpoint = tmp_path / "scheduled-classifier.safetensors"
+    save_file(
+        {
+            name: value.detach().contiguous()
+            for name, value in frozen_classifier.state_dict().items()
+        },
+        str(checkpoint),
+    )
+    encoder = load_verified_frozen_encoder(
+        frozen_classifier,
+        torch.arange(8, dtype=torch.long).reshape(4, 2),
+        checkpoint,
+        backbone="vit_b_32",
+        prompts=PROMPTS,
+    )
+    images = {
+        view: torch.full((3, 2, 2), 0.15 + index * 0.15)
+        for index, view in enumerate(("L_CC", "L_MLO", "R_CC", "R_MLO"))
+    }
+    bundle = build_exam_cache_with_role_access(
+        manifest,
+        operation=Operation.CONFIDENCE_FITTING,
+        role=Role.CONFIDENCE_FIT,
+        exam_key="exam-a",
+        sample_key="scheduled-sample-a",
+        parent_loader=lambda _record: realize_training_parent(images, draw),
+        encoder=encoder,
+        implementation_revision="synthetic-scheduled-revision",
+    )
+    classifier_fit_manifest = _manifest(Role.CLASSIFIER_FIT)
+    initialization = ClassifierProvenance.public_pretrained(
+        "vit_b_32", encoder.identity.checkpoint_sha256
+    )
+    classifier = ClassifierProvenance.fresh_selected(
+        initialization,
+        checkpoint_sha256=encoder.identity.checkpoint_sha256,
+        classifier_fit_manifest_sha256=classifier_fit_manifest.manifest_sha256,
+        classifier_fit_update_count=1,
+        tune_selection_sha256="e" * 64,
+        tune_manifest_sha256="f" * 64,
+        readiness=audit_software_fixture(classifier_fit_manifest),
+    )
+    config = ResearchRunConfig.default("RSNA", "vit_b_32")
+    binding = TrainingBinding(
+        protocol_sha256=config.protocol_sha256,
+        config_sha256=config.sha256,
+        search_table_sha256=config.search_table.sha256,
+        manifest_sha256=manifest.manifest_sha256,
+        classifier_checkpoint_sha256=classifier.checkpoint_sha256,
+        method="candidate",
+        seed=42,
+    )
+    model = build_learned_method("candidate", "vit_b_32", RSNA_FUSION_PAIRS)
+    head_before = module_state_sha256(model)
+    classifier_before = module_state_sha256(encoder.classifier)
+
+    def batches(_records, supplied_schedule, batch_size, epoch):
+        assert supplied_schedule == schedule
+        assert batch_size == 6
+        assert epoch == 1
+        yield ConfidenceFitBatch((bundle,))
+
+    result = fit_confidence_method_with_role_access(
+        manifest=manifest,
+        model=model,
+        method="candidate",
+        classifier=classifier,
+        config=config,
+        seed=42,
+        binding=binding,
+        batch_loader=batches,
+        frozen_encoder=encoder,
+        stop_after_epoch=1,
+    )
+
+    assert result.actual_exposure_verified is True
+    assert result.update_count == 1
+    assert result.exposed_record_count == 1
+    assert result.selection_trial_budget == 20
+    assert module_state_sha256(model) != head_before
+    assert module_state_sha256(encoder.classifier) == classifier_before
+
+
+def test_confidence_fit_rejects_diagnostic_classifier_before_cache_reader() -> None:
+    manifest = _manifest(Role.CONFIDENCE_FIT)
+    config = ResearchRunConfig.default("RSNA", "vit_b_32")
+    diagnostic = ClassifierProvenance.diagnostic_original(
+        "vit_b_32", "d" * 64, reason="overlapping historical training exposure"
+    )
+    binding = TrainingBinding(
+        protocol_sha256=config.protocol_sha256,
+        config_sha256=config.sha256,
+        search_table_sha256=config.search_table.sha256,
+        manifest_sha256=manifest.manifest_sha256,
+        classifier_checkpoint_sha256=diagnostic.checkpoint_sha256,
+        method="candidate",
+        seed=42,
+    )
+    called = False
+
+    def batches(*_args):
+        nonlocal called
+        called = True
+        raise AssertionError("cache reader must not run")
+
+    with pytest.raises(PermissionError, match="fresh public classifier"):
+        fit_confidence_method_with_role_access(
+            manifest=manifest,
+            model=build_learned_method("candidate", "vit_b_32", RSNA_FUSION_PAIRS),
+            method="candidate",
+            classifier=diagnostic,
+            config=config,
+            seed=42,
+            binding=binding,
+            batch_loader=batches,
+            stop_after_epoch=1,
+        )
+    assert called is False
 
 
 def test_safe_roundtrip_keeps_exact_targets_and_required_provenance(cache_bundle, tmp_path) -> None:

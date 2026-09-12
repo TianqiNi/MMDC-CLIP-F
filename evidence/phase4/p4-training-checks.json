@@ -1,0 +1,187 @@
+[
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 2,
+    "output": "\n==================================== ERRORS ====================================\n__________ ERROR collecting tests/research/test_view_risk_training.py __________\nImportError while importing test module '/home/tianqini/research/.ivr-p4-worktrees/p4-training/tests/research/test_view_risk_training.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\n../../../anaconda3/envs/te-clip/lib/python3.11/importlib/__init__.py:126: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\ntests/research/test_view_risk_training.py:22: in <module>\n    from mmdc_clip_f.research.view_risk.training import (\nE   ModuleNotFoundError: No module named 'mmdc_clip_f.research.view_risk.training'\n_________ ERROR collecting tests/research/test_view_risk_evaluation.py _________\nImportError while importing test module '/home/tianqini/research/.ivr-p4-worktrees/p4-training/tests/research/test_view_risk_evaluation.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\n../../../anaconda3/envs/te-clip/lib/python3.11/importlib/__init__.py:126: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\ntests/research/test_view_risk_evaluation.py:7: in <module>\n    from mmdc_clip_f.research.view_risk.evaluation import (\nE   ModuleNotFoundError: No module named 'mmdc_clip_f.research.view_risk.evaluation'\n=========================== short test summary info ============================\nERROR tests/research/test_view_risk_training.py\nERROR tests/research/test_view_risk_evaluation.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!\n2 errors in 0.61s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 1,
+    "output": ".....FF.....                                                             [100%]\n=================================== FAILURES ===================================\n______ test_optimizer_updates_resume_exactly_and_preserves_frozen_module _______\n\nself =  42\n 3107752595\n 1895908407\n 3900362577\n 3030691166\n 4081230161\n 2732361568\n 1361238961\n 3961642104\n 867618704\n 283770...3\n 2783561793\n 1329389532\n 836540831\n 26719530\n[torch.storage.TypedStorage(dtype=torch.uint32, device=cpu) of size 624]\n\n    def _pickle_storage_type(self):\n        try:\n>           return _dtype_to_storage_type_map()[self.dtype]\nE           KeyError: torch.uint32\n\n../../MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/storage.py:945: KeyError\n\nThe above exception was the direct cause of the following exception:\n\ntmp_path = PosixPath('/tmp/pytest-of-tianqini/pytest-25/test_optimizer_updates_resume_0')\n\n    def test_optimizer_updates_resume_exactly_and_preserves_frozen_module(tmp_path) -> None:\n        manifest = _manifest(Role.CONFIDENCE_FIT)\n        binding = _binding(manifest)\n        frozen = nn.Linear(1, 1).requires_grad_(False)\n        frozen_before = {name: value.detach().clone() for name, value in frozen.state_dict().items()}\n    \n        torch.manual_seed(71)\n        uninterrupted = _TinyDropout()\n        initial = {name: value.detach().clone() for name, value in uninterrupted.state_dict().items()}\n        complete = fit_role_bound_module(\n            manifest=manifest,\n            operation=Operation.CONFIDENCE_FITTING,\n            role=Role.CONFIDENCE_FIT,\n            model=uninterrupted,\n            optimizer_config=OptimizerConfig(batch_size=2),\n            epochs=3,\n            binding=binding,\n            batch_loader=_tiny_batches,\n            loss_fn=_tiny_loss,\n            frozen_modules=(frozen,),\n        )\n    \n        resumed = _TinyDropout()\n        resumed.load_state_dict(initial)\n        checkpoint = tmp_path / \"private-resume.pt\"\n>       partial = fit_role_bound_module(\n            manifest=manifest,\n            operation=Operation.CONFIDENCE_FITTING,\n            role=Role.CONFIDENCE_FIT,\n            model=resumed,\n            optimizer_config=OptimizerConfig(batch_size=2),\n            epochs=3,\n            binding=binding,\n            batch_loader=_tiny_batches,\n            loss_fn=_tiny_loss,\n            checkpoint_path=checkpoint,\n            stop_after_epoch=1,\n            frozen_modules=(frozen,),\n        )\n\ntests/research/test_view_risk_training.py:267: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \nsrc/mmdc_clip_f/research/view_risk/training.py:991: in fit_role_bound_module\n    return run_with_role_access(\nsrc/mmdc_clip_f/research/view_risk/roles.py:989: in run_with_role_access\n    return loader(selected)\nsrc/mmdc_clip_f/research/view_risk/training.py:966: in authorized\n    _save_resume(\nsrc/mmdc_clip_f/research/view_risk/training.py:807: in _save_resume\n    torch.save(payload, temporary)\n../../MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/serialization.py:628: in save\n    _save(obj, opened_zipfile, pickle_module, pickle_protocol, _disable_byteorder_record)\n../../MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/serialization.py:840: in _save\n    pickler.dump(obj)\n../../MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/serialization.py:802: in persistent_id\n    storage_type_str = obj._pickle_storage_type()\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nself =  42\n 3107752595\n 1895908407\n 3900362577\n 3030691166\n 4081230161\n 2732361568\n 1361238961\n 3961642104\n 867618704\n 283770...3\n 2783561793\n 1329389532\n 836540831\n 26719530\n[torch.storage.TypedStorage(dtype=torch.uint32, device=cpu) of size 624]\n\n    def _pickle_storage_type(self):\n        try:\n            return _dtype_to_storage_type_map()[self.dtype]\n        except KeyError as e:\n>           raise KeyError(f'dtype {self.dtype} is not recognized') from e\nE           KeyError: 'dtype torch.uint32 is not recognized'\n\n../../MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/storage.py:947: KeyError\n___ test_resume_refuses_binding_change_and_projection_ownership_is_separate ____\n\nself =  42\n 3107752595\n 1895908407\n 3900362577\n 3030691166\n 4081230161\n 2732361568\n 1361238961\n 3961642104\n 867618704\n 283770...3\n 2783561793\n 1329389532\n 836540831\n 26719530\n[torch.storage.TypedStorage(dtype=torch.uint32, device=cpu) of size 624]\n\n    def _pickle_storage_type(self):\n        try:\n>           return _dtype_to_storage_type_map()[self.dtype]\nE           KeyError: torch.uint32\n\n../../MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/storage.py:945: KeyError\n\nThe above exception was the direct cause of the following exception:\n\ntmp_path = PosixPath('/tmp/pytest-of-tianqini/pytest-25/test_resume_refuses_binding_ch0')\n\n    def test_resume_refuses_binding_change_and_projection_ownership_is_separate(tmp_path) -> None:\n        manifest = _manifest(Role.CONFIDENCE_FIT, 2)\n        checkpoint = tmp_path / \"resume.pt\"\n        first = _TinyDropout()\n>       fit_role_bound_module(\n            manifest=manifest,\n            operation=Operation.CONFIDENCE_FITTING,\n            role=Role.CONFIDENCE_FIT,\n            model=first,\n            optimizer_config=OptimizerConfig(batch_size=2),\n            epochs=1,\n            binding=_binding(manifest),\n            batch_loader=_tiny_batches,\n            loss_fn=_tiny_loss,\n            checkpoint_path=checkpoint,\n        )\n\ntests/research/test_view_risk_training.py:309: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \nsrc/mmdc_clip_f/research/view_risk/training.py:991: in fit_role_bound_module\n    return run_with_role_access(\nsrc/mmdc_clip_f/research/view_risk/roles.py:989: in run_with_role_access\n    return loader(selected)\nsrc/mmdc_clip_f/research/view_risk/training.py:966: in authorized\n    _save_resume(\nsrc/mmdc_clip_f/research/view_risk/training.py:807: in _save_resume\n    torch.save(payload, temporary)\n../../MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/serialization.py:628: in save\n    _save(obj, opened_zipfile, pickle_module, pickle_protocol, _disable_byteorder_record)\n../../MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/serialization.py:840: in _save\n    pickler.dump(obj)\n../../MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/serialization.py:802: in persistent_id\n    storage_type_str = obj._pickle_storage_type()\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nself =  42\n 3107752595\n 1895908407\n 3900362577\n 3030691166\n 4081230161\n 2732361568\n 1361238961\n 3961642104\n 867618704\n 283770...3\n 2783561793\n 1329389532\n 836540831\n 26719530\n[torch.storage.TypedStorage(dtype=torch.uint32, device=cpu) of size 624]\n\n    def _pickle_storage_type(self):\n        try:\n            return _dtype_to_storage_type_map()[self.dtype]\n        except KeyError as e:\n>           raise KeyError(f'dtype {self.dtype} is not recognized') from e\nE           KeyError: 'dtype torch.uint32 is not recognized'\n\n../../MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/storage.py:947: KeyError\n=============================== warnings summary ===============================\ntests/research/test_view_risk_training.py::test_optimizer_updates_resume_exactly_and_preserves_frozen_module\n  /home/tianqini/research/MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/_pytest/_io/saferepr.py:73: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()\n    s = repr(x)\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nFAILED tests/research/test_view_risk_training.py::test_optimizer_updates_resume_exactly_and_preserves_frozen_module\nFAILED tests/research/test_view_risk_training.py::test_resume_refuses_binding_change_and_projection_ownership_is_separate\n2 failed, 10 passed, 1 warning in 1.03s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 0,
+    "output": "............                                                             [100%]\n12 passed in 0.91s\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py src/mmdc_clip_f/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 1,
+    "output": "src/mmdc_clip_f/research/view_risk/training.py:18:20: F401 [*] `typing.Any` imported but unused\n   |\n16 | from pathlib import Path\n17 | from types import MappingProxyType\n18 | from typing import Any, Callable, Iterable, Mapping, Sequence\n   |                    ^^^ F401\n19 | \n20 | import numpy as np\n   |\n   = help: Remove unused import: `typing.Any`\n\ntests/research/test_view_risk_training.py:3:8: F401 [*] `random` imported but unused\n  |\n1 | from __future__ import annotations\n2 | \n3 | import random\n  |        ^^^^^^ F401\n4 | from dataclasses import replace\n  |\n  = help: Remove unused import: `random`\n\ntests/research/test_view_risk_training.py:6:17: F401 [*] `numpy` imported but unused\n  |\n4 | from dataclasses import replace\n5 | \n6 | import numpy as np\n  |                 ^^ F401\n7 | import pytest\n8 | import torch\n  |\n  = help: Remove unused import: `numpy`\n\nFound 3 errors.\n[*] 3 fixable with the `--fix` option.\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 0,
+    "output": "............                                                             [100%]\n12 passed in 0.93s\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py src/mmdc_clip_f/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 0,
+    "output": "............                                                             [100%]\n12 passed in 0.95s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 0,
+    "output": "...............                                                          [100%]\n15 passed in 0.99s\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py src/mmdc_clip_f/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'git diff --check && git status --short && git diff --stat'",
+    "exit_code": 0,
+    "output": " M src/mmdc_clip_f/cli.py\n?? src/mmdc_clip_f/research/view_risk/cli.py\n?? src/mmdc_clip_f/research/view_risk/evaluation.py\n?? src/mmdc_clip_f/research/view_risk/training.py\n?? tests/research/test_view_risk_evaluation.py\n?? tests/research/test_view_risk_training.py\n src/mmdc_clip_f/cli.py | 9 +++++++++\n 1 file changed, 9 insertions(+)\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m py_compile src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py src/mmdc_clip_f/cli.py'",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m mmdc_clip_f.cli --help'",
+    "exit_code": 0,
+    "output": "usage: mmdc-clip-f [-h] [--version]\n                   {validate-data,train-classifier,build-tcp,train-confidence,view-risk-validate-config,view-risk-select,view-risk-freeze-pilot,view-risk-evaluate}\n                   ...\n\nReproducible core workflows for MMDC-CLIP-F\n\npositional arguments:\n  {validate-data,train-classifier,build-tcp,train-confidence,view-risk-validate-config,view-risk-select,view-risk-freeze-pilot,view-risk-evaluate}\n    validate-data       Validate manifests, files, and split isolation\n    train-classifier    Train the four-view Stage-1 classifier\n    build-tcp           Build strict TCP artifacts from a verified Stage-1 run\n    train-confidence    Train the head-only MV-ACN confidence model\n    view-risk-validate-config\n                        Validate and hash a strict P4B JSON/YAML run\n                        configuration\n    view-risk-select    Select a checkpoint from aggregate tune-only AURCs\n    view-risk-freeze-pilot\n                        Exclusively freeze a complete immutable pilot plan\n    view-risk-evaluate  Role-authorize and aggregate one frozen pilot panel\n                        via P4A\n\noptions:\n  -h, --help            show this help message and exit\n  --version             show program's version number and exit\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py src/mmdc_clip_f/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 0,
+    "output": "...............                                                          [100%]\n15 passed in 0.92s\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py src/mmdc_clip_f/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 1,
+    "output": "tests/research/test_view_risk_evaluation.py:97:5: F841 Local variable `reference` is assigned to but never used\n   |\n96 | def test_reference_guardrail_ties_and_no_eligible_selection() -> None:\n97 |     reference = select_clean_reference(\n   |     ^^^^^^^^^ F841\n98 |         (\n99 |             CheckpointTuneResult(2, 0.20, _cells(9.0), \"2\" * 64),\n   |\n   = help: Remove assignment to unused variable `reference`\n\ntests/research/test_view_risk_evaluation.py:154:12: F821 Undefined name `reference`\n    |\n152 |     with pytest.raises(PermissionError, match=\"readiness\"):\n153 |         selected.require_pilot_eligible()\n154 |     assert reference.epoch == 1\n    |            ^^^^^^^^^ F821\n155 | \n156 |     selected = select_candidate_checkpoint(\n    |\n\ntests/research/test_view_risk_evaluation.py:162:25: F821 Undefined name `reference`\n    |\n160 |             CheckpointTuneResult(3, 0.202, _cells(0.31), \"6\" * 64),\n161 |         ),\n162 |         clean_reference=reference,\n    |                         ^^^^^^^^^ F821\n163 |     )\n164 |     assert selected is not None and selected.epoch == 2\n    |\n\ntests/research/test_view_risk_evaluation.py:169:29: F821 Undefined name `reference`\n    |\n167 |         select_candidate_checkpoint(\n168 |             (CheckpointTuneResult(1, 0.206, _cells(0.01), \"7\" * 64),),\n169 |             clean_reference=reference,\n    |                             ^^^^^^^^^ F821\n170 |         )\n171 |         is None\n    |\n\nFound 4 errors.\nNo fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 1,
+    "output": "............F....                                                        [100%]\n=================================== FAILURES ===================================\n__ test_fresh_classifier_selection_reads_only_tune_and_remains_software_only ___\n\n    def test_fresh_classifier_selection_reads_only_tune_and_remains_software_only() -> None:\n        fit_manifest = _manifest(Role.CLASSIFIER_FIT)\n        tune_manifest = _manifest(Role.TUNE)\n        model, initialization = initialize_public_classifier(\n            \"vit_b_32\", lambda _spec, _prompts: nn.Linear(1, 1)\n        )\n        binding = TrainingBinding(\n            protocol_sha256=\"1\" * 64,\n            config_sha256=\"2\" * 64,\n            search_table_sha256=\"3\" * 64,\n            manifest_sha256=fit_manifest.manifest_sha256,\n            classifier_checkpoint_sha256=initialization.checkpoint_sha256,\n            method=\"fresh_classifier\",\n            seed=42,\n        )\n    \n        def batches(records, _epoch):\n            yield RoleBoundBatch(\n                tuple(record.exam_key for record in records),\n                (torch.ones(len(records), 1), torch.zeros(len(records), 1)),\n            )\n    \n        fitted = fit_fresh_classifier_with_role_access(\n            manifest=fit_manifest,\n            model=model,\n            classifier=initialization,\n            readiness=audit_software_fixture(fit_manifest),\n            optimizer_config=OptimizerConfig(batch_size=6),\n            epochs=1,\n            binding=binding,\n            batch_loader=batches,\n            loss_fn=lambda current, payload: (current(payload[0]) - payload[1]).square().mean(),\n        )\n        selected = select_fresh_classifier_on_tune(\n            tune_manifest,\n            initialization=initialization,\n            classifier_fit_result=fitted,\n            readiness=audit_software_fixture(fit_manifest),\n            checkpoint_evaluator=lambda _records: (\n                ClassifierTuneCheckpoint(2, \"b\" * 64, 0.4),\n                ClassifierTuneCheckpoint(1, \"a\" * 64, 0.4),\n            ),\n        )\n        assert selected.checkpoint_sha256 == \"a\" * 64\n        assert selected.workflow_complete is True\n        assert selected.pilot_eligible is False\n        with pytest.raises(PermissionError, match=\"readiness\"):\n            selected.require_pilot_eligible()\n>       assert reference.epoch == 1\nE       NameError: name 'reference' is not defined\n\ntests/research/test_view_risk_evaluation.py:154: NameError\n=========================== short test summary info ============================\nFAILED tests/research/test_view_risk_evaluation.py::test_fresh_classifier_selection_reads_only_tune_and_remains_software_only\n1 failed, 16 passed in 0.96s\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py src/mmdc_clip_f/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 0,
+    "output": ".................                                                        [100%]\n17 passed in 0.96s\n"
+  },
+  {
+    "command": "/bin/bash -lc \"rg -n 'absent from the readiness' src/mmdc_clip_f/research/view_risk/training.py && /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py\"",
+    "exit_code": 0,
+    "output": "1224:        raise ValueError(\"classifier fitting manifest is absent from the readiness audit\")\nAll checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py'",
+    "exit_code": 0,
+    "output": ".................                                                        [100%]\n17 passed in 0.98s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py::test_candidate_optimizer_uses_checked_current_cache_and_keeps_classifier_frozen'",
+    "exit_code": 0,
+    "output": "..................                                                       [100%]\n18 passed in 1.00s\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py src/mmdc_clip_f/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py src/mmdc_clip_f/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py::test_candidate_optimizer_uses_checked_current_cache_and_keeps_classifier_frozen'",
+    "exit_code": 0,
+    "output": "..................                                                       [100%]\n18 passed in 1.00s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py::test_candidate_optimizer_uses_checked_current_cache_and_keeps_classifier_frozen'",
+    "exit_code": 0,
+    "output": "...................                                                      [100%]\n19 passed in 1.00s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py::test_candidate_optimizer_uses_checked_current_cache_and_keeps_classifier_frozen'",
+    "exit_code": 0,
+    "output": "...................                                                      [100%]\n19 passed in 1.00s\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py src/mmdc_clip_f/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research'",
+    "exit_code": 0,
+    "output": "........................................................................ [ 29%]\n........................................................................ [ 59%]\n........................................................................ [ 89%]\n..........................                                               [100%]\n242 passed in 2.15s\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src tests/research'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py::test_candidate_optimizer_uses_checked_current_cache_and_keeps_classifier_frozen'",
+    "exit_code": 0,
+    "output": "...................                                                      [100%]\n19 passed in 1.01s\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src tests/research'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py::test_candidate_optimizer_uses_checked_current_cache_and_keeps_classifier_frozen'",
+    "exit_code": 0,
+    "output": "...................                                                      [100%]\n19 passed in 0.99s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py::test_candidate_optimizer_uses_checked_current_cache_and_keeps_classifier_frozen'",
+    "exit_code": 127,
+    "output": "/bin/bash: line 1: /home/tianqini/research/MMDC-CLIP/.venv/bin/python: No such file or directory\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP/.venv/bin/python -m ruff check src tests/research'",
+    "exit_code": 127,
+    "output": "/bin/bash: line 1: /home/tianqini/research/MMDC-CLIP/.venv/bin/python: No such file or directory\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py::test_candidate_optimizer_uses_checked_current_cache_and_keeps_classifier_frozen'",
+    "exit_code": 0,
+    "output": "...................                                                      [100%]\n19 passed in 0.96s\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src tests/research'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'git diff --check'",
+    "exit_code": 0,
+    "output": ""
+  }
+]

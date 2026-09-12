@@ -51,6 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
         add_confidence_subparsers(subparsers)
     except ImportError:
         pass
+    from .research.view_risk.cli import add_view_risk_subparsers
+
+    add_view_risk_subparsers(subparsers)
     return parser
 
 
@@ -98,6 +101,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             return int(handled)
     except ImportError:
         pass
+    from .research.view_risk.cli import run_view_risk_command
+
+    result = run_view_risk_command(args)
+    if result is not None:
+        _json_print(result)
+        return 0
     raise RuntimeError(f"Command handler is unavailable: {args.command}")
 
 
