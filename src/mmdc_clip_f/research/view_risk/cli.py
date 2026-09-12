@@ -14,12 +14,15 @@ from .cache import (
     load_cache_bundle,
 )
 from .evaluation import (
+    FrozenClassifierPrediction,
     CheckpointTuneResult,
     ModelArtifactSelection,
     TuneCellResult,
     evaluate_prediction_panel_with_role_access,
+    freeze_authoritative_predictions,
     freeze_pilot_plan,
     load_pilot_plan,
+    load_authoritative_predictions_with_role_access,
     select_candidate_checkpoint,
     select_clean_reference,
     validate_checkpoint_selection_budget,
@@ -50,6 +53,7 @@ COMMANDS = frozenset(
         "view-risk-select",
         "view-risk-freeze-pilot",
         "view-risk-evaluate",
+        "view-risk-freeze-classifier-predictions",
         "view-risk-train-confidence",
     }
 )
@@ -86,9 +90,23 @@ def add_view_risk_subparsers(subparsers: argparse._SubParsersAction) -> None:
     evaluate.add_argument("--manifest-binding", required=True)
     evaluate.add_argument("--private-root", required=True)
     evaluate.add_argument("--predictions", required=True)
+    evaluate.add_argument("--classifier-predictions", required=True)
     evaluate.add_argument("--method", required=True)
     evaluate.add_argument("--seed", required=True, type=int)
     evaluate.add_argument("--model-sha256", required=True)
+    evaluate.add_argument("--model-artifact")
+
+    predictions = subparsers.add_parser(
+        "view-risk-freeze-classifier-predictions",
+        help="Bind one complete label-free classifier prediction artifact after plan freeze",
+    )
+    predictions.add_argument("--config", required=True)
+    predictions.add_argument("--plan", required=True)
+    predictions.add_argument("--manifest", required=True)
+    predictions.add_argument("--manifest-binding", required=True)
+    predictions.add_argument("--private-root", required=True)
+    predictions.add_argument("--input", required=True)
+    predictions.add_argument("--output", required=True)
 
     train = subparsers.add_parser(
         "view-risk-train-confidence",
@@ -180,6 +198,7 @@ def _classifier_from_dict(value: object) -> ClassifierProvenance:
         "tune_manifest_sha256",
         "patient_readiness_verified",
         "readiness_audit_sha256",
+        "public_weight_content_sha256",
     }:
         raise ValueError("classifier binding has missing or unknown fields")
     try:
@@ -203,6 +222,7 @@ def _classifier_from_dict(value: object) -> ClassifierProvenance:
             tune_manifest_sha256=value["tune_manifest_sha256"],
             patient_readiness_verified=value["patient_readiness_verified"],
             readiness_audit_sha256=value["readiness_audit_sha256"],
+            public_weight_content_sha256=value["public_weight_content_sha256"],
         )
     except TypeError as exc:
         raise ValueError("classifier binding has an invalid schema") from exc
@@ -243,6 +263,23 @@ def _prediction_rows(path: str | Path) -> tuple[EvaluationPrediction, ...]:
         )
     except (AttributeError, TypeError) as exc:
         raise ValueError("private prediction row has an invalid schema") from exc
+
+
+def _classifier_prediction_rows(path: str | Path) -> tuple[FrozenClassifierPrediction, ...]:
+    _require_external_or_ignored_destination(Path(path).resolve())
+    value = _read_json(path, description="label-free classifier prediction artifact")
+    if not isinstance(value, dict) or set(value) != {"predictions"}:
+        raise ValueError("classifier prediction input has missing or unknown fields")
+    rows = value["predictions"]
+    if not isinstance(rows, list):
+        raise ValueError("classifier predictions must be a list")
+    try:
+        return tuple(
+            FrozenClassifierPrediction(**{**row, "mask": tuple(row["mask"])})
+            for row in rows
+        )
+    except (AttributeError, KeyError, TypeError) as exc:
+        raise ValueError("classifier prediction row has an invalid schema") from exc
 
 
 def _cache_index(path: str | Path) -> tuple[ClassifierProvenance, tuple[dict[str, object], ...]]:
@@ -305,7 +342,10 @@ def _run_confidence_training(args: argparse.Namespace) -> dict[str, object]:
 
     def authorized(_records):
         classifier, entries = _cache_index(args.cache_index)
-        if classifier.kind != "public_pretrained_fresh" or not classifier.workflow_complete:
+        if classifier.kind not in (
+            "public_pretrained_fresh",
+            "synthetic_injected",
+        ) or not classifier.workflow_complete:
             raise PermissionError(
                 "confidence fitting requires a fit-and-tune-selected fresh public classifier"
             )
@@ -459,18 +499,60 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
         raw_selections = selections_value["selections"]
         if not isinstance(raw_selections, list):
             raise ValueError("selections must be a list")
-        try:
-            selections = tuple(ModelArtifactSelection(**value) for value in raw_selections)
-        except TypeError as exc:
-            raise ValueError("selection entry has an invalid schema") from exc
         manifests = bindings["manifest_sha256_by_role"]
         if not isinstance(manifests, dict):
             raise ValueError("manifest bindings must be a mapping")
+        classifier = _classifier_from_dict(bindings["classifier"])
+        selections = []
+        for value in raw_selections:
+            if not isinstance(value, dict) or "evidence_kind" not in value:
+                raise ValueError("selection entry has an invalid schema")
+            if value["evidence_kind"] == "synthetic_software":
+                if set(value) != {"method", "seed", "artifact_path", "evidence_kind"}:
+                    raise ValueError("synthetic selection entry has unknown fields")
+                selections.append(
+                    ModelArtifactSelection.synthetic_from_artifact(
+                        value["artifact_path"],
+                        method=value["method"],
+                        seed=value["seed"],
+                        config=config,
+                        classifier=classifier,
+                    )
+                )
+            else:
+                expected = {
+                    "method",
+                    "seed",
+                    "artifact_path",
+                    "evidence_kind",
+                    "tune_manifest_sha256",
+                    "selection_trials",
+                    "reference_artifact_sha256",
+                    "workflow_evidence_path",
+                    "eligible",
+                }
+                if set(value) != expected:
+                    raise ValueError("production selection entry has missing or unknown fields")
+                selections.append(
+                    ModelArtifactSelection.verified_from_artifact(
+                        value["artifact_path"],
+                        method=value["method"],
+                        seed=value["seed"],
+                        config=config,
+                        classifier=classifier,
+                        tune_manifest_sha256=value["tune_manifest_sha256"],
+                        selection_trials=value["selection_trials"],
+                        reference_artifact_sha256=value["reference_artifact_sha256"],
+                        workflow_evidence_path=value["workflow_evidence_path"],
+                        evidence_kind=value["evidence_kind"],
+                        eligible=value["eligible"],
+                    )
+                )
         plan = freeze_pilot_plan(
             args.output,
             config=config,
             manifest_sha256_by_role=manifests,
-            classifier=_classifier_from_dict(bindings["classifier"]),
+            classifier=classifier,
             selections=selections,
         )
         return {"status": "frozen", "pilot_plan_sha256": plan.sha256}
@@ -488,13 +570,35 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
         operation=Operation.PILOT_EVALUATION,
         role=Role.PILOT,
     )
+    if args.command == "view-risk-freeze-classifier-predictions":
+        predictions = freeze_authoritative_predictions(
+            args.output,
+            plan,
+            manifest=manifest,
+            role=Role.PILOT,
+            prediction_reader=lambda _records: _classifier_prediction_rows(args.input),
+        )
+        return {
+            "status": "classifier_predictions_frozen",
+            "prediction_sha256": predictions.sha256,
+            "row_count": len(predictions.rows),
+            "patient_readiness": "verified" if plan.patient_ready else "synthetic_only",
+        }
+    authoritative = load_authoritative_predictions_with_role_access(
+        args.classifier_predictions,
+        plan,
+        manifest=manifest,
+        role=Role.PILOT,
+    )
     summary = evaluate_prediction_panel_with_role_access(
         plan,
+        authoritative_predictions=authoritative,
         manifest=manifest,
         role=Role.PILOT,
         method=args.method,
         seed=args.seed,
         model_sha256=args.model_sha256,
+        model_artifact_path=args.model_artifact,
         prediction_reader=lambda _records: _prediction_rows(args.predictions),
     )
     return {

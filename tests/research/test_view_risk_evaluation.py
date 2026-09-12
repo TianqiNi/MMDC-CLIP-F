@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
+from mmdc_clip_f.provenance import sha256_file
 
 from mmdc_clip_f.research.view_risk.evaluation import (
+    FrozenClassifierPrediction,
     CheckpointTuneResult,
     ClassifierTuneCheckpoint,
     ModelArtifactSelection,
     PilotEvaluationSummary,
     TuneCellResult,
+    bind_authoritative_predictions_with_role_access,
     evaluate_pilot_with_role_access,
     evaluate_prediction_panel_with_role_access,
     evaluate_tune_cells_with_role_access,
@@ -35,6 +39,7 @@ from mmdc_clip_f.research.view_risk.training import (
     ResearchRunConfig,
     RoleBoundBatch,
     TrainingBinding,
+    TrainingResult,
     audit_software_fixture,
     fit_fresh_classifier_with_role_access,
     initialize_public_classifier,
@@ -43,7 +48,7 @@ from torch import nn
 import torch
 
 
-def _manifest(role: Role) -> RoleManifest:
+def _manifest(role: Role, count: int = 1) -> RoleManifest:
     return RoleManifest(
         dataset_namespace="synthetic-evaluation",
         source_hashes={"fixture": "a" * 64},
@@ -53,16 +58,20 @@ def _manifest(role: Role) -> RoleManifest:
         records=[
             PrivateExamRecord(
                 dataset_namespace="synthetic-evaluation",
-                exam_key="exam-safe",
-                patient_key="patient-safe",
-                density=0,
+                exam_key=f"exam-safe-{index}",
+                patient_key=f"patient-safe-{index}",
+                density=index % 4,
                 source_manifest="fixture",
                 views={
-                    view: ViewReference(image_id=f"image-{view}", path=f"fixture/{view}.png")
+                    view: ViewReference(
+                        image_id=f"image-{index}-{view}",
+                        path=f"fixture/{index}/{view}.png",
+                    )
                     for view in ("L_CC", "L_MLO", "R_CC", "R_MLO")
                 },
                 role=role,
             )
+            for index in range(count)
         ],
     )
 
@@ -165,6 +174,59 @@ def test_reference_guardrail_ties_and_no_eligible_selection() -> None:
         )
 
 
+def test_learned_selection_replays_budget_guardrail_and_checkpoint_bytes(tmp_path) -> None:
+    config = ResearchRunConfig.default("RSNA")
+    classifier = _fresh_selected()
+    files = []
+    for epoch in config.search_table.checkpoint_epochs:
+        path = tmp_path / f"epoch-{epoch}.bin"
+        path.write_bytes(f"checkpoint-{epoch}".encode())
+        files.append(path)
+    checkpoints = tuple(
+        replace(
+            _checkpoint(
+                epoch,
+                0.2 if epoch == 1 else 0.3,
+                0.4,
+                sha256_file(files[epoch - 1]),
+                method="correctness_mvacn",
+                tune_manifest_sha256=classifier.tune_manifest_sha256,
+            ),
+            classifier_checkpoint_sha256=classifier.checkpoint_sha256,
+        )
+        for epoch in config.search_table.checkpoint_epochs
+    )
+    reference = checkpoints[0]
+    training = TrainingResult(
+        method="correctness_mvacn",
+        seed=42,
+        completed_epoch=config.epochs,
+        update_count=config.epochs,
+        exposed_record_count=3,
+        parameter_count=7,
+        model_state_sha256="9" * 64,
+        manifest_sha256="8" * 64,
+        scaling="declared_identity_no_fitted_scaler",
+        selection_trial_budget=config.epochs,
+        actual_exposure_verified=True,
+        software_only=True,
+    )
+    selection = ModelArtifactSelection.from_learned_workflow(
+        artifact_path=files[0],
+        evidence_path=tmp_path / "learned-evidence.json",
+        config=config,
+        classifier=classifier,
+        training_result=training,
+        checkpoints=checkpoints,
+        clean_reference=reference,
+    )
+    assert selection.artifact_sha256 == sha256_file(files[0])
+    assert selection.confidence_fit_manifest_sha256 == training.manifest_sha256
+    files[0].write_bytes(b"changed")
+    with pytest.raises(ValueError, match="content changed"):
+        selection.verify_current_artifact()
+
+
 def test_fresh_classifier_selection_reads_only_tune_and_remains_software_only() -> None:
     fit_manifest = _manifest(Role.CLASSIFIER_FIT)
     tune_manifest = _manifest(Role.TUNE)
@@ -211,22 +273,33 @@ def test_fresh_classifier_selection_reads_only_tune_and_remains_software_only() 
     assert selected.checkpoint_sha256 == "a" * 64
     assert selected.workflow_complete is True
     assert selected.pilot_eligible is False
-    with pytest.raises(PermissionError, match="readiness"):
+    with pytest.raises(PermissionError, match="synthetic"):
         selected.require_pilot_eligible()
 
 
-def _selections(config: ResearchRunConfig) -> tuple[ModelArtifactSelection, ...]:
-    return tuple(
-        ModelArtifactSelection(method, seed, f"{index + 10:064x}")
-        for index, (method, seed) in enumerate(
-            (method, seed) for method in config.methods for seed in config.seeds
+def _selections(config: ResearchRunConfig, directory) -> tuple[ModelArtifactSelection, ...]:
+    classifier = _fresh_selected()
+    result = []
+    for index, (method, seed) in enumerate(
+        (method, seed) for method in config.methods for seed in config.seeds
+    ):
+        artifact = directory / f"selection-{index}.bin"
+        artifact.write_bytes(f"{method}:{seed}".encode())
+        result.append(
+            ModelArtifactSelection.synthetic_from_artifact(
+                artifact,
+                method=method,
+                seed=seed,
+                config=config,
+                classifier=classifier,
+            )
         )
-    )
+    return tuple(result)
 
 
 def _fresh_selected() -> ClassifierProvenance:
     return ClassifierProvenance.fresh_selected(
-        ClassifierProvenance.public_pretrained("vit_b_32", "a" * 64),
+        ClassifierProvenance.synthetic_injected("vit_b_32", "a" * 64),
         checkpoint_sha256="c" * 64,
         classifier_fit_manifest_sha256=_manifest(Role.CLASSIFIER_FIT).manifest_sha256,
         classifier_fit_update_count=20,
@@ -254,7 +327,7 @@ def test_pilot_plan_is_immutable_complete_and_binds_all_inputs(tmp_path) -> None
         config=config,
         manifest_sha256_by_role=_manifest_hashes(),
         classifier=classifier,
-        selections=_selections(config),
+        selections=_selections(config, tmp_path),
     )
 
     assert plan.stress_seed == 4242
@@ -266,7 +339,7 @@ def test_pilot_plan_is_immutable_complete_and_binds_all_inputs(tmp_path) -> None
             config=config,
             manifest_sha256_by_role=_manifest_hashes(),
             classifier=classifier,
-            selections=_selections(config),
+            selections=_selections(config, tmp_path),
         )
 
     document = json.loads(path.read_text())
@@ -284,7 +357,7 @@ def test_missing_selection_diagnostic_classifier_and_locked_outcomes_are_refused
             config=config,
             manifest_sha256_by_role=_manifest_hashes(),
             classifier=_fresh_selected(),
-            selections=_selections(config)[:-1],
+            selections=_selections(config, tmp_path)[:-1],
         )
     with pytest.raises(PermissionError, match="diagnostic"):
         freeze_pilot_plan(
@@ -294,7 +367,7 @@ def test_missing_selection_diagnostic_classifier_and_locked_outcomes_are_refused
             classifier=ClassifierProvenance.diagnostic_original(
                 "vit_b_32", "c" * 64, reason="known development exposure"
             ),
-            selections=_selections(config),
+            selections=_selections(config, tmp_path),
         )
 
     # Ordinary manifests cannot even be constructed with locked outcomes; the
@@ -312,7 +385,7 @@ def test_missing_selection_diagnostic_classifier_and_locked_outcomes_are_refused
         config=config,
         manifest_sha256_by_role=_manifest_hashes(pilot_manifest.manifest_sha256),
         classifier=_fresh_selected(),
-        selections=_selections(config),
+        selections=_selections(config, tmp_path),
     )
     with pytest.raises(PermissionError):
         evaluate_pilot_with_role_access(
@@ -335,7 +408,7 @@ def test_pilot_evaluation_checks_model_binding_before_outcome_reader(tmp_path) -
         config=config,
         manifest_sha256_by_role=_manifest_hashes(manifest.manifest_sha256),
         classifier=_fresh_selected(),
-        selections=_selections(config),
+        selections=_selections(config, tmp_path),
     )
     called = False
 
@@ -393,11 +466,24 @@ def test_role_authorized_evaluation_really_uses_p4a_and_cli_has_no_unlock(tmp_pa
         config=config,
         manifest_sha256_by_role=_manifest_hashes(manifest.manifest_sha256),
         classifier=_fresh_selected(),
-        selections=_selections(config),
+        selections=_selections(config, tmp_path),
     )
     row = manifest.records[0]
+    authoritative = bind_authoritative_predictions_with_role_access(
+        plan,
+        manifest=manifest,
+        role=Role.PILOT,
+        prediction_reader=lambda _records: (
+            FrozenClassifierPrediction(
+                exam_id=row.exam_key,
+                panel="clean_four_view",
+                prediction=row.density,
+            ),
+        ),
+    )
     summary = evaluate_prediction_panel_with_role_access(
         plan,
+        authoritative_predictions=authoritative,
         manifest=manifest,
         role=Role.PILOT,
         method="candidate",
@@ -435,3 +521,69 @@ def test_role_authorized_evaluation_really_uses_p4a_and_cli_has_no_unlock(tmp_pa
     output = json.loads(capsys.readouterr().out)
     assert output["status"] == "valid"
     assert output["patient_readiness"] == "not_assessed"
+
+
+def test_pilot_requires_exact_cohort_and_shared_classifier_predictions(tmp_path) -> None:
+    config = ResearchRunConfig.default("RSNA", "vit_b_32")
+    manifest = _manifest(Role.PILOT, 2)
+    plan = freeze_pilot_plan(
+        tmp_path / "paired-plan.json",
+        config=config,
+        manifest_sha256_by_role=_manifest_hashes(manifest.manifest_sha256),
+        classifier=_fresh_selected(),
+        selections=_selections(config, tmp_path),
+    )
+    authoritative = bind_authoritative_predictions_with_role_access(
+        plan,
+        manifest=manifest,
+        role=Role.PILOT,
+        prediction_reader=lambda records: tuple(
+            FrozenClassifierPrediction(
+                exam_id=record.exam_key,
+                panel="clean_four_view",
+                prediction=record.density,
+            )
+            for record in records
+        ),
+    )
+
+    def prediction(record, prediction):
+        return EvaluationPrediction(
+            dataset="RSNA",
+            role=Role.PILOT.value,
+            cohort=manifest.manifest_sha256,
+            method="candidate",
+            training_seed=42,
+            patient_id=record.patient_key,
+            exam_id=record.exam_key,
+            panel="clean_four_view",
+            target=record.density,
+            prediction=prediction,
+            confidence=0.8,
+            confidence_kind="probability",
+        )
+
+    with pytest.raises(ValueError, match="omit or add"):
+        evaluate_prediction_panel_with_role_access(
+            plan,
+            authoritative_predictions=authoritative,
+            manifest=manifest,
+            role=Role.PILOT,
+            method="candidate",
+            seed=42,
+            model_sha256=dict(plan.selection_map)["candidate:42"],
+            prediction_reader=lambda records: (prediction(records[0], records[0].density),),
+        )
+    with pytest.raises(ValueError, match="authoritative"):
+        evaluate_prediction_panel_with_role_access(
+            plan,
+            authoritative_predictions=authoritative,
+            manifest=manifest,
+            role=Role.PILOT,
+            method="candidate",
+            seed=42,
+            model_sha256=dict(plan.selection_map)["candidate:42"],
+            prediction_reader=lambda records: tuple(
+                prediction(record, (record.density + 1) % 4) for record in records
+            ),
+        )

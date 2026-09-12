@@ -13,7 +13,7 @@ import json
 import math
 import os
 import random
-from dataclasses import asdict, dataclass, fields, replace
+from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Callable, Iterable, Mapping, Sequence
@@ -23,6 +23,7 @@ import torch
 from torch import Tensor, nn
 
 from mmdc_clip_f.backbones import PROMPTS, get_backbone
+from mmdc_clip_f.model import MultiViewCLIPClassifier
 from mmdc_clip_f.provenance import sha256_file
 
 from .baselines import (
@@ -109,6 +110,7 @@ LEARNED_TORCH_METHODS = frozenset(
     }
 )
 _FRESH_CLASSIFIER_FIT_TOKEN = object()
+_PRODUCTION_INITIALIZATION_TOKEN = object()
 
 
 def _canonical_json(value: object) -> bytes:
@@ -468,6 +470,8 @@ class ClassifierProvenance:
     tune_manifest_sha256: str | None = None
     patient_readiness_verified: bool = False
     readiness_audit_sha256: str | None = None
+    public_weight_content_sha256: str | None = None
+    _production_token: object = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         spec = get_backbone(self.backbone)
@@ -485,9 +489,18 @@ class ClassifierProvenance:
             raise ValueError("classifier provenance disagrees with accepted preprocessing")
         if not _is_sha256(self.checkpoint_sha256):
             raise ValueError("classifier checkpoint identity must be SHA-256")
-        if self.kind == "public_pretrained_fresh":
+        if self.kind in ("public_pretrained_fresh", "synthetic_injected"):
             if self.diagnostic_reason is not None:
                 raise ValueError("fresh classifier provenance cannot have a diagnostic reason")
+            if self.kind == "public_pretrained_fresh":
+                if self._production_token is not _PRODUCTION_INITIALIZATION_TOKEN:
+                    raise PermissionError(
+                        "public pretrained provenance must come from the pinned production loader"
+                    )
+                if not _is_sha256(self.public_weight_content_sha256):
+                    raise ValueError("public initialization requires weight-content evidence")
+            elif self.public_weight_content_sha256 is not None:
+                raise ValueError("synthetic initialization cannot claim public weight evidence")
             initialization = self.initialization_sha256 or self.checkpoint_sha256
             if not _is_sha256(initialization):
                 raise ValueError("fresh classifier initialization must be SHA-256 bound")
@@ -527,10 +540,10 @@ class ClassifierProvenance:
             raise ValueError("classifier patient readiness must be boolean")
 
     @classmethod
-    def public_pretrained(cls, backbone: str, checkpoint_sha256: str) -> "ClassifierProvenance":
+    def synthetic_injected(cls, backbone: str, checkpoint_sha256: str) -> "ClassifierProvenance":
         spec = get_backbone(backbone)
         return cls(
-            "public_pretrained_fresh",
+            "synthetic_injected",
             spec.name,
             spec.hf_model,
             spec.revision,
@@ -545,6 +558,42 @@ class ClassifierProvenance:
         )
 
     @classmethod
+    def _public_pretrained(
+        cls,
+        backbone: str,
+        checkpoint_sha256: str,
+        *,
+        weight_content_sha256: str,
+        source_identity_sha256: str,
+    ) -> "ClassifierProvenance":
+        spec = get_backbone(backbone)
+        return cls(
+            "public_pretrained_fresh",
+            spec.name,
+            spec.hf_model,
+            spec.revision,
+            spec.image_size,
+            spec.hidden_size,
+            tuple(PROMPTS),
+            LEGACY_PREPROCESSING,
+            LEGACY_IMAGE_MEAN,
+            LEGACY_IMAGE_STD,
+            checkpoint_sha256,
+            None,
+            initialization_sha256=source_identity_sha256,
+            public_weight_content_sha256=weight_content_sha256,
+            _production_token=_PRODUCTION_INITIALIZATION_TOKEN,
+        )
+
+    @classmethod
+    def _restore_frozen_record(cls, **values: object) -> "ClassifierProvenance":
+        """Restore only a classifier record embedded in an already-verified plan."""
+
+        if values.get("kind") == "public_pretrained_fresh":
+            values["_production_token"] = _PRODUCTION_INITIALIZATION_TOKEN
+        return cls(**values)  # type: ignore[arg-type]
+
+    @classmethod
     def fresh_selected(
         cls,
         initialization: "ClassifierProvenance",
@@ -556,7 +605,10 @@ class ClassifierProvenance:
         tune_manifest_sha256: str,
         readiness: "ReadinessAudit",
     ) -> "ClassifierProvenance":
-        if initialization.kind != "public_pretrained_fresh" or initialization.workflow_complete:
+        if initialization.kind not in (
+            "public_pretrained_fresh",
+            "synthetic_injected",
+        ) or initialization.workflow_complete:
             raise ValueError("fresh selection requires an unfitted pinned public initialization")
         if not isinstance(readiness, ReadinessAudit):
             raise TypeError("fresh selection requires a factory-created readiness audit")
@@ -580,8 +632,12 @@ class ClassifierProvenance:
             classifier_fit_update_count=classifier_fit_update_count,
             tune_selection_sha256=tune_selection_sha256,
             tune_manifest_sha256=tune_manifest_sha256,
-            patient_readiness_verified=readiness.patient_ready,
+            patient_readiness_verified=(
+                readiness.patient_ready and initialization.kind == "public_pretrained_fresh"
+            ),
             readiness_audit_sha256=readiness.sha256,
+            public_weight_content_sha256=initialization.public_weight_content_sha256,
+            _production_token=initialization._production_token,
         )
 
     @classmethod
@@ -606,12 +662,16 @@ class ClassifierProvenance:
 
     @property
     def pilot_eligible(self) -> bool:
-        return self.workflow_complete and self.patient_readiness_verified
+        return (
+            self.kind == "public_pretrained_fresh"
+            and self.workflow_complete
+            and self.patient_readiness_verified
+        )
 
     @property
     def workflow_complete(self) -> bool:
         return (
-            self.kind == "public_pretrained_fresh"
+            self.kind in ("public_pretrained_fresh", "synthetic_injected")
             and self.classifier_fit_manifest_sha256 is not None
             and self.classifier_fit_update_count > 0
             and self.tune_selection_sha256 is not None
@@ -621,6 +681,8 @@ class ClassifierProvenance:
     def require_pilot_eligible(self) -> None:
         if self.kind == "original_finetuned_diagnostic":
             raise PermissionError("diagnostic original classifier cannot qualify a held-out pilot")
+        if self.kind == "synthetic_injected":
+            raise PermissionError("synthetic injected classifier cannot qualify a held-out pilot")
         if not self.workflow_complete:
             raise PermissionError("fresh classifier fitting/tune workflow is incomplete")
         if not self.patient_readiness_verified:
@@ -647,21 +709,66 @@ class ClassifierProvenance:
             "tune_manifest_sha256": self.tune_manifest_sha256,
             "patient_readiness_verified": self.patient_readiness_verified,
             "readiness_audit_sha256": self.readiness_audit_sha256,
+            "public_weight_content_sha256": self.public_weight_content_sha256,
         }
 
 
-def initialize_public_classifier(
+def initialize_synthetic_classifier(
     backbone: str,
     factory: Callable[[PublicCLIPConfiguration], nn.Module],
 ) -> tuple[nn.Module, ClassifierProvenance]:
-    """Construct a fresh classifier through a public-pin-aware injected factory."""
+    """Construct an explicitly synthetic classifier for download-free software tests."""
 
     public = pinned_public_clip_configuration(backbone)
     model = factory(public)
     if not isinstance(model, nn.Module) or not tuple(model.parameters()):
         raise TypeError("public classifier factory must return a parameterized torch module")
     digest = module_state_sha256(model)
-    return model, ClassifierProvenance.public_pretrained(public.backbone, digest)
+    return model, ClassifierProvenance.synthetic_injected(public.backbone, digest)
+
+
+initialize_public_classifier = initialize_synthetic_classifier
+
+
+def load_pinned_public_clip_classifier(
+    backbone: str,
+    dataset: str,
+    *,
+    device: str | torch.device = "cpu",
+) -> tuple[MultiViewCLIPClassifier, Tensor, ClassifierProvenance]:
+    """Load the exact pinned public CLIP source and bind its actual tensor content."""
+
+    from transformers import CLIPModel, CLIPTokenizer
+
+    public = pinned_public_clip_configuration(backbone)
+    target = torch.device(device)
+    clip = CLIPModel.from_pretrained(public.hf_model, revision=public.revision)
+    tokenizer = CLIPTokenizer.from_pretrained(public.hf_model, revision=public.revision)
+    tokenized = tokenizer(list(public.prompts), padding=True, return_tensors="pt")
+    input_ids = tokenized["input_ids"].to(target)
+    normalized_dataset = dataset.upper()
+    if normalized_dataset not in ("RSNA", "DDSM"):
+        raise ValueError("dataset must be RSNA or DDSM")
+    pairs = RSNA_FUSION_PAIRS if normalized_dataset == "RSNA" else DDSM_FUSION_PAIRS
+    classifier = MultiViewCLIPClassifier(clip, CANONICAL_VIEWS, pairs).to(target)
+    weight_content = module_state_sha256(classifier)
+    source_identity = _sha256_json(
+        {
+            "hf_model": public.hf_model,
+            "revision": public.revision,
+            "weight_content_sha256": weight_content,
+            "token_ids_sha256": tensor_sha256(input_ids),
+            "prompts": list(public.prompts),
+            "fusion_pairs": [list(pair) for pair in pairs],
+        }
+    )
+    provenance = ClassifierProvenance._public_pretrained(
+        public.backbone,
+        weight_content,
+        weight_content_sha256=weight_content,
+        source_identity_sha256=source_identity,
+    )
+    return classifier, input_ids, provenance
 
 
 _READINESS_AUDIT_TOKEN = object()
@@ -678,6 +785,8 @@ class ReadinessAudit:
     locked_isolation_verified: bool
     manifest_sha256s: tuple[str, ...]
     locked_denylist_sha256: str | None
+    verified_file_sha256s: tuple[str, ...]
+    verified_files: tuple[tuple[str, str], ...]
     sha256: str
 
     def __init__(
@@ -691,6 +800,8 @@ class ReadinessAudit:
         locked_isolation_verified: bool,
         manifest_sha256s: Sequence[str],
         locked_denylist_sha256: str | None,
+        verified_file_sha256s: Sequence[str] = (),
+        verified_files: Mapping[str, str] | None = None,
         *,
         _factory_token: object,
     ) -> None:
@@ -702,6 +813,10 @@ class ReadinessAudit:
         if locked_denylist_sha256 is not None and not _is_sha256(locked_denylist_sha256):
             raise ValueError("readiness audit locked denylist binding must be SHA-256")
         counts = MappingProxyType(dict(sorted(role_exam_counts.items())))
+        verified_digests = tuple(sorted(verified_file_sha256s))
+        path_bindings = tuple(sorted((verified_files or {}).items()))
+        if any(not Path(path).is_absolute() or not _is_sha256(digest) for path, digest in path_bindings):
+            raise ValueError("readiness file evidence must bind absolute paths to SHA-256")
         payload = {
             "kind": kind,
             "patient_ready": patient_ready,
@@ -712,11 +827,15 @@ class ReadinessAudit:
             "locked_isolation_verified": locked_isolation_verified,
             "manifest_sha256s": list(manifests),
             "locked_denylist_sha256": locked_denylist_sha256,
+            "verified_file_sha256s": list(verified_digests),
+            "verified_files": dict(path_bindings),
         }
         for name, value in payload.items():
             object.__setattr__(self, name, value)
         object.__setattr__(self, "role_exam_counts", counts)
         object.__setattr__(self, "manifest_sha256s", manifests)
+        object.__setattr__(self, "verified_file_sha256s", verified_digests)
+        object.__setattr__(self, "verified_files", path_bindings)
         object.__setattr__(self, "sha256", _sha256_json(payload))
 
 
@@ -742,8 +861,12 @@ def audit_real_data_readiness(
     manifests: Sequence[RoleManifest],
     *,
     locked_patient_denylist: LockedPatientIdentityDenylist,
+    source_files: Mapping[str, str | Path],
+    patient_mapping_file: str | Path,
+    locked_denylist_file: str | Path,
+    image_root: str | Path,
 ) -> ReadinessAudit:
-    """Audit all non-test roles plus identity-only locked-patient isolation."""
+    """Audit structural isolation and verify every referenced production byte."""
 
     materialized = tuple(manifests)
     summary = validate_inventory(
@@ -754,6 +877,41 @@ def audit_real_data_readiness(
     }
     if represented != set(NON_TEST_ROLES):
         raise ValueError("real-data readiness requires every non-test role")
+    if not locked_patient_denylist.patient_identity_digests:
+        raise ValueError("real-data readiness requires locked patient identity evidence")
+    expected_sources = dict(materialized[0].source_hashes)
+    if set(source_files) != set(expected_sources):
+        raise ValueError("source-file evidence does not match manifest source names")
+    verified: list[str] = []
+    verified_paths: dict[str, str] = {}
+    for name, expected in expected_sources.items():
+        actual = sha256_file(Path(source_files[name]).resolve())
+        if actual != expected:
+            raise ValueError("source-file content disagrees with manifest provenance")
+        verified.append(actual)
+        verified_paths[str(Path(source_files[name]).resolve())] = actual
+    mapping_hash = sha256_file(Path(patient_mapping_file).resolve())
+    if any(manifest.patient_mapping.mapping_source_sha256 != mapping_hash for manifest in materialized):
+        raise ValueError("patient-mapping bytes disagree with manifest provenance")
+    denylist_hash = sha256_file(Path(locked_denylist_file).resolve())
+    if denylist_hash != locked_patient_denylist.source_sha256:
+        raise ValueError("locked denylist bytes disagree with its provenance")
+    root = Path(image_root).resolve()
+    verified_paths[str(Path(patient_mapping_file).resolve())] = mapping_hash
+    verified_paths[str(Path(locked_denylist_file).resolve())] = denylist_hash
+    for manifest in materialized:
+        for record in manifest.records:
+            for reference in record.views.values():
+                if reference.content_sha256 is None:
+                    raise ValueError("real readiness requires image content hashes")
+                image_path = (root / reference.path).resolve()
+                if image_path != root and root not in image_path.parents:
+                    raise ValueError("image path escapes the audited image root")
+                actual = sha256_file(image_path)
+                if actual != reference.content_sha256:
+                    raise ValueError("image bytes disagree with manifest provenance")
+                verified.append(actual)
+                verified_paths[str(image_path)] = actual
     return ReadinessAudit(
         "real_data",
         True,
@@ -764,8 +922,80 @@ def audit_real_data_readiness(
         True,
         tuple(manifest.manifest_sha256 for manifest in materialized),
         locked_patient_denylist.source_sha256,
+        (*verified, mapping_hash, denylist_hash),
+        verified_paths,
         _factory_token=_READINESS_AUDIT_TOKEN,
     )
+
+
+def save_readiness_audit(audit: ReadinessAudit, path: str | Path) -> Path:
+    """Exclusively persist a private real-readiness artifact with byte paths."""
+
+    if not isinstance(audit, ReadinessAudit) or not audit.patient_ready:
+        raise ValueError("only a verified real-data readiness audit may be persisted")
+    target = Path(path).resolve()
+    if target.suffix != ".json" or not target.parent.exists():
+        raise ValueError("readiness artifact must be JSON in an existing directory")
+    staging = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    for candidate in (target, staging):
+        _require_external_or_ignored_destination(candidate)
+    payload = {
+        "kind": audit.kind,
+        "patient_ready": audit.patient_ready,
+        "dataset_count": audit.dataset_count,
+        "exam_count": audit.exam_count,
+        "patient_count": audit.patient_count,
+        "role_exam_counts": dict(audit.role_exam_counts),
+        "locked_isolation_verified": audit.locked_isolation_verified,
+        "manifest_sha256s": list(audit.manifest_sha256s),
+        "locked_denylist_sha256": audit.locked_denylist_sha256,
+        "verified_file_sha256s": list(audit.verified_file_sha256s),
+        "verified_files": dict(audit.verified_files),
+    }
+    document = {"audit_sha256": audit.sha256, "audit": payload}
+    try:
+        with staging.open("xb") as handle:
+            handle.write(_canonical_json(document) + b"\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(staging, target)
+        target.chmod(0o600)
+    finally:
+        staging.unlink(missing_ok=True)
+    return target
+
+
+def load_verified_readiness_audit(path: str | Path) -> ReadinessAudit:
+    """Reload a real readiness artifact and re-hash every bound source byte."""
+
+    try:
+        document = json.loads(Path(path).read_text(encoding="utf-8"))
+        payload = document["audit"]
+        if set(document) != {"audit_sha256", "audit"}:
+            raise ValueError
+        verified_paths = payload["verified_files"]
+        for source, expected in verified_paths.items():
+            if sha256_file(Path(source)) != expected:
+                raise ValueError("readiness source content changed after audit")
+        audit = ReadinessAudit(
+            payload["kind"],
+            payload["patient_ready"],
+            payload["dataset_count"],
+            payload["exam_count"],
+            payload["patient_count"],
+            payload["role_exam_counts"],
+            payload["locked_isolation_verified"],
+            payload["manifest_sha256s"],
+            payload["locked_denylist_sha256"],
+            payload["verified_file_sha256s"],
+            verified_paths,
+            _factory_token=_READINESS_AUDIT_TOKEN,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise ValueError("readiness artifact is unavailable or invalid") from exc
+    if document["audit_sha256"] != audit.sha256 or not audit.patient_ready:
+        raise ValueError("readiness artifact integrity or status is invalid")
+    return audit
 
 
 @dataclass(frozen=True)
@@ -1370,7 +1600,10 @@ def fit_fresh_classifier_with_role_access(
     on behalf of real patient data.
     """
 
-    if classifier.kind != "public_pretrained_fresh" or classifier.workflow_complete:
+    if classifier.kind not in (
+        "public_pretrained_fresh",
+        "synthetic_injected",
+    ) or classifier.workflow_complete:
         raise PermissionError("classifier fitting requires an unfitted pinned public initialization")
     if classifier.checkpoint_sha256 != module_state_sha256(model):
         raise ValueError("fresh classifier initialization identity is stale")
@@ -1395,7 +1628,10 @@ def fit_fresh_classifier_with_role_access(
         stop_after_epoch=stop_after_epoch,
         _classifier_fit_token=_FRESH_CLASSIFIER_FIT_TOKEN,
     )
-    return replace(result, software_only=not readiness.patient_ready)
+    return replace(
+        result,
+        software_only=(classifier.kind == "synthetic_injected" or not readiness.patient_ready),
+    )
 
 
 @dataclass(frozen=True)
@@ -1483,7 +1719,10 @@ def fit_confidence_method_with_role_access(
 
     if method not in LEARNED_TORCH_METHODS:
         raise ValueError("requested confidence method has no torch fitting workflow")
-    if classifier.kind != "public_pretrained_fresh" or not classifier.workflow_complete:
+    if classifier.kind not in (
+        "public_pretrained_fresh",
+        "synthetic_injected",
+    ) or not classifier.workflow_complete:
         raise PermissionError(
             "confidence fitting requires a fit-and-tune-selected fresh public classifier"
         )
@@ -1599,8 +1838,12 @@ __all__ = [
     "fit_confidence_method_with_role_access",
     "fit_fresh_classifier_with_role_access",
     "initialize_public_classifier",
+    "initialize_synthetic_classifier",
+    "load_pinned_public_clip_classifier",
+    "load_verified_readiness_audit",
     "load_research_run_config",
     "load_role_manifest_for_operation",
     "module_state_sha256",
     "pinned_public_clip_configuration",
+    "save_readiness_audit",
 ]

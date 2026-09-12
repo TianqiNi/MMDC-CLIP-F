@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 import random
 import subprocess
+import sys
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -20,6 +22,7 @@ from mmdc_clip_f.research.view_risk.roles import (
     RoleManifest,
     ViewReference,
     ManifestBinding,
+    LockedPatientIdentityDenylist,
 )
 from mmdc_clip_f.research.view_risk.training import (
     MANDATORY_METHODS,
@@ -29,6 +32,7 @@ from mmdc_clip_f.research.view_risk.training import (
     RoleBoundBatch,
     TrainingBinding,
     audit_software_fixture,
+    audit_real_data_readiness,
     build_learned_method,
     build_method_training_schedule,
     build_training_schedule,
@@ -36,6 +40,7 @@ from mmdc_clip_f.research.view_risk.training import (
     fit_role_bound_module,
     fit_fresh_classifier_with_role_access,
     initialize_public_classifier,
+    load_pinned_public_clip_classifier,
     module_state_sha256,
     load_role_manifest_for_operation,
 )
@@ -161,7 +166,7 @@ def test_role_is_rejected_before_training_reader_hook() -> None:
 
 
 def test_public_fresh_and_diagnostic_classifier_identities_are_not_interchangeable() -> None:
-    fresh = ClassifierProvenance.public_pretrained("vit_b_32", "a" * 64)
+    fresh = ClassifierProvenance.synthetic_injected("vit_b_32", "a" * 64)
     diagnostic = ClassifierProvenance.diagnostic_original(
         "vit_b_32", "a" * 64, reason="training exposure overlaps repartitioned roles"
     )
@@ -467,7 +472,7 @@ def test_resume_rejects_unignored_staging_path_before_reader(tmp_path) -> None:
     assert called is False
 
 
-def test_public_classifier_factory_receives_pins_without_download() -> None:
+def test_injected_classifier_is_explicitly_synthetic_and_not_pilot_eligible() -> None:
     received = None
 
     def factory(public):
@@ -493,6 +498,95 @@ def test_public_classifier_factory_receives_pins_without_download() -> None:
     )
     assert provenance.checkpoint_sha256 == module_state_sha256(model)
     assert provenance.workflow_complete is False
+    assert provenance.kind == "synthetic_injected"
+    with pytest.raises(PermissionError, match="synthetic"):
+        provenance.require_pilot_eligible()
+
+
+def test_production_loader_uses_exact_public_pins_and_weight_content(monkeypatch) -> None:
+    calls = []
+
+    class FakeCLIP(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = nn.Parameter(torch.tensor([1.0]))
+
+    class ModelLoader:
+        @staticmethod
+        def from_pretrained(model, *, revision):
+            calls.append(("model", model, revision))
+            return FakeCLIP()
+
+    class FakeTokenizer:
+        def __call__(self, prompts, *, padding, return_tensors):
+            calls.append(("tokenize", tuple(prompts), padding, return_tensors))
+            return {"input_ids": torch.arange(8).reshape(4, 2)}
+
+    class TokenizerLoader:
+        @staticmethod
+        def from_pretrained(model, *, revision):
+            calls.append(("tokenizer", model, revision))
+            return FakeTokenizer()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "transformers",
+        SimpleNamespace(CLIPModel=ModelLoader, CLIPTokenizer=TokenizerLoader),
+    )
+    classifier, input_ids, provenance = load_pinned_public_clip_classifier(
+        "vit_b_32", "RSNA"
+    )
+    assert isinstance(classifier, nn.Module)
+    assert input_ids.shape == (4, 2)
+    assert calls[0] == ("model", provenance.hf_model, provenance.revision)
+    assert calls[1] == ("tokenizer", provenance.hf_model, provenance.revision)
+    assert provenance.kind == "public_pretrained_fresh"
+    assert provenance.public_weight_content_sha256 is not None
+    assert provenance.patient_readiness_verified is False
+
+
+def test_real_readiness_rejects_unverified_empty_locked_evidence_before_paths() -> None:
+    manifests = []
+    for index, role in enumerate(
+        (Role.CLASSIFIER_FIT, Role.CONFIDENCE_FIT, Role.TUNE, Role.PILOT)
+    ):
+        template = _manifest(role, 1)
+        record = template.records[0]
+        manifests.append(
+            RoleManifest(
+                dataset_namespace=template.dataset_namespace,
+                source_hashes=template.source_hashes,
+                patient_mapping=template.patient_mapping,
+                records=(
+                    replace(
+                        record,
+                        exam_key=f"exam-role-{index}",
+                        patient_key=f"patient-role-{index}",
+                        views={
+                            view: ViewReference(
+                                image_id=f"image-role-{index}-{view}",
+                                path=f"fixture/role-{index}/{view}.png",
+                            )
+                            for view in ("L_CC", "L_MLO", "R_CC", "R_MLO")
+                        },
+                    ),
+                ),
+            )
+        )
+    denylist = LockedPatientIdentityDenylist(
+        dataset_namespace="synthetic-p4b",
+        source_sha256="c" * 64,
+        patient_identity_digests=frozenset(),
+    )
+    with pytest.raises(ValueError, match="locked patient identity evidence"):
+        audit_real_data_readiness(
+            tuple(manifests),
+            locked_patient_denylist=denylist,
+            source_files={"fixture": "/does/not/exist"},
+            patient_mapping_file="/does/not/exist",
+            locked_denylist_file="/does/not/exist",
+            image_root="/does/not/exist",
+        )
 
 
 def test_fresh_classifier_fits_only_classifier_role_and_reports_software_readiness() -> None:
