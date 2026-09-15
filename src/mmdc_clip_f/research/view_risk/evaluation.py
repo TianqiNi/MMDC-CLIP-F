@@ -12,11 +12,15 @@ from typing import Callable, Mapping, Sequence, TypeVar
 
 from mmdc_clip_f.provenance import sha256_file
 
-from .artifacts import ControlArtifact, load_control_artifact
+from .artifacts import CONTROL_ARTIFACT_VERSION, ControlArtifact, load_control_artifact
 from .cache import _require_external_or_ignored_destination
 from .inputs import CANONICAL_VIEWS
 from .metrics import EvaluationPrediction, confidence_panel_metrics, evaluate_aurc_panel
-from .perturbations import FITTING_FAMILIES, FITTING_SEVERITIES
+from .perturbations import (
+    FITTING_FAMILIES,
+    FITTING_SEVERITIES,
+    enumerate_evaluation_panels,
+)
 from .roles import Operation, PrivateExamRecord, Role, RoleManifest, run_with_role_access
 from .training import (
     LEARNED_TORCH_METHODS,
@@ -26,12 +30,13 @@ from .training import (
     FrozenSearchTable,
     ReadinessAudit,
     ResearchRunConfig,
+    TrainingBinding,
     TrainingResult,
 )
 
 
-PILOT_PLAN_VERSION = "view-risk-pilot-plan/v1"
-PILOT_PLAN_ENVELOPE_VERSION = "view-risk-pilot-plan-envelope/v1"
+PILOT_PLAN_VERSION = "view-risk-pilot-plan/v2"
+PILOT_PLAN_ENVELOPE_VERSION = "view-risk-pilot-plan-envelope/v2"
 PREDICTION_SET_VERSION = "view-risk-authoritative-predictions/v1"
 TUNE_GUARDRAIL = 0.005
 
@@ -52,6 +57,35 @@ def _is_sha256(value: object) -> bool:
     except ValueError:
         return False
     return value == value.lower()
+
+
+def _evaluation_stress_table_sha256() -> str:
+    """Hash the exact accepted P3 panel enumeration bound by a pilot plan."""
+
+    panels = enumerate_evaluation_panels()
+
+    def cell_payload(cell: object) -> dict[str, object]:
+        return {
+            "family": cell.family,
+            "severity": cell.severity,
+            "target_view": cell.target_view,
+            "variants": list(cell.variants),
+            "common_mode": cell.common_mode,
+        }
+
+    return _sha256_json(
+        {
+            "clean_four_view": list(panels.clean_four_view),
+            "clean_masks": [list(mask) for mask in panels.clean_masks],
+            "primary_cells": [cell_payload(cell) for cell in panels.primary_cells],
+            "strong_seen_family_cells": [
+                cell_payload(cell) for cell in panels.strong_seen_family_cells
+            ],
+            "common_mode_cells": [
+                cell_payload(cell) for cell in panels.common_mode_cells
+            ],
+        }
+    )
 
 
 @dataclass(frozen=True)
@@ -560,8 +594,8 @@ class ModelArtifactSelection:
     ) -> "ModelArtifactSelection":
         """Create an analytic selection only from a verified fitted/raw control artifact."""
 
-        if not classifier.pilot_eligible:
-            raise PermissionError("real selection evidence requires a pilot-eligible fresh classifier")
+        if not classifier.workflow_complete:
+            raise PermissionError("analytic selection requires a completed fresh classifier")
         current = load_control_artifact(control.path)
         if current.sha256 != control.sha256:
             raise ValueError("control artifact content changed before selection")
@@ -588,6 +622,20 @@ class ModelArtifactSelection:
         }
         if expected_kind.get(current.method) != current.evidence_kind:
             raise ValueError("control artifact fitting evidence disagrees with its method")
+        if classifier.kind == "public_pretrained_fresh":
+            required_evidence = {
+                "temperature_scaled_msp": {"tune_manifest", "tune_rows"},
+                "ds_logistic": {
+                    "confidence_manifest",
+                    "confidence_rows",
+                    "tune_manifest",
+                    "tune_rows",
+                },
+            }.get(current.method, set())
+            if {purpose for purpose, _path, _digest in current.evidence_files} != (
+                required_evidence
+            ):
+                raise ValueError("production control fitting evidence is incomplete")
         return cls(
             method=current.method,
             seed=current.seed,
@@ -614,9 +662,12 @@ class ModelArtifactSelection:
         evidence_path: str | Path,
         config: ResearchRunConfig,
         classifier: ClassifierProvenance,
+        training_binding: TrainingBinding,
         training_result: TrainingResult,
         checkpoints: Sequence[CheckpointTuneResult],
         clean_reference: CheckpointTuneResult,
+        training_artifact_path: str | Path | None = None,
+        tune_evidence_path: str | Path | None = None,
     ) -> "ModelArtifactSelection":
         """Replay the frozen budget/guardrail and bind its real checkpoint bytes."""
 
@@ -632,6 +683,15 @@ class ModelArtifactSelection:
         if method not in LEARNED_TORCH_METHODS:
             raise ValueError("learned workflow evidence requires a learned method")
         if (
+            training_binding.protocol_sha256 != config.protocol_sha256
+            or training_binding.config_sha256 != config.sha256
+            or training_binding.search_table_sha256 != config.search_table.sha256
+            or training_binding.manifest_sha256 != training_result.manifest_sha256
+            or training_binding.classifier_checkpoint_sha256
+            != classifier.checkpoint_sha256
+            or training_binding.method != method
+            or training_binding.seed != seed
+            or
             training_result.method != method
             or training_result.seed != seed
             or training_result.completed_epoch != config.epochs
@@ -643,11 +703,51 @@ class ModelArtifactSelection:
         ):
             raise ValueError("learned training result is incomplete or budget-mismatched")
         if classifier.kind == "public_pretrained_fresh":
-            classifier.require_pilot_eligible()
-            if training_result.software_only:
-                raise ValueError("production selection cannot use software-only training evidence")
+            if training_result.software_only != (
+                not classifier.patient_readiness_verified
+            ):
+                raise ValueError(
+                    "learned training readiness disagrees with selected classifier evidence"
+                )
+            if training_artifact_path is None or tune_evidence_path is None:
+                raise ValueError("production selection requires persisted training/tune evidence")
+            from .production import load_confidence_fit_artifact
+
+            fit_artifact = load_confidence_fit_artifact(
+                training_artifact_path, expected_config=config
+            )
+            if (
+                fit_artifact.classifier != classifier
+                or fit_artifact.binding != training_binding
+                or fit_artifact.result != training_result
+                or {
+                    epoch: sha256_file(path)
+                    for epoch, path in fit_artifact.checkpoint_paths
+                }
+                != {item.epoch: item.artifact_sha256 for item in materialized}
+            ):
+                raise ValueError("persisted confidence training evidence is stale")
         elif not training_result.software_only:
             raise ValueError("synthetic training evidence must remain software-only")
+        elif (training_artifact_path is None) != (tune_evidence_path is None):
+            raise ValueError("synthetic workflow evidence paths must be both present or absent")
+        elif training_artifact_path is not None:
+            from .production import load_confidence_fit_artifact
+
+            fit_artifact = load_confidence_fit_artifact(
+                training_artifact_path, expected_config=config
+            )
+            if (
+                fit_artifact.classifier != classifier
+                or fit_artifact.binding != training_binding
+                or fit_artifact.result != training_result
+                or {
+                    epoch: sha256_file(path)
+                    for epoch, path in fit_artifact.checkpoint_paths
+                }
+                != {item.epoch: item.artifact_sha256 for item in materialized}
+            ):
+                raise ValueError("synthetic confidence workflow evidence is stale")
         if (
             {item.classifier_checkpoint_sha256 for item in materialized}
             != {classifier.checkpoint_sha256}
@@ -676,7 +776,7 @@ class ModelArtifactSelection:
         for candidate in (evidence, staging):
             _require_external_or_ignored_destination(candidate)
         payload = {
-            "schema_version": "view-risk-learned-selection-evidence/v1",
+            "schema_version": "view-risk-learned-selection-evidence/v2",
             "method": method,
             "seed": seed,
             "config_sha256": config.sha256,
@@ -684,29 +784,30 @@ class ModelArtifactSelection:
             "classifier_checkpoint_sha256": classifier.checkpoint_sha256,
             "confidence_fit_manifest_sha256": training_result.manifest_sha256,
             "tune_manifest_sha256": classifier.tune_manifest_sha256,
+            "artifact_path": str(artifact),
+            "training_binding": training_binding.to_dict(),
             "training_result": training_result.to_dict(),
-            "reference": {
-                "epoch": clean_reference.epoch,
-                "artifact_sha256": clean_reference.artifact_sha256,
-                "clean_aurc": clean_reference.clean_aurc,
-            },
-            "selected": {
-                "epoch": selected.epoch,
-                "artifact_sha256": selected.artifact_sha256,
-                "clean_aurc": selected.clean_aurc,
-                "stress_aurc": selected.stress_aurc,
-            },
-            "checkpoint_results_sha256": _sha256_json(
-                [
-                    {
-                        "epoch": item.epoch,
-                        "artifact_sha256": item.artifact_sha256,
-                        "clean_aurc": item.clean_aurc,
-                        "stress_cells": [cell.__dict__ for cell in item.stress_cells],
-                    }
-                    for item in materialized
-                ]
+            "training_artifact_path": (
+                None if training_artifact_path is None else str(Path(training_artifact_path).resolve())
             ),
+            "training_artifact_file_sha256": (
+                None
+                if training_artifact_path is None
+                else sha256_file(Path(training_artifact_path).resolve())
+            ),
+            "tune_evidence_path": (
+                None if tune_evidence_path is None else str(Path(tune_evidence_path).resolve())
+            ),
+            "tune_evidence_file_sha256": (
+                None
+                if tune_evidence_path is None
+                else sha256_file(Path(tune_evidence_path).resolve())
+            ),
+            "reference": _checkpoint_payload(clean_reference),
+            "selected": _checkpoint_payload(selected),
+            "checkpoint_results": [
+                _checkpoint_payload(item) for item in materialized
+            ],
             "selection_trials": len(materialized),
             "eligible": True,
         }
@@ -725,7 +826,7 @@ class ModelArtifactSelection:
             artifact_path=artifact,
             evidence_kind=(
                 "learned_epoch_selection"
-                if classifier.kind == "public_pretrained_fresh"
+                if classifier.pilot_eligible
                 else "synthetic_software"
             ),
             config_sha256=config.sha256,
@@ -748,8 +849,297 @@ class ModelArtifactSelection:
             raise ValueError("selection workflow evidence changed after verification")
 
 
+def _checkpoint_payload(item: CheckpointTuneResult) -> dict[str, object]:
+    return {
+        "method": item.method,
+        "seed": item.seed,
+        "classifier_checkpoint_sha256": item.classifier_checkpoint_sha256,
+        "tune_manifest_sha256": item.tune_manifest_sha256,
+        "epoch": item.epoch,
+        "clean_aurc": item.clean_aurc,
+        "stress_cells": [cell.__dict__ for cell in item.stress_cells],
+        "artifact_sha256": item.artifact_sha256,
+        "role": item.role,
+    }
+
+
+def _checkpoint_from_payload(value: object) -> CheckpointTuneResult:
+    expected = {
+        "method",
+        "seed",
+        "classifier_checkpoint_sha256",
+        "tune_manifest_sha256",
+        "epoch",
+        "clean_aurc",
+        "stress_cells",
+        "artifact_sha256",
+        "role",
+    }
+    if not isinstance(value, Mapping) or set(value) != expected:
+        raise ValueError("learned checkpoint evidence schema is invalid")
+    cells = value["stress_cells"]
+    if not isinstance(cells, list):
+        raise ValueError("learned checkpoint stress evidence is invalid")
+    try:
+        return CheckpointTuneResult(
+            method=value["method"],
+            seed=value["seed"],
+            classifier_checkpoint_sha256=value["classifier_checkpoint_sha256"],
+            tune_manifest_sha256=value["tune_manifest_sha256"],
+            epoch=value["epoch"],
+            clean_aurc=value["clean_aurc"],
+            stress_cells=tuple(TuneCellResult(**cell) for cell in cells),
+            artifact_sha256=value["artifact_sha256"],
+            role=value["role"],
+        )
+    except TypeError as exc:
+        raise ValueError("learned checkpoint evidence schema is invalid") from exc
+
+
+def _read_learned_selection_evidence(path: str | Path) -> tuple[Mapping[str, object], Path]:
+    source = Path(path).resolve()
+    _require_external_or_ignored_destination(source)
+    try:
+        value = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("learned selection evidence is unavailable or invalid") from exc
+    expected = {
+        "schema_version",
+        "method",
+        "seed",
+        "config_sha256",
+        "search_table_sha256",
+        "classifier_checkpoint_sha256",
+        "confidence_fit_manifest_sha256",
+        "tune_manifest_sha256",
+        "artifact_path",
+        "training_binding",
+        "training_result",
+        "training_artifact_path",
+        "training_artifact_file_sha256",
+        "tune_evidence_path",
+        "tune_evidence_file_sha256",
+        "reference",
+        "selected",
+        "checkpoint_results",
+        "selection_trials",
+        "eligible",
+    }
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != expected
+        or value["schema_version"] != "view-risk-learned-selection-evidence/v2"
+    ):
+        raise ValueError("learned selection evidence schema is invalid")
+    return value, source
+
+
+def _reference_from_evidence(path: str | Path) -> CheckpointTuneResult:
+    payload, _ = _read_learned_selection_evidence(path)
+    checkpoints = tuple(
+        _checkpoint_from_payload(item) for item in payload["checkpoint_results"]
+    )
+    if payload["method"] != "correctness_mvacn":
+        raise ValueError("selection reference record is not correctness-MVACN")
+    reference = select_clean_reference(checkpoints)
+    if _checkpoint_payload(reference) != payload["selected"]:
+        raise ValueError("clean-reference evidence does not replay")
+    return reference
+
+
+def load_clean_reference_checkpoint(path: str | Path) -> CheckpointTuneResult:
+    """Reload and replay the selected correctness-MVACN tune reference."""
+
+    return _reference_from_evidence(path)
+
+
+def load_model_artifact_selection(
+    record_path: str | Path,
+    *,
+    config: ResearchRunConfig,
+    classifier: ClassifierProvenance,
+    clean_reference_record_path: str | Path | None = None,
+) -> ModelArtifactSelection:
+    """Reload and replay learned or analytic selection evidence from current bytes."""
+
+    source = Path(record_path).resolve()
+    _require_external_or_ignored_destination(source)
+    try:
+        raw = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("selection evidence is unavailable or invalid") from exc
+    control_payload = raw.get("artifact") if isinstance(raw, Mapping) else None
+    if isinstance(control_payload, Mapping) and control_payload.get(
+        "schema_version"
+    ) == CONTROL_ARTIFACT_VERSION:
+        if clean_reference_record_path is None:
+            raise ValueError("analytic selection requires its persisted clean-reference record")
+        reference_selection = load_model_artifact_selection(
+            clean_reference_record_path,
+            config=config,
+            classifier=classifier,
+        )
+        return ModelArtifactSelection.from_control_artifact(
+            load_control_artifact(source),
+            config=config,
+            classifier=classifier,
+            clean_reference=reference_selection,
+        )
+
+    payload, evidence = _read_learned_selection_evidence(source)
+    if (
+        payload["config_sha256"] != config.sha256
+        or payload["search_table_sha256"] != config.search_table.sha256
+        or payload["classifier_checkpoint_sha256"] != classifier.checkpoint_sha256
+        or payload["tune_manifest_sha256"] != classifier.tune_manifest_sha256
+    ):
+        raise ValueError("learned selection evidence has stale workflow bindings")
+    try:
+        binding = TrainingBinding(**payload["training_binding"])
+        training = TrainingResult(**payload["training_result"])
+        checkpoints = tuple(
+            _checkpoint_from_payload(item) for item in payload["checkpoint_results"]
+        )
+    except (KeyError, TypeError) as exc:
+        raise ValueError("learned selection training evidence is invalid") from exc
+    materialized = validate_checkpoint_selection_budget(checkpoints, config.search_table)
+    method = str(payload["method"])
+    seed = payload["seed"]
+    if (
+        not materialized
+        or {item.method for item in materialized} != {method}
+        or {item.seed for item in materialized} != {seed}
+        or binding.protocol_sha256 != config.protocol_sha256
+        or binding.config_sha256 != config.sha256
+        or binding.search_table_sha256 != config.search_table.sha256
+        or binding.manifest_sha256 != training.manifest_sha256
+        or binding.classifier_checkpoint_sha256 != classifier.checkpoint_sha256
+        or binding.method != method
+        or binding.seed != seed
+        or training.method != method
+        or training.seed != seed
+        or training.completed_epoch != config.epochs
+        or training.selection_trial_budget != config.epochs
+        or not training.actual_exposure_verified
+        or training.update_count < config.epochs
+        or training.exposed_record_count < 1
+        or training.parameter_count < 1
+        or payload["selection_trials"] != len(materialized)
+        or payload["eligible"] is not True
+    ):
+        raise ValueError("learned selection training/budget evidence is incomplete")
+    if classifier.kind == "public_pretrained_fresh":
+        if training.software_only != (not classifier.patient_readiness_verified):
+            raise ValueError(
+                "learned training readiness disagrees with selected classifier evidence"
+            )
+        training_artifact_path = payload["training_artifact_path"]
+        tune_evidence_path = payload["tune_evidence_path"]
+        if not isinstance(training_artifact_path, str) or not isinstance(
+            tune_evidence_path, str
+        ):
+            raise ValueError("production learned selection evidence paths are missing")
+        if (
+            sha256_file(Path(training_artifact_path).resolve())
+            != payload["training_artifact_file_sha256"]
+            or sha256_file(Path(tune_evidence_path).resolve())
+            != payload["tune_evidence_file_sha256"]
+        ):
+            raise ValueError("production training/tune evidence content changed")
+        from .production import load_confidence_fit_artifact
+
+        fit_artifact = load_confidence_fit_artifact(
+            training_artifact_path, expected_config=config
+        )
+        if (
+            fit_artifact.classifier != classifier
+            or fit_artifact.binding != binding
+            or fit_artifact.result != training
+            or {
+                epoch: sha256_file(path) for epoch, path in fit_artifact.checkpoint_paths
+            }
+            != {item.epoch: item.artifact_sha256 for item in materialized}
+        ):
+            raise ValueError("production learned training evidence is stale")
+    elif not training.software_only:
+        raise ValueError("synthetic selection evidence must remain software-only")
+    else:
+        training_artifact_path = payload["training_artifact_path"]
+        tune_evidence_path = payload["tune_evidence_path"]
+        if (training_artifact_path is None) != (tune_evidence_path is None):
+            raise ValueError("synthetic workflow evidence paths are incomplete")
+        if training_artifact_path is not None:
+            if (
+                not isinstance(training_artifact_path, str)
+                or not isinstance(tune_evidence_path, str)
+                or sha256_file(Path(training_artifact_path).resolve())
+                != payload["training_artifact_file_sha256"]
+                or sha256_file(Path(tune_evidence_path).resolve())
+                != payload["tune_evidence_file_sha256"]
+            ):
+                raise ValueError("synthetic training/tune evidence content changed")
+            from .production import load_confidence_fit_artifact
+
+            fit_artifact = load_confidence_fit_artifact(
+                training_artifact_path, expected_config=config
+            )
+            if (
+                fit_artifact.classifier != classifier
+                or fit_artifact.binding != binding
+                or fit_artifact.result != training
+                or {
+                    epoch: sha256_file(path)
+                    for epoch, path in fit_artifact.checkpoint_paths
+                }
+                != {item.epoch: item.artifact_sha256 for item in materialized}
+            ):
+                raise ValueError("synthetic learned training evidence is stale")
+
+    if method == "correctness_mvacn":
+        reference = select_clean_reference(materialized)
+        selected = reference
+    else:
+        if clean_reference_record_path is None:
+            raise ValueError("learned selection requires its persisted clean-reference record")
+        reference = _reference_from_evidence(clean_reference_record_path)
+        selected = select_candidate_checkpoint(materialized, clean_reference=reference)
+        if selected is None:
+            raise ValueError("learned selection has no guardrail-eligible checkpoint")
+    if (
+        _checkpoint_payload(reference) != payload["reference"]
+        or _checkpoint_payload(selected) != payload["selected"]
+    ):
+        raise ValueError("learned selection/reference evidence does not replay")
+    artifact = Path(str(payload["artifact_path"])).resolve()
+    _require_external_or_ignored_destination(artifact)
+    if sha256_file(artifact) != selected.artifact_sha256:
+        raise ValueError("selected checkpoint evidence changed")
+    return ModelArtifactSelection(
+        method=method,
+        seed=seed,
+        artifact_path=artifact,
+        evidence_kind=(
+            "learned_epoch_selection"
+            if classifier.pilot_eligible
+            else "synthetic_software"
+        ),
+        config_sha256=config.sha256,
+        classifier_checkpoint_sha256=classifier.checkpoint_sha256,
+        tune_manifest_sha256=str(payload["tune_manifest_sha256"]),
+        search_table_sha256=config.search_table.sha256,
+        selection_trials=len(materialized),
+        eligible=True,
+        reference_artifact_sha256=reference.artifact_sha256,
+        workflow_evidence_sha256=sha256_file(evidence),
+        workflow_evidence_path=evidence,
+        confidence_fit_manifest_sha256=training.manifest_sha256,
+        _factory_token=_SELECTION_TOKEN,
+    )
+
+
 @dataclass(frozen=True)
 class PilotPlan:
+    config: ResearchRunConfig
     config_sha256: str
     search_table_sha256: str
     protocol_sha256: str
@@ -759,14 +1149,25 @@ class PilotPlan:
     methods: tuple[str, ...]
     seeds: tuple[int, ...]
     stress_seed: int
+    stress_table_sha256: str
     manifest_sha256_by_role: tuple[tuple[str, str], ...]
     classifier: ClassifierProvenance
+    classifier_artifact_path: Path | None
+    classifier_artifact_file_sha256: str | None
     selection_map: tuple[tuple[str, str], ...]
+    selection_record_map: tuple[tuple[str, str, str], ...]
     evaluation_kind: str
     patient_ready: bool
     sha256: str
     source_path: Path
+    authoritative_prediction_artifact_path: Path
     schema_version: str = PILOT_PLAN_VERSION
+
+    @property
+    def authoritative_prediction_path(self) -> Path:
+        """The sole plan-owned location where label-free predictions may be registered."""
+
+        return self.authoritative_prediction_artifact_path
 
     def __post_init__(self) -> None:
         if self.schema_version != PILOT_PLAN_VERSION:
@@ -775,7 +1176,20 @@ class PilotPlan:
         if source.suffix != ".json":
             raise ValueError("pilot plan source must be a JSON artifact")
         object.__setattr__(self, "source_path", source)
-        for value in (self.config_sha256, self.search_table_sha256, self.protocol_sha256):
+        prediction_path = Path(self.authoritative_prediction_artifact_path).resolve()
+        if not prediction_path.is_absolute() or prediction_path.suffix != ".json":
+            raise ValueError("authoritative prediction registration path is invalid")
+        object.__setattr__(
+            self, "authoritative_prediction_artifact_path", prediction_path
+        )
+        if not isinstance(self.config, ResearchRunConfig) or self.config.sha256 != self.config_sha256:
+            raise ValueError("pilot plan embedded configuration binding is stale")
+        for value in (
+            self.config_sha256,
+            self.search_table_sha256,
+            self.protocol_sha256,
+            self.stress_table_sha256,
+        ):
             if not _is_sha256(value):
                 raise ValueError("pilot plan binding must use SHA-256")
         if not _is_sha256(self.sha256):
@@ -790,6 +1204,8 @@ class PilotPlan:
             raise ValueError("pilot plan patient readiness must be boolean")
         if self.stress_seed != 4242:
             raise ValueError("pilot plan stress table seed must remain 4242")
+        if self.stress_table_sha256 != _evaluation_stress_table_sha256():
+            raise ValueError("pilot plan stress table binding is stale")
         if self.classifier.kind == "original_finetuned_diagnostic":
             raise PermissionError("diagnostic original classifier cannot qualify a pilot plan")
         if not self.classifier.workflow_complete:
@@ -814,10 +1230,24 @@ class PilotPlan:
         expected = {f"{method}:{seed}" for method in self.methods for seed in self.seeds}
         if set(selections) != expected or any(not _is_sha256(value) for value in selections.values()):
             raise ValueError("pilot plan has a missing or invalid model selection")
+        records = {key: (path, digest) for key, path, digest in self.selection_record_map}
+        if set(records) != expected or any(
+            not Path(path).is_absolute() or not _is_sha256(record_sha)
+            for path, record_sha in records.values()
+        ):
+            raise ValueError("pilot plan has a missing or invalid selection record")
+        if self.classifier.kind == "public_pretrained_fresh":
+            if self.classifier_artifact_path is None or not _is_sha256(
+                self.classifier_artifact_file_sha256
+            ):
+                raise ValueError("production pilot plan requires classifier artifact evidence")
+        elif self.classifier_artifact_path is not None or self.classifier_artifact_file_sha256 is not None:
+            raise ValueError("synthetic plan cannot bind production classifier evidence")
 
     def payload(self) -> dict[str, object]:
         return {
             "schema_version": self.schema_version,
+            "config": self.config.to_dict(),
             "config_sha256": self.config_sha256,
             "search_table_sha256": self.search_table_sha256,
             "protocol_sha256": self.protocol_sha256,
@@ -827,11 +1257,25 @@ class PilotPlan:
             "methods": list(self.methods),
             "seeds": list(self.seeds),
             "stress_seed": self.stress_seed,
+            "stress_table_sha256": self.stress_table_sha256,
             "manifest_sha256_by_role": dict(self.manifest_sha256_by_role),
             "classifier": self.classifier.to_dict(),
+            "classifier_artifact_path": (
+                None
+                if self.classifier_artifact_path is None
+                else str(self.classifier_artifact_path)
+            ),
+            "classifier_artifact_file_sha256": self.classifier_artifact_file_sha256,
             "selection_map": dict(self.selection_map),
+            "selection_records": {
+                key: {"path": path, "file_sha256": digest}
+                for key, path, digest in self.selection_record_map
+            },
             "evaluation_kind": self.evaluation_kind,
             "patient_ready": self.patient_ready,
+            "authoritative_prediction_path": str(
+                self.authoritative_prediction_artifact_path
+            ),
         }
 
 
@@ -840,6 +1284,7 @@ def _plan_from_payload(payload: object, digest: str, source_path: str | Path) ->
         raise ValueError("pilot plan payload must be an object")
     expected = {
         "schema_version",
+        "config",
         "config_sha256",
         "search_table_sha256",
         "protocol_sha256",
@@ -849,15 +1294,23 @@ def _plan_from_payload(payload: object, digest: str, source_path: str | Path) ->
         "methods",
         "seeds",
         "stress_seed",
+        "stress_table_sha256",
         "manifest_sha256_by_role",
         "classifier",
+        "classifier_artifact_path",
+        "classifier_artifact_file_sha256",
         "selection_map",
+        "selection_records",
         "evaluation_kind",
         "patient_ready",
+        "authoritative_prediction_path",
     }
     if set(payload) != expected:
         raise ValueError("pilot plan payload has missing or unknown fields")
     try:
+        config = ResearchRunConfig.from_dict(payload["config"])
+        if config.sha256 != payload["config_sha256"]:
+            raise ValueError("pilot plan configuration content is stale")
         raw_classifier = payload["classifier"]
         classifier_fields = {
             "kind",
@@ -883,35 +1336,66 @@ def _plan_from_payload(payload: object, digest: str, source_path: str | Path) ->
         }
         if not isinstance(raw_classifier, dict) or set(raw_classifier) != classifier_fields:
             raise TypeError
-        classifier = ClassifierProvenance._restore_frozen_record(
-            kind=raw_classifier["kind"],
-            backbone=raw_classifier["backbone"],
-            hf_model=raw_classifier["hf_model"],
-            revision=raw_classifier["revision"],
-            image_size=raw_classifier["image_size"],
-            hidden_size=raw_classifier["hidden_size"],
-            prompts=tuple(raw_classifier["prompts"]),
-            preprocessing=raw_classifier["preprocessing"],
-            image_mean=tuple(raw_classifier["image_mean"]),
-            image_std=tuple(raw_classifier["image_std"]),
-            checkpoint_sha256=raw_classifier["checkpoint_sha256"],
-            diagnostic_reason=raw_classifier["diagnostic_reason"],
-            initialization_sha256=raw_classifier["initialization_sha256"],
-            classifier_fit_manifest_sha256=raw_classifier[
-                "classifier_fit_manifest_sha256"
-            ],
-            classifier_fit_update_count=raw_classifier["classifier_fit_update_count"],
-            tune_selection_sha256=raw_classifier["tune_selection_sha256"],
-            tune_manifest_sha256=raw_classifier["tune_manifest_sha256"],
-            patient_readiness_verified=raw_classifier["patient_readiness_verified"],
-            readiness_audit_sha256=raw_classifier["readiness_audit_sha256"],
-            public_weight_content_sha256=raw_classifier["public_weight_content_sha256"],
-        )
+        classifier_artifact_path = payload["classifier_artifact_path"]
+        classifier_artifact_file_sha256 = payload["classifier_artifact_file_sha256"]
+        if raw_classifier["kind"] == "public_pretrained_fresh":
+            if not isinstance(classifier_artifact_path, str) or not _is_sha256(
+                classifier_artifact_file_sha256
+            ):
+                raise ValueError("production classifier artifact evidence is missing")
+            from .production import load_selected_classifier_artifact
+
+            selected_artifact = load_selected_classifier_artifact(
+                classifier_artifact_path,
+                expected_config=config,
+            )
+            selected_artifact.classifier.require_pilot_eligible()
+            if (
+                sha256_file(Path(classifier_artifact_path).resolve())
+                != classifier_artifact_file_sha256
+                or selected_artifact.classifier.to_dict() != raw_classifier
+            ):
+                raise ValueError("production classifier artifact evidence changed")
+            classifier = selected_artifact.classifier
+        else:
+            if classifier_artifact_path is not None or classifier_artifact_file_sha256 is not None:
+                raise ValueError("non-production classifier cannot use production evidence")
+            classifier = ClassifierProvenance._restore_frozen_record(
+                **{**raw_classifier, "prompts": tuple(raw_classifier["prompts"]),
+                   "image_mean": tuple(raw_classifier["image_mean"]),
+                   "image_std": tuple(raw_classifier["image_std"])}
+            )
         manifests = payload["manifest_sha256_by_role"]
         selections = payload["selection_map"]
-        if not isinstance(manifests, dict) or not isinstance(selections, dict):
+        selection_records = payload["selection_records"]
+        if (
+            not isinstance(manifests, dict)
+            or not isinstance(selections, dict)
+            or not isinstance(selection_records, dict)
+        ):
             raise TypeError
+        if raw_classifier["kind"] == "public_pretrained_fresh":
+            audited_manifests = set(selected_artifact.readiness.manifest_sha256s)
+            planned_manifests = {
+                manifests[role.value]
+                for role in (
+                    Role.CLASSIFIER_FIT,
+                    Role.CONFIDENCE_FIT,
+                    Role.TUNE,
+                    Role.PILOT,
+                )
+            }
+            if audited_manifests != planned_manifests:
+                raise ValueError(
+                    "production pilot manifests disagree with readiness evidence"
+                )
+        normalized_records = []
+        for key, record in selection_records.items():
+            if not isinstance(record, dict) or set(record) != {"path", "file_sha256"}:
+                raise TypeError
+            normalized_records.append((key, record["path"], record["file_sha256"]))
         return PilotPlan(
+            config=config,
             config_sha256=payload["config_sha256"],
             search_table_sha256=payload["search_table_sha256"],
             protocol_sha256=payload["protocol_sha256"],
@@ -921,16 +1405,27 @@ def _plan_from_payload(payload: object, digest: str, source_path: str | Path) ->
             methods=tuple(payload["methods"]),
             seeds=tuple(payload["seeds"]),
             stress_seed=payload["stress_seed"],
+            stress_table_sha256=payload["stress_table_sha256"],
             manifest_sha256_by_role=tuple(sorted(manifests.items())),
             classifier=classifier,
+            classifier_artifact_path=(
+                None
+                if classifier_artifact_path is None
+                else Path(classifier_artifact_path).resolve()
+            ),
+            classifier_artifact_file_sha256=classifier_artifact_file_sha256,
             selection_map=tuple(sorted(selections.items())),
+            selection_record_map=tuple(sorted(normalized_records)),
             evaluation_kind=payload["evaluation_kind"],
             patient_ready=payload["patient_ready"],
             sha256=digest,
             source_path=Path(source_path).resolve(),
+            authoritative_prediction_artifact_path=Path(
+                payload["authoritative_prediction_path"]
+            ).resolve(),
             schema_version=payload["schema_version"],
         )
-    except (KeyError, TypeError) as exc:
+    except (KeyError, PermissionError, TypeError) as exc:
         raise ValueError("pilot plan payload schema is invalid") from exc
 
 
@@ -941,6 +1436,7 @@ def freeze_pilot_plan(
     manifest_sha256_by_role: Mapping[str, str],
     classifier: ClassifierProvenance,
     selections: Sequence[ModelArtifactSelection],
+    classifier_artifact_path: str | Path | None = None,
 ) -> PilotPlan:
     """Create, validate, and exclusively publish an immutable pilot plan."""
 
@@ -950,6 +1446,36 @@ def freeze_pilot_plan(
         raise PermissionError("diagnostic original classifier cannot qualify a pilot plan")
     if not classifier.workflow_complete:
         raise PermissionError("fresh classifier fitting/tune workflow is incomplete")
+    classifier_evidence_path: Path | None = None
+    classifier_evidence_file_sha256: str | None = None
+    if classifier.kind == "public_pretrained_fresh":
+        if classifier_artifact_path is None:
+            raise ValueError("production pilot freeze requires selected classifier artifact evidence")
+        from .production import load_selected_classifier_artifact
+
+        selected_classifier = load_selected_classifier_artifact(
+            classifier_artifact_path,
+            expected_config=config,
+        )
+        selected_classifier.classifier.require_pilot_eligible()
+        if selected_classifier.classifier.to_dict() != classifier.to_dict():
+            raise ValueError("selected classifier artifact disagrees with requested classifier")
+        audited_manifests = set(selected_classifier.readiness.manifest_sha256s)
+        planned_manifests = {
+            manifest_sha256_by_role[role.value]
+            for role in (
+                Role.CLASSIFIER_FIT,
+                Role.CONFIDENCE_FIT,
+                Role.TUNE,
+                Role.PILOT,
+            )
+        }
+        if audited_manifests != planned_manifests:
+            raise ValueError("pilot manifests disagree with readiness evidence")
+        classifier_evidence_path = selected_classifier.source_path
+        classifier_evidence_file_sha256 = sha256_file(classifier_evidence_path)
+    elif classifier_artifact_path is not None:
+        raise ValueError("synthetic classifier cannot bind production classifier evidence")
     materialized = tuple(selections)
     for selection in materialized:
         if not isinstance(selection, ModelArtifactSelection):
@@ -994,15 +1520,42 @@ def freeze_pilot_plan(
                 item = by_key.get((method, seed))
                 if item is not None and item.reference_artifact_sha256 != reference.artifact_sha256:
                     raise ValueError("selection does not bind the same-seed clean reference")
+                if item is not None:
+                    loaded = load_model_artifact_selection(
+                        item.workflow_evidence_path,
+                        config=config,
+                        classifier=classifier,
+                        clean_reference_record_path=(
+                            None
+                            if method == "correctness_mvacn"
+                            else reference.workflow_evidence_path
+                        ),
+                    )
+                    if loaded != item:
+                        raise ValueError("selection record reload disagrees with verified selection")
     selection_map = tuple(
         sorted((f"{selection.method}:{selection.seed}", selection.artifact_sha256) for selection in materialized)
     )
     if len(dict(selection_map)) != len(selection_map):
         raise ValueError("pilot plan contains duplicate model selections")
+    selection_record_map = tuple(
+        sorted(
+            (
+                f"{selection.method}:{selection.seed}",
+                str(selection.workflow_evidence_path),
+                sha256_file(selection.workflow_evidence_path),
+            )
+            for selection in materialized
+        )
+    )
     target = Path(path).resolve()
     if target.suffix != ".json" or not target.parent.exists():
         raise ValueError("pilot plan must be a JSON file in an existing directory")
+    authoritative_prediction_path = target.with_name(
+        f"{target.stem}.authoritative-predictions.json"
+    )
     provisional = PilotPlan(
+        config=config,
         config_sha256=config.sha256,
         search_table_sha256=config.search_table.sha256,
         protocol_sha256=config.protocol_sha256,
@@ -1012,15 +1565,20 @@ def freeze_pilot_plan(
         methods=config.methods,
         seeds=config.seeds,
         stress_seed=config.stress_seed,
+        stress_table_sha256=_evaluation_stress_table_sha256(),
         manifest_sha256_by_role=tuple(sorted(manifest_sha256_by_role.items())),
         classifier=classifier,
+        classifier_artifact_path=classifier_evidence_path,
+        classifier_artifact_file_sha256=classifier_evidence_file_sha256,
         selection_map=selection_map,
+        selection_record_map=selection_record_map,
         evaluation_kind=(
             "real_pilot" if classifier.patient_readiness_verified else "synthetic_software"
         ),
         patient_ready=classifier.patient_readiness_verified,
         sha256="0" * 64,
         source_path=target,
+        authoritative_prediction_artifact_path=authoritative_prediction_path,
     )
     payload = provisional.payload()
     digest = _sha256_json(payload)
@@ -1071,6 +1629,26 @@ def load_pilot_plan(
     plan = _plan_from_payload(document["plan"], digest, path)
     if expected_config_sha256 is not None and plan.config_sha256 != expected_config_sha256:
         raise ValueError("pilot plan configuration binding is stale")
+    record_map = {
+        key: (Path(record_path).resolve(), record_sha256)
+        for key, record_path, record_sha256 in plan.selection_record_map
+    }
+    for key, (record_path, record_sha256) in record_map.items():
+        if sha256_file(record_path) != record_sha256:
+            raise ValueError("selection record content changed after plan freeze")
+        if plan.classifier.kind == "public_pretrained_fresh":
+            _method, seed_text = key.rsplit(":", 1)
+            reference_path = record_map[f"correctness_mvacn:{seed_text}"][0]
+            loaded = load_model_artifact_selection(
+                record_path,
+                config=plan.config,
+                classifier=plan.classifier,
+                clean_reference_record_path=(
+                    None if key.startswith("correctness_mvacn:") else reference_path
+                ),
+            )
+            if loaded.artifact_sha256 != dict(plan.selection_map)[key]:
+                raise ValueError("selection artifact identity changed after plan freeze")
     return plan
 
 
@@ -1232,6 +1810,34 @@ def _validate_complete_prediction_cohort(
         by_cell.setdefault(row.cell_key, set()).add(row.exam_id)
     if not by_cell or any(exams != expected for exams in by_cell.values()):
         raise ValueError("every evaluation cell must contain the exact authorized exam cohort")
+    record_map = {record.exam_key: record for record in records}
+    for panel in {row.panel for row in rows}:
+        panel_rows = tuple(row for row in rows if row.panel == panel)
+        evaluate_aurc_panel(
+            tuple(
+                EvaluationPrediction(
+                    dataset="registry-validation",
+                    role=Role.PILOT.value,
+                    cohort="registry-validation",
+                    method="registry-validation",
+                    training_seed=0,
+                    patient_id=record_map[row.exam_id].patient_key,
+                    exam_id=row.exam_id,
+                    panel=row.panel,  # type: ignore[arg-type]
+                    target=record_map[row.exam_id].density,
+                    prediction=row.prediction,
+                    confidence=0.5,
+                    confidence_kind="ranking",
+                    family=row.family,
+                    severity=row.severity,
+                    target_view=row.target_view,
+                    variant=row.variant,
+                    mask=row.mask,
+                    realization_id=row.realization_id,
+                )
+                for row in panel_rows
+            )
+        )
 
 
 def bind_authoritative_predictions_with_role_access(
@@ -1245,13 +1851,19 @@ def bind_authoritative_predictions_with_role_access(
 ) -> AuthoritativePredictionSet:
     """Bind post-freeze, label-free classifier predictions to every pilot cell."""
 
-    current = load_pilot_plan(plan.source_path, expected_config_sha256=plan.config_sha256)
-    if current.sha256 != plan.sha256:
-        raise ValueError("pilot plan changed before classifier prediction binding")
     if role is not Role.PILOT:
         raise PermissionError("only pilot label-free predictions may be bound")
     if dict(plan.manifest_sha256_by_role)[Role.PILOT.value] != manifest.manifest_sha256:
         raise ValueError("pilot manifest binding is stale")
+    run_with_role_access(
+        manifest,
+        operation=Operation.PILOT_EVALUATION,
+        roles=(Role.PILOT,),
+        loader=lambda _records: None,
+    )
+    current = load_pilot_plan(plan.source_path, expected_config_sha256=plan.config_sha256)
+    if current.sha256 != plan.sha256:
+        raise ValueError("pilot plan changed before classifier prediction binding")
 
     def authorized(records: tuple[PrivateExamRecord, ...]) -> AuthoritativePredictionSet:
         rows = tuple(prediction_reader(records))
@@ -1287,10 +1899,14 @@ def freeze_authoritative_predictions(
 ) -> AuthoritativePredictionSet:
     """Exclusively persist the one reusable, private classifier-prediction set."""
 
+    target = Path(path).resolve()
+    if target != plan.authoritative_prediction_path:
+        raise ValueError("authoritative predictions must use the plan-owned registration path")
+    if target.exists():
+        raise FileExistsError("authoritative predictions are already registered for this plan")
     bound = bind_authoritative_predictions_with_role_access(
         plan, manifest=manifest, role=role, prediction_reader=prediction_reader
     )
-    target = Path(path).resolve()
     if target.suffix != ".json" or not target.parent.exists():
         raise ValueError("classifier prediction artifact must be JSON in an existing directory")
     staging = target.with_name(f".{target.name}.{os.getpid()}.tmp")
@@ -1317,7 +1933,6 @@ def freeze_authoritative_predictions(
 
 
 def load_authoritative_predictions_with_role_access(
-    path: str | Path,
     plan: PilotPlan,
     *,
     manifest: RoleManifest,
@@ -1327,6 +1942,7 @@ def load_authoritative_predictions_with_role_access(
 
     if role is not Role.PILOT:
         raise PermissionError("only pilot classifier predictions may be loaded")
+    path = plan.authoritative_prediction_path
 
     def authorized(records: tuple[PrivateExamRecord, ...]) -> AuthoritativePredictionSet:
         try:
@@ -1380,6 +1996,22 @@ class ConfidenceScore:
     confidence_kind: str
 
 
+_P4A_PREDICTION_PANEL_TOKEN = object()
+
+
+def _authoritative_panel_rows(
+    authoritative: AuthoritativePredictionSet, panel: str | None
+) -> tuple[FrozenClassifierPrediction, ...]:
+    available = {row.panel for row in authoritative.rows}
+    if panel is None:
+        if len(available) != 1:
+            raise ValueError("a named evaluation panel is required for a multi-panel registry")
+        panel = next(iter(available))
+    if panel not in available:
+        raise ValueError("requested panel is absent from authoritative predictions")
+    return tuple(row for row in authoritative.rows if row.panel == panel)
+
+
 def generate_confidence_predictions_with_role_access(
     plan: PilotPlan,
     *,
@@ -1388,6 +2020,7 @@ def generate_confidence_predictions_with_role_access(
     role: Role,
     method: str,
     seed: int,
+    panel: str | None = None,
     score_reader: Callable[
         [tuple[PrivateExamRecord, ...], tuple[FrozenClassifierPrediction, ...]],
         Sequence[ConfidenceScore],
@@ -1402,20 +2035,26 @@ def generate_confidence_predictions_with_role_access(
         or authoritative_predictions.manifest_sha256 != manifest.manifest_sha256
     ):
         raise ValueError("authoritative prediction binding is stale")
+    registered = load_authoritative_predictions_with_role_access(
+        plan, manifest=manifest, role=role
+    )
+    if registered.sha256 != authoritative_predictions.sha256:
+        raise ValueError("confidence scoring did not use the plan-registered prediction identity")
     if dict(plan.selection_map).get(f"{method}:{seed}") is None:
         raise ValueError("confidence method/seed is absent from the frozen plan")
+    panel_rows = _authoritative_panel_rows(authoritative_predictions, panel)
 
     def authorized(records: tuple[PrivateExamRecord, ...]) -> tuple[EvaluationPrediction, ...]:
-        values = tuple(score_reader(records, authoritative_predictions.rows))
+        values = tuple(score_reader(records, panel_rows))
         if any(not isinstance(value, ConfidenceScore) for value in values):
             raise TypeError("confidence scorer returned an invalid row")
         scores = {value.row_key: value for value in values}
-        expected = {row.row_key for row in authoritative_predictions.rows}
+        expected = {row.row_key for row in panel_rows}
         if len(scores) != len(values) or set(scores) != expected:
             raise ValueError("confidence scores must cover every authoritative row exactly once")
         record_map = {record.exam_key: record for record in records}
         result = []
-        for frozen in authoritative_predictions.rows:
+        for frozen in panel_rows:
             record = record_map[frozen.exam_id]
             value = scores[frozen.row_key]
             result.append(
@@ -1460,18 +2099,29 @@ def evaluate_pilot_with_role_access(
     model_sha256: str,
     model_artifact_path: str | Path | None = None,
     outcome_reader: Callable[[tuple[PrivateExamRecord, ...]], PilotEvaluationSummary],
+    _p4a_prediction_panel_token: object | None = None,
 ) -> PilotEvaluationSummary:
     """Verify plan/model bindings, then authorize pilot rows before reading outcomes."""
 
     if not isinstance(plan, PilotPlan):
         raise TypeError("plan must be a verified PilotPlan")
+    if role is not Role.PILOT:
+        raise PermissionError("only the pilot role is available; locked outcomes remain inaccessible")
+    if plan.patient_ready and _p4a_prediction_panel_token is not _P4A_PREDICTION_PANEL_TOKEN:
+        raise PermissionError(
+            "real pilot outcomes require the authoritative P4A prediction-panel workflow"
+        )
+    run_with_role_access(
+        manifest,
+        operation=Operation.PILOT_EVALUATION,
+        roles=(Role.PILOT,),
+        loader=lambda _records: None,
+    )
     current_plan = load_pilot_plan(
         plan.source_path, expected_config_sha256=plan.config_sha256
     )
     if current_plan.sha256 != plan.sha256:
         raise ValueError("pilot plan changed after it was loaded")
-    if role is not Role.PILOT:
-        raise PermissionError("only the pilot role is available; locked outcomes remain inaccessible")
     expected_model = dict(plan.selection_map).get(f"{method}:{seed}")
     if expected_model is None or model_sha256 != expected_model:
         raise ValueError("pilot model binding is missing or stale")
@@ -1527,15 +2177,26 @@ def evaluate_prediction_panel_with_role_access(
         or authoritative_predictions.manifest_sha256 != manifest.manifest_sha256
     ):
         raise ValueError("authoritative classifier prediction binding is stale or missing")
+    registered = load_authoritative_predictions_with_role_access(
+        plan, manifest=manifest, role=role
+    )
+    if registered.sha256 != authoritative_predictions.sha256:
+        raise ValueError("evaluation did not use the plan-registered prediction identity")
 
     def read_and_aggregate(
         records: tuple[PrivateExamRecord, ...],
     ) -> PilotEvaluationSummary:
         predictions = tuple(prediction_reader(records))
         authorized = {record.exam_key: record for record in records}
-        authoritative = {row.row_key: row.prediction for row in authoritative_predictions.rows}
         if not predictions:
             raise ValueError("pilot prediction panel is empty")
+        panels = {prediction.panel for prediction in predictions}
+        if len(panels) != 1:
+            raise ValueError("each evaluation invocation must select exactly one named panel")
+        authoritative_rows = _authoritative_panel_rows(
+            authoritative_predictions, next(iter(panels))
+        )
+        authoritative = {row.row_key: row.prediction for row in authoritative_rows}
         supplied_keys: set[tuple[object, ...]] = set()
         for prediction in predictions:
             record = authorized.get(prediction.exam_id)
@@ -1585,6 +2246,7 @@ def evaluate_prediction_panel_with_role_access(
         model_sha256=model_sha256,
         model_artifact_path=model_artifact_path,
         outcome_reader=read_and_aggregate,
+        _p4a_prediction_panel_token=_P4A_PREDICTION_PANEL_TOKEN,
     )
 
 
@@ -1606,6 +2268,8 @@ __all__ = [
     "freeze_authoritative_predictions",
     "freeze_pilot_plan",
     "load_pilot_plan",
+    "load_model_artifact_selection",
+    "load_clean_reference_checkpoint",
     "load_authoritative_predictions_with_role_access",
     "generate_checkpoint_tune_result_with_role_access",
     "generate_confidence_predictions_with_role_access",

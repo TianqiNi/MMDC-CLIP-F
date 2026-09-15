@@ -13,6 +13,8 @@ from typing import Callable, Mapping, Sequence
 import torch
 from torch import Tensor
 
+from mmdc_clip_f.provenance import sha256_file
+
 from .baselines import (
     DSBaselineFeatures,
     DSLogisticErrorControl,
@@ -27,7 +29,7 @@ from .roles import Operation, PrivateExamRecord, Role, RoleManifest, run_with_ro
 from .training import ClassifierProvenance, ResearchRunConfig
 
 
-CONTROL_ARTIFACT_VERSION = "view-risk-control-artifact/v1"
+CONTROL_ARTIFACT_VERSION = "view-risk-control-artifact/v2"
 RAW_CONTROL_METHODS = frozenset(
     {"msp", "margin", "negative_entropy", "energy", "absolute_omission_sensitivity"}
 )
@@ -128,6 +130,7 @@ class ControlArtifact:
     scaling: str
     output_kind: str
     state: Mapping[str, object]
+    evidence_files: tuple[tuple[str, str, str], ...]
     sha256: str
     path: Path
 
@@ -158,6 +161,15 @@ class ControlArtifact:
             raise ValueError("control artifact identity must be SHA-256")
         object.__setattr__(self, "path", Path(self.path).resolve())
         object.__setattr__(self, "exposure_by_role", tuple(self.exposure_by_role))
+        evidence = tuple(self.evidence_files)
+        if len({purpose for purpose, _path, _digest in evidence}) != len(evidence) or any(
+            not purpose
+            or not Path(path).is_absolute()
+            or not _is_sha256(digest)
+            for purpose, path, digest in evidence
+        ):
+            raise ValueError("control fitting evidence file bindings are invalid")
+        object.__setattr__(self, "evidence_files", evidence)
 
     def payload(self) -> dict[str, object]:
         return {
@@ -176,6 +188,10 @@ class ControlArtifact:
             "scaling": self.scaling,
             "output_kind": self.output_kind,
             "state": dict(self.state),
+            "evidence_files": {
+                purpose: {"path": path, "file_sha256": digest}
+                for purpose, path, digest in self.evidence_files
+            },
         }
 
 
@@ -242,13 +258,32 @@ def _artifact_from_payload(
         "scaling",
         "output_kind",
         "state",
+        "evidence_files",
     }
     if set(payload) != expected or payload["schema_version"] != CONTROL_ARTIFACT_VERSION:
         raise ValueError("control artifact has a missing, unknown, or stale field")
     exposure = payload["exposure_by_role"]
     state = payload["state"]
-    if not isinstance(exposure, Mapping) or not isinstance(state, Mapping):
+    evidence = payload["evidence_files"]
+    if (
+        not isinstance(exposure, Mapping)
+        or not isinstance(state, Mapping)
+        or not isinstance(evidence, Mapping)
+    ):
         raise ValueError("control artifact exposure/state schema is invalid")
+    normalized_evidence = []
+    for purpose, record in evidence.items():
+        if (
+            not isinstance(purpose, str)
+            or not isinstance(record, Mapping)
+            or set(record) != {"path", "file_sha256"}
+        ):
+            raise ValueError("control fitting evidence schema is invalid")
+        source = Path(str(record["path"])).resolve()
+        _require_external_or_ignored_destination(source)
+        if sha256_file(source) != record["file_sha256"]:
+            raise ValueError("control fitting evidence content changed")
+        normalized_evidence.append((purpose, str(source), record["file_sha256"]))
     return ControlArtifact(
         method=payload["method"],  # type: ignore[arg-type]
         seed=payload["seed"],  # type: ignore[arg-type]
@@ -264,6 +299,7 @@ def _artifact_from_payload(
         scaling=payload["scaling"],  # type: ignore[arg-type]
         output_kind=payload["output_kind"],  # type: ignore[arg-type]
         state=dict(state),
+        evidence_files=tuple(sorted(normalized_evidence)),
         sha256=digest,
         path=Path(path),
     )
@@ -304,8 +340,17 @@ def _base_payload(
     scaling: str,
     output_kind: str,
     state: Mapping[str, object],
+    evidence_files: Mapping[str, str | Path] | None = None,
 ) -> dict[str, object]:
     _validate_classifier(config, classifier)
+    bound_evidence = {}
+    for purpose, raw_path in (evidence_files or {}).items():
+        source = Path(raw_path).resolve()
+        _require_external_or_ignored_destination(source)
+        bound_evidence[purpose] = {
+            "path": str(source),
+            "file_sha256": sha256_file(source),
+        }
     return {
         "schema_version": CONTROL_ARTIFACT_VERSION,
         "method": method,
@@ -322,6 +367,7 @@ def _base_payload(
         "scaling": scaling,
         "output_kind": output_kind,
         "state": dict(state),
+        "evidence_files": bound_evidence,
     }
 
 
@@ -367,6 +413,8 @@ def fit_temperature_control_artifact_with_role_access(
     seed: int,
     tune_manifest: RoleManifest,
     row_reader: Callable[[tuple[PrivateExamRecord, ...]], ScalarControlRows],
+    tune_manifest_path: str | Path | None = None,
+    tune_input_path: str | Path | None = None,
 ) -> ControlArtifact:
     """Tune one positive temperature on authorized tune NLL and persist its state."""
 
@@ -380,6 +428,14 @@ def fit_temperature_control_artifact_with_role_access(
     _validate_classifier(config, classifier)
     if tune_manifest.manifest_sha256 != classifier.tune_manifest_sha256:
         raise ValueError("temperature tune manifest disagrees with classifier selection")
+    evidence_files = {}
+    if classifier.kind == "public_pretrained_fresh":
+        if tune_manifest_path is None or tune_input_path is None:
+            raise ValueError("production temperature fitting requires persisted tune evidence")
+        evidence_files = {
+            "tune_manifest": tune_manifest_path,
+            "tune_rows": tune_input_path,
+        }
 
     def authorized(records: tuple[PrivateExamRecord, ...]) -> ControlArtifact:
         rows = row_reader(records)
@@ -411,6 +467,7 @@ def fit_temperature_control_artifact_with_role_access(
                 scaling="tune_fitted_temperature",
                 output_kind="ranking",
                 state={"temperature": float(scaler.temperature.cpu())},
+                evidence_files=evidence_files,
             ),
         )
 
@@ -432,12 +489,29 @@ def fit_ds_control_artifact_with_role_access(
     tune_manifest: RoleManifest,
     confidence_reader: Callable[[tuple[PrivateExamRecord, ...]], DSControlRows],
     tune_reader: Callable[[tuple[PrivateExamRecord, ...]], DSControlRows],
+    confidence_manifest_path: str | Path | None = None,
+    tune_manifest_path: str | Path | None = None,
+    confidence_input_path: str | Path | None = None,
+    tune_input_path: str | Path | None = None,
 ) -> ControlArtifact:
     """Fit the DS scaler/weights on confidence_fit and select regularization on tune."""
 
     _validate_classifier(config, classifier)
     if tune_manifest.manifest_sha256 != classifier.tune_manifest_sha256:
         raise ValueError("DS tune manifest disagrees with classifier selection")
+    evidence_files = {}
+    if classifier.kind == "public_pretrained_fresh":
+        raw_evidence = {
+            "confidence_manifest": confidence_manifest_path,
+            "confidence_rows": confidence_input_path,
+            "tune_manifest": tune_manifest_path,
+            "tune_rows": tune_input_path,
+        }
+        if any(path is None for path in raw_evidence.values()):
+            raise ValueError("production DS fitting requires persisted role/input evidence")
+        evidence_files = {
+            purpose: path for purpose, path in raw_evidence.items() if path is not None
+        }
     # Validate both role contracts before either private tensor reader is opened.
     _require_exact_manifest_role(confidence_manifest, Role.CONFIDENCE_FIT)
     _require_exact_manifest_role(tune_manifest, Role.TUNE)
@@ -517,6 +591,7 @@ def fit_ds_control_artifact_with_role_access(
             scaling="confidence_fit_fitted_feature_scaler",
             output_kind="probability",
             state=state,
+            evidence_files=evidence_files,
         ),
     )
 
@@ -531,6 +606,8 @@ def fit_scalar_calibration_artifact_with_role_access(
     seed: int,
     tune_manifest: RoleManifest,
     row_reader: Callable[[tuple[PrivateExamRecord, ...]], ScalarCalibrationRows],
+    tune_manifest_path: str | Path | None = None,
+    tune_input_path: str | Path | None = None,
 ) -> ControlArtifact:
     """Create the separately labelled tune-monotone probability output for a scalar."""
 
@@ -540,6 +617,14 @@ def fit_scalar_calibration_artifact_with_role_access(
     _validate_classifier(config, classifier)
     if tune_manifest.manifest_sha256 != classifier.tune_manifest_sha256:
         raise ValueError("scalar calibration tune manifest binding is stale")
+    evidence_files = {}
+    if classifier.kind == "public_pretrained_fresh":
+        if tune_manifest_path is None or tune_input_path is None:
+            raise ValueError("production scalar calibration requires persisted tune evidence")
+        evidence_files = {
+            "tune_manifest": tune_manifest_path,
+            "tune_rows": tune_input_path,
+        }
 
     def authorized(records: tuple[PrivateExamRecord, ...]) -> ControlArtifact:
         rows = row_reader(records)
@@ -580,6 +665,7 @@ def fit_scalar_calibration_artifact_with_role_access(
                     "intercept": float(adapter._intercept.cpu()),
                     "output_label": "tune_calibrated_error_probability",
                 },
+                evidence_files=evidence_files,
             ),
         )
 
