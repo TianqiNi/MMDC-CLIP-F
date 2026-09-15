@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import replace
 
 import pytest
@@ -13,24 +14,28 @@ from mmdc_clip_f.research.view_risk.evaluation import (
     ModelArtifactSelection,
     PilotEvaluationSummary,
     TuneCellResult,
-    bind_authoritative_predictions_with_role_access,
     evaluate_pilot_with_role_access,
     evaluate_prediction_panel_with_role_access,
     evaluate_tune_cells_with_role_access,
+    freeze_authoritative_predictions,
     freeze_pilot_plan,
     load_pilot_plan,
+    load_model_artifact_selection,
+    load_authoritative_predictions_with_role_access,
     select_candidate_checkpoint,
     select_clean_reference,
     select_fresh_classifier_on_tune,
 )
 from mmdc_clip_f.research.view_risk.metrics import EvaluationPrediction
 from mmdc_clip_f.cli import build_parser, main
+from mmdc_clip_f.research.view_risk.cli import run_view_risk_command
 from mmdc_clip_f.research.view_risk.roles import (
     PatientMappingDeclaration,
     PrivateExamRecord,
     Role,
     RoleManifest,
     ViewReference,
+    save_private_manifest,
 )
 from mmdc_clip_f.research.view_risk.training import (
     MANDATORY_METHODS,
@@ -211,17 +216,47 @@ def test_learned_selection_replays_budget_guardrail_and_checkpoint_bytes(tmp_pat
         actual_exposure_verified=True,
         software_only=True,
     )
+    binding = TrainingBinding(
+        protocol_sha256=config.protocol_sha256,
+        config_sha256=config.sha256,
+        search_table_sha256=config.search_table.sha256,
+        manifest_sha256=training.manifest_sha256,
+        classifier_checkpoint_sha256=classifier.checkpoint_sha256,
+        method="correctness_mvacn",
+        seed=42,
+    )
     selection = ModelArtifactSelection.from_learned_workflow(
         artifact_path=files[0],
         evidence_path=tmp_path / "learned-evidence.json",
         config=config,
         classifier=classifier,
+        training_binding=binding,
         training_result=training,
         checkpoints=checkpoints,
         clean_reference=reference,
     )
     assert selection.artifact_sha256 == sha256_file(files[0])
     assert selection.confidence_fit_manifest_sha256 == training.manifest_sha256
+    reloaded = load_model_artifact_selection(
+        selection.workflow_evidence_path,
+        config=config,
+        classifier=classifier,
+    )
+    assert reloaded == selection
+
+    evidence = json.loads(selection.workflow_evidence_path.read_text())
+    evidence["checkpoint_results"][0]["clean_aurc"] = 0.9
+    selection.workflow_evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+    with pytest.raises(ValueError, match="selection|evidence|reference"):
+        load_model_artifact_selection(
+            selection.workflow_evidence_path,
+            config=config,
+            classifier=classifier,
+        )
+    selection.workflow_evidence_path.write_text(
+        json.dumps({**evidence, "checkpoint_results_sha256": "0" * 64}),
+        encoding="utf-8",
+    )
     files[0].write_bytes(b"changed")
     with pytest.raises(ValueError, match="content changed"):
         selection.verify_current_artifact()
@@ -331,6 +366,7 @@ def test_pilot_plan_is_immutable_complete_and_binds_all_inputs(tmp_path) -> None
     )
 
     assert plan.stress_seed == 4242
+    assert "stress_table_sha256" in plan.payload()
     assert plan.methods == MANDATORY_METHODS
     assert load_pilot_plan(path, expected_config_sha256=config.sha256).sha256 == plan.sha256
     with pytest.raises(FileExistsError):
@@ -469,7 +505,8 @@ def test_role_authorized_evaluation_really_uses_p4a_and_cli_has_no_unlock(tmp_pa
         selections=_selections(config, tmp_path),
     )
     row = manifest.records[0]
-    authoritative = bind_authoritative_predictions_with_role_access(
+    authoritative = freeze_authoritative_predictions(
+        plan.authoritative_prediction_path,
         plan,
         manifest=manifest,
         role=Role.PILOT,
@@ -533,7 +570,8 @@ def test_pilot_requires_exact_cohort_and_shared_classifier_predictions(tmp_path)
         classifier=_fresh_selected(),
         selections=_selections(config, tmp_path),
     )
-    authoritative = bind_authoritative_predictions_with_role_access(
+    authoritative = freeze_authoritative_predictions(
+        plan.authoritative_prediction_path,
         plan,
         manifest=manifest,
         role=Role.PILOT,
@@ -587,3 +625,160 @@ def test_pilot_requires_exact_cohort_and_shared_classifier_predictions(tmp_path)
                 prediction(record, (record.density + 1) % 4) for record in records
             ),
         )
+
+
+def test_plan_reload_cannot_promote_self_hashed_synthetic_classifier(tmp_path) -> None:
+    config = ResearchRunConfig.default("RSNA")
+    plan = freeze_pilot_plan(
+        tmp_path / "forged-plan.json",
+        config=config,
+        manifest_sha256_by_role=_manifest_hashes(),
+        classifier=_fresh_selected(),
+        selections=_selections(config, tmp_path),
+    )
+    document = json.loads(plan.source_path.read_text(encoding="utf-8"))
+    classifier = document["plan"]["classifier"]
+    classifier["kind"] = "public_pretrained_fresh"
+    classifier["patient_readiness_verified"] = True
+    classifier["readiness_audit_sha256"] = "7" * 64
+    classifier["public_weight_content_sha256"] = "8" * 64
+    document["plan"]["evaluation_kind"] = "real_pilot"
+    document["plan"]["patient_ready"] = True
+    encoded = json.dumps(
+        document["plan"], sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode()
+    document["plan_sha256"] = hashlib.sha256(encoded).hexdigest()
+    plan.source_path.write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="production.*evidence|classifier artifact"):
+        load_pilot_plan(plan.source_path, expected_config_sha256=config.sha256)
+
+
+def test_pilot_cli_verifies_frozen_plan_before_opening_target_manifest(
+    tmp_path, monkeypatch
+) -> None:
+    config = ResearchRunConfig.default("RSNA")
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config.to_dict()), encoding="utf-8")
+    manifest_opened = False
+
+    def reject_manifest_open(*_args, **_kwargs):
+        nonlocal manifest_opened
+        manifest_opened = True
+        raise AssertionError("pilot manifest opened before the frozen plan was verified")
+
+    monkeypatch.setattr(
+        "mmdc_clip_f.research.view_risk.cli.load_role_manifest_for_operation",
+        reject_manifest_open,
+    )
+    args = build_parser().parse_args(
+        [
+            "view-risk-evaluate",
+            "--config",
+            str(config_path),
+            "--plan",
+            str(tmp_path / "missing-plan.json"),
+            "--manifest",
+            str(tmp_path / "must-not-open-manifest.json"),
+            "--manifest-binding",
+            str(tmp_path / "must-not-open-binding.json"),
+            "--private-root",
+            str(tmp_path),
+            "--predictions",
+            str(tmp_path / "must-not-open-predictions.json"),
+            "--method",
+            "candidate",
+            "--seed",
+            "42",
+            "--model-sha256",
+            "0" * 64,
+        ]
+    )
+    with pytest.raises(ValueError, match="pilot plan"):
+        run_view_risk_command(args)
+    assert manifest_opened is False
+
+
+def test_one_plan_rejects_two_conflicting_authoritative_registrations(tmp_path) -> None:
+    config = ResearchRunConfig.default("RSNA")
+    manifest = _manifest(Role.PILOT, 2)
+    plan = freeze_pilot_plan(
+        tmp_path / "registry-plan.json",
+        config=config,
+        manifest_sha256_by_role=_manifest_hashes(manifest.manifest_sha256),
+        classifier=_fresh_selected(),
+        selections=_selections(config, tmp_path),
+    )
+
+    def predictions(value):
+        return tuple(
+            FrozenClassifierPrediction(
+                exam_id=record.exam_key,
+                panel="clean_four_view",
+                prediction=value,
+            )
+            for record in manifest.records
+        )
+    config_path = tmp_path / "registry-config.json"
+    config_path.write_text(json.dumps(config.to_dict()), encoding="utf-8")
+    manifest_path = tmp_path / "registry-manifest.json"
+    binding = save_private_manifest(manifest, manifest_path, private_root=tmp_path)
+    binding_path = tmp_path / "registry-binding.json"
+    binding_path.write_text(
+        json.dumps(
+            {
+                "schema_version": binding.schema_version,
+                "dataset_namespace": binding.dataset_namespace,
+                "source_hashes": dict(binding.source_hashes),
+                "manifest_sha256": binding.manifest_sha256,
+            }
+        ),
+        encoding="utf-8",
+    )
+    first_input = tmp_path / "complete-predictions-a.json"
+    second_input = tmp_path / "complete-predictions-b.json"
+    first_input.write_text(
+        json.dumps({"predictions": [row.to_dict() for row in predictions(0)]}),
+        encoding="utf-8",
+    )
+    second_input.write_text(
+        json.dumps({"predictions": [row.to_dict() for row in predictions(1)]}),
+        encoding="utf-8",
+    )
+    parser = build_parser()
+
+    def command(input_path, *, plan_path=plan.source_path, output_path=None):
+        output_path = output_path or plan.authoritative_prediction_path
+        return parser.parse_args(
+            [
+                "view-risk-freeze-classifier-predictions",
+                "--config", str(config_path),
+                "--plan", str(plan_path),
+                "--manifest", str(manifest_path),
+                "--manifest-binding", str(binding_path),
+                "--private-root", str(tmp_path),
+                "--input", str(input_path),
+                "--output", str(output_path),
+            ]
+        )
+
+    first = run_view_risk_command(command(first_input))
+    assert first["status"] == "classifier_predictions_frozen"
+    copied_plan = tmp_path / "copied-registry-plan.json"
+    copied_plan.write_bytes(plan.source_path.read_bytes())
+    copied_registry = tmp_path / "copied-registry-plan.authoritative-predictions.json"
+    with pytest.raises((FileExistsError, ValueError), match="registered|authoritative|exist"):
+        run_view_risk_command(
+            command(
+                second_input,
+                plan_path=copied_plan,
+                output_path=copied_registry,
+            )
+        )
+    assert not copied_registry.exists()
+    loaded = load_authoritative_predictions_with_role_access(
+        plan,
+        manifest=manifest,
+        role=Role.PILOT,
+    )
+    assert loaded.sha256 == first["prediction_sha256"]

@@ -587,10 +587,12 @@ class ClassifierProvenance:
 
     @classmethod
     def _restore_frozen_record(cls, **values: object) -> "ClassifierProvenance":
-        """Restore only a classifier record embedded in an already-verified plan."""
+        """Restore only non-production provenance from a self-contained record."""
 
         if values.get("kind") == "public_pretrained_fresh":
-            values["_production_token"] = _PRODUCTION_INITIALIZATION_TOKEN
+            raise PermissionError(
+                "production provenance requires persisted initialization/readiness evidence"
+            )
         return cls(**values)  # type: ignore[arg-type]
 
     @classmethod
@@ -807,16 +809,54 @@ class ReadinessAudit:
     ) -> None:
         if _factory_token is not _READINESS_AUDIT_TOKEN:
             raise RuntimeError("ReadinessAudit must be produced by an inventory audit")
+        if kind not in ("synthetic_software", "real_data"):
+            raise ValueError("readiness audit kind is invalid")
+        if not isinstance(patient_ready, bool) or not isinstance(
+            locked_isolation_verified, bool
+        ):
+            raise ValueError("readiness audit status fields must be boolean")
+        for value in (dataset_count, exam_count, patient_count):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError("readiness audit inventory counts must be positive integers")
         manifests = tuple(sorted(manifest_sha256s))
         if not manifests or any(not _is_sha256(value) for value in manifests):
             raise ValueError("readiness audit requires manifest SHA-256 bindings")
         if locked_denylist_sha256 is not None and not _is_sha256(locked_denylist_sha256):
             raise ValueError("readiness audit locked denylist binding must be SHA-256")
         counts = MappingProxyType(dict(sorted(role_exam_counts.items())))
+        if set(counts) != {role.value for role in NON_TEST_ROLES} or any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in counts.values()
+        ):
+            raise ValueError("readiness audit role counts are invalid")
+        if sum(counts.values()) != exam_count:
+            raise ValueError("readiness audit role counts do not reconcile with inventory")
         verified_digests = tuple(sorted(verified_file_sha256s))
         path_bindings = tuple(sorted((verified_files or {}).items()))
         if any(not Path(path).is_absolute() or not _is_sha256(digest) for path, digest in path_bindings):
             raise ValueError("readiness file evidence must bind absolute paths to SHA-256")
+        if kind == "real_data":
+            if (
+                not patient_ready
+                or not locked_isolation_verified
+                or not _is_sha256(locked_denylist_sha256)
+                or not path_bindings
+                or locked_denylist_sha256 not in verified_digests
+                or locked_denylist_sha256 not in {digest for _path, digest in path_bindings}
+                or not {digest for _path, digest in path_bindings}.issubset(
+                    set(verified_digests)
+                )
+                or any(count < 1 for count in counts.values())
+            ):
+                raise ValueError("real readiness requires complete byte and role evidence")
+        elif (
+            patient_ready
+            or locked_isolation_verified
+            or locked_denylist_sha256 is not None
+            or verified_digests
+            or path_bindings
+        ):
+            raise ValueError("software readiness cannot claim real-data evidence")
         payload = {
             "kind": kind,
             "patient_ready": patient_ready,
@@ -839,19 +879,28 @@ class ReadinessAudit:
         object.__setattr__(self, "sha256", _sha256_json(payload))
 
 
-def audit_software_fixture(manifest: RoleManifest) -> ReadinessAudit:
+def audit_software_fixture(
+    manifest: RoleManifest | Sequence[RoleManifest],
+) -> ReadinessAudit:
     """Validate fixture structure while explicitly withholding patient readiness."""
 
-    summary = validate_inventory((manifest,))
+    manifests = (
+        (manifest,)
+        if isinstance(manifest, RoleManifest)
+        else tuple(manifest)
+    )
+    summary = validate_inventory(manifests)
     return ReadinessAudit(
         "synthetic_software",
         False,
         summary.dataset_count,
         summary.exam_count,
         summary.patient_count,
-        MappingProxyType({role.value: summary.role_exam_counts[role] for role in Role}),
+        MappingProxyType(
+            {role.value: summary.role_exam_counts[role] for role in NON_TEST_ROLES}
+        ),
         False,
-        (manifest.manifest_sha256,),
+        tuple(item.manifest_sha256 for item in manifests),
         None,
         _factory_token=_READINESS_AUDIT_TOKEN,
     )
@@ -918,7 +967,9 @@ def audit_real_data_readiness(
         summary.dataset_count,
         summary.exam_count,
         summary.patient_count,
-        MappingProxyType({role.value: summary.role_exam_counts[role] for role in Role}),
+        MappingProxyType(
+            {role.value: summary.role_exam_counts[role] for role in NON_TEST_ROLES}
+        ),
         True,
         tuple(manifest.manifest_sha256 for manifest in materialized),
         locked_patient_denylist.source_sha256,
@@ -929,10 +980,10 @@ def audit_real_data_readiness(
 
 
 def save_readiness_audit(audit: ReadinessAudit, path: str | Path) -> Path:
-    """Exclusively persist a private real-readiness artifact with byte paths."""
+    """Persist a real or explicitly non-promotable software readiness artifact."""
 
-    if not isinstance(audit, ReadinessAudit) or not audit.patient_ready:
-        raise ValueError("only a verified real-data readiness audit may be persisted")
+    if not isinstance(audit, ReadinessAudit):
+        raise ValueError("readiness evidence must come from an inventory audit")
     target = Path(path).resolve()
     if target.suffix != ".json" or not target.parent.exists():
         raise ValueError("readiness artifact must be JSON in an existing directory")
@@ -965,13 +1016,33 @@ def save_readiness_audit(audit: ReadinessAudit, path: str | Path) -> Path:
     return target
 
 
-def load_verified_readiness_audit(path: str | Path) -> ReadinessAudit:
-    """Reload a real readiness artifact and re-hash every bound source byte."""
+def load_verified_readiness_audit(
+    path: str | Path, *, require_patient_ready: bool = True
+) -> ReadinessAudit:
+    """Reload readiness evidence, re-hashing every bound source byte."""
 
     try:
         document = json.loads(Path(path).read_text(encoding="utf-8"))
         payload = document["audit"]
-        if set(document) != {"audit_sha256", "audit"}:
+        expected = {
+            "kind",
+            "patient_ready",
+            "dataset_count",
+            "exam_count",
+            "patient_count",
+            "role_exam_counts",
+            "locked_isolation_verified",
+            "manifest_sha256s",
+            "locked_denylist_sha256",
+            "verified_file_sha256s",
+            "verified_files",
+        }
+        if (
+            set(document) != {"audit_sha256", "audit"}
+            or not isinstance(payload, Mapping)
+            or set(payload) != expected
+            or not isinstance(payload["verified_files"], Mapping)
+        ):
             raise ValueError
         verified_paths = payload["verified_files"]
         for source, expected in verified_paths.items():
@@ -993,7 +1064,9 @@ def load_verified_readiness_audit(path: str | Path) -> ReadinessAudit:
         )
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
         raise ValueError("readiness artifact is unavailable or invalid") from exc
-    if document["audit_sha256"] != audit.sha256 or not audit.patient_ready:
+    if document["audit_sha256"] != audit.sha256 or (
+        require_patient_ready and not audit.patient_ready
+    ):
         raise ValueError("readiness artifact integrity or status is invalid")
     return audit
 
@@ -1239,6 +1312,64 @@ def confidence_bundle_loss(
     raise TypeError("model type is not bound to an accepted learned confidence objective")
 
 
+def confidence_bundle_scores(model: nn.Module, method: str, bundle: CacheBundle) -> Tensor:
+    """Infer confidence from frozen features without consuming labels or metadata."""
+
+    if method not in LEARNED_TORCH_METHODS or not isinstance(bundle, CacheBundle):
+        raise ValueError("learned confidence inference requires a bound method/cache bundle")
+    try:
+        device = next(model.parameters()).device
+    except StopIteration as exc:
+        raise ValueError("confidence model must contain parameters") from exc
+    source = bundle.features
+    features = FrozenViewFeatures(
+        logits_by_view={
+            view: source.logits_by_view[view].to(device) for view in source.observed_views
+        },
+        hidden_by_view={
+            view: source.hidden_by_view[view].to(device) for view in source.observed_views
+        },
+        projected_by_view={
+            view: source.projected_by_view[view].to(device) for view in source.observed_views
+        },
+        normalized_text_embeddings=source.normalized_text_embeddings.to(device),
+        scores=source.scores.to(device),
+        probabilities=source.probabilities.to(device),
+        observed_views=source.observed_views,
+        fusion_pairs=source.fusion_pairs,
+    )
+    raw = prepare_raw_head_inputs(features, backbone=bundle.provenance.backbone)
+    if isinstance(model, RelationAwareConfidenceHead):
+        output = model(raw)
+    elif isinstance(model, MaskedMVACNAdapter):
+        output = model(
+            features.hidden_by_view,
+            features.observed_views,
+            classifier_prediction=features.prediction,
+            current_scores=features.scores,
+        )
+    elif isinstance(model, (SameInputMLP, SameInputDensityControl)):
+        output = model(raw)
+    elif isinstance(model, ViLUFailureAdapter):
+        projected, mask = _projected_slots(features)
+        output = model(
+            projected,
+            mask,
+            classifier_prediction=features.prediction,
+            current_scores=features.scores,
+        )
+    else:
+        raise TypeError("model type is not an accepted learned confidence model")
+    confidence = output.confidence
+    if (
+        confidence.shape != (features.batch_size,)
+        or not torch.isfinite(confidence).all()
+        or not torch.equal(output.classifier_prediction, features.prediction)
+    ):
+        raise RuntimeError("confidence output changed or failed to preserve classifier predictions")
+    return confidence.detach()
+
+
 @dataclass(frozen=True)
 class RoleBoundBatch:
     """One bounded optimizer batch with private identities kept out of reports."""
@@ -1298,12 +1429,16 @@ class TrainingResult:
         return asdict(self)
 
 
-def module_state_sha256(module: nn.Module) -> str:
+def state_dict_sha256(state: Mapping[str, Tensor]) -> str:
     manifest = [
         (name, str(value.dtype), list(value.shape), tensor_sha256(value.detach()))
-        for name, value in sorted(module.state_dict().items())
+        for name, value in sorted(state.items())
     ]
     return _sha256_json(manifest)
+
+
+def module_state_sha256(module: nn.Module) -> str:
+    return state_dict_sha256(module.state_dict())
 
 
 def _rng_state() -> dict[str, object]:
@@ -1454,6 +1589,7 @@ def fit_role_bound_module(
     resume: bool = False,
     stop_after_epoch: int | None = None,
     frozen_modules: Sequence[nn.Module] = (),
+    epoch_callback: Callable[[int, nn.Module], None] | None = None,
     _classifier_fit_token: object | None = None,
 ) -> TrainingResult:
     """Run deterministic Adam updates after role authorization, with exact resume."""
@@ -1549,6 +1685,8 @@ def fit_role_bound_module(
                     completed_epoch=completed_epoch,
                     update_count=update_count,
                 )
+            if epoch_callback is not None:
+                epoch_callback(completed_epoch, model)
         scaling_by_method = {
             "same_input_mlp": "method_owned_confidence_fit_affine",
             "same_input_density": "method_owned_confidence_fit_affine",
@@ -1592,6 +1730,7 @@ def fit_fresh_classifier_with_role_access(
     checkpoint_path: str | Path | None = None,
     resume: bool = False,
     stop_after_epoch: int | None = None,
+    epoch_callback: Callable[[int, nn.Module], None] | None = None,
 ) -> TrainingResult:
     """Fit only classifier-fit rows from a pinned public initialization.
 
@@ -1626,6 +1765,7 @@ def fit_fresh_classifier_with_role_access(
         checkpoint_path=checkpoint_path,
         resume=resume,
         stop_after_epoch=stop_after_epoch,
+        epoch_callback=epoch_callback,
         _classifier_fit_token=_FRESH_CLASSIFIER_FIT_TOKEN,
     )
     return replace(
@@ -1709,6 +1849,7 @@ def fit_confidence_method_with_role_access(
     checkpoint_path: str | Path | None = None,
     resume: bool = False,
     stop_after_epoch: int | None = None,
+    epoch_callback: Callable[[int, nn.Module], None] | None = None,
 ) -> TrainingResult:
     """Fit a candidate/control by streaming bounded current cache bundles.
 
@@ -1794,7 +1935,7 @@ def fit_confidence_method_with_role_access(
             counts.append(bundle.features.batch_size)
         return torch.stack(weighted).sum() / sum(counts)
 
-    return fit_role_bound_module(
+    result = fit_role_bound_module(
         manifest=manifest,
         operation=Operation.CONFIDENCE_FITTING,
         role=Role.CONFIDENCE_FIT,
@@ -1808,6 +1949,14 @@ def fit_confidence_method_with_role_access(
         resume=resume,
         stop_after_epoch=stop_after_epoch,
         frozen_modules=frozen,
+        epoch_callback=epoch_callback,
+    )
+    return replace(
+        result,
+        software_only=(
+            classifier.kind == "synthetic_injected"
+            or not classifier.patient_readiness_verified
+        ),
     )
 
 
@@ -1836,6 +1985,7 @@ __all__ = [
     "confidence_bundle_loss",
     "fit_role_bound_module",
     "fit_confidence_method_with_role_access",
+    "confidence_bundle_scores",
     "fit_fresh_classifier_with_role_access",
     "initialize_public_classifier",
     "initialize_synthetic_classifier",
@@ -1846,4 +1996,5 @@ __all__ = [
     "module_state_sha256",
     "pinned_public_clip_configuration",
     "save_readiness_audit",
+    "state_dict_sha256",
 ]
