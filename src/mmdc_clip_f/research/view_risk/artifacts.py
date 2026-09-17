@@ -414,7 +414,7 @@ def fit_temperature_control_artifact_with_role_access(
     tune_manifest: RoleManifest,
     row_reader: Callable[[tuple[PrivateExamRecord, ...]], ScalarControlRows],
     tune_manifest_path: str | Path | None = None,
-    tune_input_path: str | Path | None = None,
+    tune_evidence_files: Mapping[str, str | Path] | None = None,
 ) -> ControlArtifact:
     """Tune one positive temperature on authorized tune NLL and persist its state."""
 
@@ -430,12 +430,10 @@ def fit_temperature_control_artifact_with_role_access(
         raise ValueError("temperature tune manifest disagrees with classifier selection")
     evidence_files = {}
     if classifier.kind == "public_pretrained_fresh":
-        if tune_manifest_path is None or tune_input_path is None:
-            raise ValueError("production temperature fitting requires persisted tune evidence")
-        evidence_files = {
-            "tune_manifest": tune_manifest_path,
-            "tune_rows": tune_input_path,
-        }
+        if tune_manifest_path is None or not tune_evidence_files:
+            raise ValueError("production temperature fitting requires verified cache evidence")
+        evidence_files = {"tune_manifest": tune_manifest_path}
+        evidence_files.update(tune_evidence_files)
 
     def authorized(records: tuple[PrivateExamRecord, ...]) -> ControlArtifact:
         rows = row_reader(records)
@@ -491,8 +489,8 @@ def fit_ds_control_artifact_with_role_access(
     tune_reader: Callable[[tuple[PrivateExamRecord, ...]], DSControlRows],
     confidence_manifest_path: str | Path | None = None,
     tune_manifest_path: str | Path | None = None,
-    confidence_input_path: str | Path | None = None,
-    tune_input_path: str | Path | None = None,
+    confidence_evidence_files: Mapping[str, str | Path] | None = None,
+    tune_evidence_files: Mapping[str, str | Path] | None = None,
 ) -> ControlArtifact:
     """Fit the DS scaler/weights on confidence_fit and select regularization on tune."""
 
@@ -501,17 +499,19 @@ def fit_ds_control_artifact_with_role_access(
         raise ValueError("DS tune manifest disagrees with classifier selection")
     evidence_files = {}
     if classifier.kind == "public_pretrained_fresh":
-        raw_evidence = {
-            "confidence_manifest": confidence_manifest_path,
-            "confidence_rows": confidence_input_path,
-            "tune_manifest": tune_manifest_path,
-            "tune_rows": tune_input_path,
-        }
-        if any(path is None for path in raw_evidence.values()):
-            raise ValueError("production DS fitting requires persisted role/input evidence")
+        if (
+            confidence_manifest_path is None
+            or tune_manifest_path is None
+            or not confidence_evidence_files
+            or not tune_evidence_files
+        ):
+            raise ValueError("production DS fitting requires verified role/cache evidence")
         evidence_files = {
-            purpose: path for purpose, path in raw_evidence.items() if path is not None
+            "confidence_manifest": confidence_manifest_path,
+            "tune_manifest": tune_manifest_path,
         }
+        evidence_files.update(confidence_evidence_files)
+        evidence_files.update(tune_evidence_files)
     # Validate both role contracts before either private tensor reader is opened.
     _require_exact_manifest_role(confidence_manifest, Role.CONFIDENCE_FIT)
     _require_exact_manifest_role(tune_manifest, Role.TUNE)
@@ -607,7 +607,7 @@ def fit_scalar_calibration_artifact_with_role_access(
     tune_manifest: RoleManifest,
     row_reader: Callable[[tuple[PrivateExamRecord, ...]], ScalarCalibrationRows],
     tune_manifest_path: str | Path | None = None,
-    tune_input_path: str | Path | None = None,
+    tune_evidence_files: Mapping[str, str | Path] | None = None,
 ) -> ControlArtifact:
     """Create the separately labelled tune-monotone probability output for a scalar."""
 
@@ -619,12 +619,10 @@ def fit_scalar_calibration_artifact_with_role_access(
         raise ValueError("scalar calibration tune manifest binding is stale")
     evidence_files = {}
     if classifier.kind == "public_pretrained_fresh":
-        if tune_manifest_path is None or tune_input_path is None:
-            raise ValueError("production scalar calibration requires persisted tune evidence")
-        evidence_files = {
-            "tune_manifest": tune_manifest_path,
-            "tune_rows": tune_input_path,
-        }
+        if tune_manifest_path is None or not tune_evidence_files:
+            raise ValueError("production scalar calibration requires verified cache evidence")
+        evidence_files = {"tune_manifest": tune_manifest_path}
+        evidence_files.update(tune_evidence_files)
 
     def authorized(records: tuple[PrivateExamRecord, ...]) -> ControlArtifact:
         rows = row_reader(records)

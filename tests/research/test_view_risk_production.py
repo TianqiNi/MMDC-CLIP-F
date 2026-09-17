@@ -4,6 +4,7 @@ import hashlib
 import json
 import subprocess
 import sys
+from pathlib import Path
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -23,7 +24,6 @@ from mmdc_clip_f.research.view_risk.cache import (
     save_cache_bundle,
 )
 from mmdc_clip_f.research.view_risk.features import load_verified_frozen_encoder
-from mmdc_clip_f.research.view_risk.fusion import RSNA_FUSION_PAIRS
 from mmdc_clip_f.research.view_risk.evaluation import (
     ClassifierTuneCheckpoint,
     freeze_pilot_plan,
@@ -622,81 +622,8 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
         assert load_control_artifact(output).method == method
         control_paths[method] = output
 
-    scalar_input = tmp_path / "temperature-input.json"
-    scalar_input.write_text(
-        json.dumps(
-            {
-                "schema_version": "view-risk-scalar-control-input/v1",
-                "exam_keys": [tune_manifest.records[0].exam_key],
-                "scores": [[0.1, 0.2, 0.3, 0.4]],
-            }
-        ),
-        encoding="utf-8",
-    )
     temperature_output = tmp_path / "control-temperature.json"
-    result = run_view_risk_command(
-        parser.parse_args(
-            [
-                "view-risk-fit-control",
-                "--config", str(config_path),
-                "--classifier-artifact", str(selected.source_path),
-                "--method", "temperature_scaled_msp",
-                "--seed", "42",
-                "--output", str(temperature_output),
-                "--tune-manifest", str(tune_manifest_path),
-                "--tune-manifest-binding", str(tune_binding_path),
-                "--tune-private-root", str(tmp_path),
-                "--tune-input", str(scalar_input),
-            ]
-        )
-    )
-    assert result["status"] == "control_fitted"
-    control_paths["temperature_scaled_msp"] = temperature_output
-
-    def ds_document(manifest, prediction):
-        return {
-            "schema_version": "view-risk-ds-control-input/v1",
-            "exam_keys": [manifest.records[0].exam_key],
-            "values": [[0.2] * 8],
-            "valid_mask": [[True] * 8],
-            "observed_mask": [[True] * 4],
-            "conflict_valid_mask": [[True] * 3],
-            "fusion_pairs": [list(pair) for pair in RSNA_FUSION_PAIRS],
-            "classifier_prediction": [prediction],
-        }
-
-    confidence_input = tmp_path / "ds-confidence-input.json"
-    tune_input = tmp_path / "ds-tune-input.json"
-    confidence_input.write_text(
-        json.dumps(ds_document(confidence_manifest, 0)), encoding="utf-8"
-    )
-    tune_input.write_text(json.dumps(ds_document(tune_manifest, 2)), encoding="utf-8")
     ds_output = tmp_path / "control-ds.json"
-    result = run_view_risk_command(
-        parser.parse_args(
-            [
-                "view-risk-fit-control",
-                "--config", str(config_path),
-                "--classifier-artifact", str(selected.source_path),
-                "--method", "ds_logistic",
-                "--seed", "42",
-                "--output", str(ds_output),
-                "--tune-manifest", str(tune_manifest_path),
-                "--tune-manifest-binding", str(tune_binding_path),
-                "--tune-private-root", str(tmp_path),
-                "--tune-input", str(tune_input),
-                "--confidence-manifest", str(confidence_manifest_path),
-                "--confidence-manifest-binding", str(confidence_binding_path),
-                "--confidence-private-root", str(tmp_path),
-                "--confidence-input", str(confidence_input),
-            ]
-        )
-    )
-    assert result["status"] == "control_fitted"
-    assert load_control_artifact(ds_output).selection_trials == len(
-        config.search_table.ds_regularizations
-    )
-    control_paths["ds_logistic"] = ds_output
 
     classifier_model, classifier_tokens = reload_verified_public_classifier(
         selected.initialization
@@ -833,6 +760,121 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
         ),
         encoding="utf-8",
     )
+    tune_control_index = tmp_path / "tune-control-cache-index.json"
+    tune_control_document = {
+        "schema_version": "view-risk-control-cache-index/v1",
+        "classifier": selected.classifier.to_dict(),
+        "entries": [
+            {
+                "metadata_path": tune_entries[0]["metadata_path"],
+                "provenance": tune_entries[0]["provenance"],
+            }
+        ],
+    }
+    tune_control_index.write_text(json.dumps(tune_control_document), encoding="utf-8")
+    confidence_control_index = tmp_path / "confidence-control-cache-index.json"
+    confidence_control_index.write_text(
+        json.dumps(
+            {
+                "schema_version": "view-risk-control-cache-index/v1",
+                "classifier": selected.classifier.to_dict(),
+                "entries": [
+                    {
+                        "metadata_path": training_entries[0]["metadata_path"],
+                        "provenance": training_entries[0]["provenance"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    foreign_index = tmp_path / "foreign-control-cache-index.json"
+    foreign_document = json.loads(json.dumps(tune_control_document))
+    foreign_document["classifier"]["checkpoint_sha256"] = "f" * 64
+    foreign_index.write_text(json.dumps(foreign_document), encoding="utf-8")
+    with pytest.raises(ValueError, match="classifier"):
+        run_view_risk_command(
+            parser.parse_args(
+                [
+                    "view-risk-fit-control",
+                    "--config", str(config_path),
+                    "--classifier-artifact", str(selected.source_path),
+                    "--method", "temperature_scaled_msp",
+                    "--seed", "42",
+                    "--output", str(tmp_path / "foreign-control.json"),
+                    "--tune-manifest", str(tune_manifest_path),
+                    "--tune-manifest-binding", str(tune_binding_path),
+                    "--tune-private-root", str(tmp_path),
+                    "--tune-cache-index", str(foreign_index),
+                ]
+            )
+        )
+
+    result = run_view_risk_command(
+        parser.parse_args(
+            [
+                "view-risk-fit-control",
+                "--config", str(config_path),
+                "--classifier-artifact", str(selected.source_path),
+                "--method", "temperature_scaled_msp",
+                "--seed", "42",
+                "--output", str(temperature_output),
+                "--tune-manifest", str(tune_manifest_path),
+                "--tune-manifest-binding", str(tune_binding_path),
+                "--tune-private-root", str(tmp_path),
+                "--tune-cache-index", str(tune_control_index),
+            ]
+        )
+    )
+    assert result["status"] == "control_fitted"
+    control_paths["temperature_scaled_msp"] = temperature_output
+
+    result = run_view_risk_command(
+        parser.parse_args(
+            [
+                "view-risk-fit-control",
+                "--config", str(config_path),
+                "--classifier-artifact", str(selected.source_path),
+                "--method", "ds_logistic",
+                "--seed", "42",
+                "--output", str(ds_output),
+                "--tune-manifest", str(tune_manifest_path),
+                "--tune-manifest-binding", str(tune_binding_path),
+                "--tune-private-root", str(tmp_path),
+                "--tune-cache-index", str(tune_control_index),
+                "--confidence-manifest", str(confidence_manifest_path),
+                "--confidence-manifest-binding", str(confidence_binding_path),
+                "--confidence-private-root", str(tmp_path),
+                "--confidence-cache-index", str(confidence_control_index),
+            ]
+        )
+    )
+    assert result["status"] == "control_fitted"
+    assert load_control_artifact(ds_output).selection_trials == len(
+        config.search_table.ds_regularizations
+    )
+    control_paths["ds_logistic"] = ds_output
+
+    calibrated_output = tmp_path / "control-msp-calibrated.json"
+    calibrated = run_view_risk_command(
+        parser.parse_args(
+            [
+                "view-risk-fit-control",
+                "--config", str(config_path),
+                "--classifier-artifact", str(selected.source_path),
+                "--method", "msp",
+                "--calibrate-scalar",
+                "--seed", "42",
+                "--output", str(calibrated_output),
+                "--tune-manifest", str(tune_manifest_path),
+                "--tune-manifest-binding", str(tune_binding_path),
+                "--tune-private-root", str(tmp_path),
+                "--tune-cache-index", str(tune_control_index),
+            ]
+        )
+    )
+    assert calibrated["output_kind"] == "probability"
     confidence_selection_result = run_view_risk_command(
         parser.parse_args(
             [
@@ -912,13 +954,20 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
     )
     assert torch.equal(scored.classifier_prediction, example.features.prediction)
 
-    scalar_input.write_text("changed tune fitting evidence", encoding="utf-8")
-    with pytest.raises(ValueError, match="control.*evidence|evidence.*changed"):
+    tune_tensor_path = Path(tune_entries[0]["metadata_path"]).with_suffix(".safetensors")
+    tune_tensor_path.write_bytes(b"changed tune cache tensor bytes")
+    with pytest.raises(ValueError, match="cache|control.*evidence|evidence.*changed|integrity"):
         load_model_artifact_selection(
             temperature_output,
             config=config,
             classifier=selected.classifier,
             clean_reference_record_path=confidence_selection.workflow_evidence_path,
+        )
+    with pytest.raises(ValueError, match="cache|evidence|integrity"):
+        load_model_artifact_selection(
+            confidence_selection.workflow_evidence_path,
+            config=config,
+            classifier=selected.classifier,
         )
 
 
