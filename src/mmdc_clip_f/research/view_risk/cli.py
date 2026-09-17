@@ -15,26 +15,37 @@ from mmdc_clip_f.provenance import sha256_file
 from .artifacts import (
     DSControlRows,
     RAW_CONTROL_METHODS,
+    ScalarCalibrationRows,
     ScalarControlRows,
     create_raw_control_artifact,
     fit_ds_control_artifact_with_role_access,
+    fit_scalar_calibration_artifact_with_role_access,
     fit_temperature_control_artifact_with_role_access,
 )
-from .baselines import DSBaselineFeatures
+from .baselines import (
+    DSBaselineFeatures,
+    absolute_omission_sensitivity,
+    build_ds_features,
+    scalar_baseline_scores,
+)
+from .head_inputs import prepare_raw_head_inputs
 
 from .cache import (
+    bind_cache_files,
     CacheProvenance,
     _require_external_or_ignored_destination,
     load_cache_bundle,
+    load_cache_provenance,
 )
 from .evaluation import (
-    FrozenClassifierPrediction,
     ConfidenceScore,
     CheckpointTuneResult,
     ModelArtifactSelection,
     TuneCellResult,
     TunePrediction,
     evaluate_prediction_panel_with_role_access,
+    validate_evaluation_cache_bundle,
+    validate_evaluation_cache_provenance,
     generate_confidence_predictions_with_role_access,
     generate_checkpoint_tune_result_with_role_access,
     freeze_authoritative_predictions,
@@ -148,7 +159,7 @@ def add_view_risk_subparsers(subparsers: argparse._SubParsersAction) -> None:
     predictions.add_argument("--manifest", required=True)
     predictions.add_argument("--manifest-binding", required=True)
     predictions.add_argument("--private-root", required=True)
-    predictions.add_argument("--input", required=True)
+    predictions.add_argument("--cache-index", required=True)
     predictions.add_argument("--output", required=True)
 
     train = subparsers.add_parser(
@@ -208,16 +219,17 @@ def add_view_risk_subparsers(subparsers: argparse._SubParsersAction) -> None:
     control.add_argument("--config", required=True)
     control.add_argument("--classifier-artifact", required=True)
     control.add_argument("--method", required=True)
+    control.add_argument("--calibrate-scalar", action="store_true")
     control.add_argument("--seed", required=True, type=int)
     control.add_argument("--output", required=True)
     control.add_argument("--tune-manifest")
     control.add_argument("--tune-manifest-binding")
     control.add_argument("--tune-private-root")
-    control.add_argument("--tune-input")
+    control.add_argument("--tune-cache-index")
     control.add_argument("--confidence-manifest")
     control.add_argument("--confidence-manifest-binding")
     control.add_argument("--confidence-private-root")
-    control.add_argument("--confidence-input")
+    control.add_argument("--confidence-cache-index")
 
     score = subparsers.add_parser(
         "view-risk-score-confidence",
@@ -390,22 +402,6 @@ def _prediction_rows(path: str | Path) -> tuple[EvaluationPrediction, ...]:
         raise ValueError("private prediction row has an invalid schema") from exc
 
 
-def _classifier_prediction_rows(path: str | Path) -> tuple[FrozenClassifierPrediction, ...]:
-    _require_external_or_ignored_destination(Path(path).resolve())
-    value = _read_json(path, description="label-free classifier prediction artifact")
-    if not isinstance(value, dict) or set(value) != {"predictions"}:
-        raise ValueError("classifier prediction input has missing or unknown fields")
-    rows = value["predictions"]
-    if not isinstance(rows, list):
-        raise ValueError("classifier predictions must be a list")
-    try:
-        return tuple(
-            FrozenClassifierPrediction(**{**row, "mask": tuple(row["mask"])})
-            for row in rows
-        )
-    except (AttributeError, KeyError, TypeError) as exc:
-        raise ValueError("classifier prediction row has an invalid schema") from exc
-
 
 def _cache_index(
     path: str | Path,
@@ -461,48 +457,195 @@ def _cache_index(
     return classifier, tuple(normalized)
 
 
-def _scalar_control_rows(path: str | Path) -> ScalarControlRows:
-    _require_external_or_ignored_destination(Path(path).resolve())
-    value = _read_json(path, description="private scalar control features")
-    if not isinstance(value, dict) or set(value) != {
-        "schema_version", "exam_keys", "scores"
-    } or value["schema_version"] != "view-risk-scalar-control-input/v1":
-        raise ValueError("scalar control input has missing, unknown, or unsafe fields")
-    try:
-        return ScalarControlRows(tuple(value["exam_keys"]), torch.tensor(value["scores"]).float())
-    except (TypeError, ValueError) as exc:
-        raise ValueError("scalar control input tensor schema is invalid") from exc
 
 
-def _ds_control_rows(path: str | Path) -> DSControlRows:
-    _require_external_or_ignored_destination(Path(path).resolve())
-    value = _read_json(path, description="private DS control features")
-    expected = {
-        "schema_version", "exam_keys", "values", "valid_mask", "observed_mask",
-        "conflict_valid_mask", "fusion_pairs", "classifier_prediction",
-    }
-    if not isinstance(value, dict) or set(value) != expected or value["schema_version"] != (
-        "view-risk-ds-control-input/v1"
+def _control_cache_index(
+    path: str | Path,
+    *,
+    classifier: ClassifierProvenance,
+) -> tuple[dict[str, object], ...]:
+    """Parse a strict selected-classifier-bound control cache index."""
+
+    source = Path(path).resolve()
+    _require_external_or_ignored_destination(source)
+    value = _read_json(source, description="private control cache index")
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"schema_version", "classifier", "entries"}
+        or value["schema_version"] != "view-risk-control-cache-index/v1"
+        or value["classifier"] != classifier.to_dict()
+        or not isinstance(value["entries"], list)
+        or not value["entries"]
     ):
-        raise ValueError("DS control input has missing, unknown, or unsafe fields")
-    try:
-        features = DSBaselineFeatures(
-            values=torch.tensor(value["values"]).float(),
-            valid_mask=torch.tensor(value["valid_mask"], dtype=torch.bool),
-            observed_mask=torch.tensor(value["observed_mask"], dtype=torch.bool),
-            conflict_valid_mask=torch.tensor(
-                value["conflict_valid_mask"], dtype=torch.bool
-            ),
-            fusion_pairs=tuple(tuple(pair) for pair in value["fusion_pairs"]),
-        )
-        return DSControlRows(
-            tuple(value["exam_keys"]),
-            features,
-            torch.tensor(value["classifier_prediction"], dtype=torch.long),
-        )
-    except (TypeError, ValueError) as exc:
-        raise ValueError("DS control input tensor schema is invalid") from exc
+        raise ValueError("control cache index/classifier binding is invalid")
+    result = []
+    paths = set()
+    for entry in value["entries"]:
+        if not isinstance(entry, dict) or set(entry) != {"metadata_path", "provenance"}:
+            raise ValueError("control cache entry has missing or unknown fields")
+        path_value = entry["metadata_path"]
+        if not isinstance(path_value, str) or not Path(path_value).is_absolute():
+            raise ValueError("control cache paths must be absolute")
+        metadata = Path(path_value).resolve()
+        if metadata in paths:
+            raise ValueError("control cache index contains duplicate cache paths")
+        paths.add(metadata)
+        provenance = CacheProvenance.from_dict(entry["provenance"])
+        if provenance.checkpoint_sha256 != classifier.checkpoint_sha256:
+            raise ValueError("control cache classifier binding is stale")
+        result.append({"metadata_path": metadata, "provenance": provenance})
+    return tuple(result)
 
+
+def _control_cache_evidence(
+    path: str | Path,
+    entries: tuple[dict[str, object], ...],
+    *,
+    prefix: str,
+) -> dict[str, Path]:
+    evidence = {f"{prefix}_cache_index": Path(path).resolve()}
+    for index, entry in enumerate(entries):
+        binding = bind_cache_files(entry["metadata_path"])
+        evidence[f"{prefix}_cache_metadata:{index}"] = Path(binding["metadata_path"])
+        evidence[f"{prefix}_cache_tensors:{index}"] = Path(binding["tensors_path"])
+    return evidence
+
+
+def _load_control_cache_bundles(
+    entries: tuple[dict[str, object], ...],
+    records,
+    *,
+    manifest,
+    operation: Operation,
+    role: Role,
+    classifier: ClassifierProvenance,
+):
+    bundles = []
+    exam_keys = []
+    for entry in entries:
+        bundle = load_cache_bundle(
+            entry["metadata_path"],
+            expected_provenance=entry["provenance"],
+            manifest=manifest,
+            operation=operation,
+            role=role,
+        )
+        if bundle.provenance.checkpoint_sha256 != classifier.checkpoint_sha256:
+            raise ValueError("control cache classifier binding is stale")
+        bundles.append(bundle)
+        exam_keys.extend(bundle.provenance.exam_keys)
+    expected = tuple(record.exam_key for record in records)
+    if tuple(exam_keys) != expected or len(set(exam_keys)) != len(exam_keys):
+        raise ValueError("control caches must exactly follow the authorized manifest cohort")
+    return tuple(bundles)
+
+
+def _scalar_rows_from_control_caches(
+    entries: tuple[dict[str, object], ...],
+    records,
+    *,
+    manifest,
+    operation: Operation,
+    role: Role,
+    classifier: ClassifierProvenance,
+) -> ScalarControlRows:
+    bundles = _load_control_cache_bundles(
+        entries,
+        records,
+        manifest=manifest,
+        operation=operation,
+        role=role,
+        classifier=classifier,
+    )
+    return ScalarControlRows(
+        tuple(record.exam_key for record in records),
+        torch.cat(tuple(bundle.features.scores for bundle in bundles), dim=0),
+    )
+
+
+def _ds_rows_from_control_caches(
+    entries: tuple[dict[str, object], ...],
+    records,
+    *,
+    manifest,
+    operation: Operation,
+    role: Role,
+    classifier: ClassifierProvenance,
+) -> DSControlRows:
+    bundles = _load_control_cache_bundles(
+        entries,
+        records,
+        manifest=manifest,
+        operation=operation,
+        role=role,
+        classifier=classifier,
+    )
+    features = tuple(
+        build_ds_features(
+            bundle.features.logits_by_view,
+            bundle.features.observed_views,
+            fusion_pairs=bundle.features.fusion_pairs,
+        )
+        for bundle in bundles
+    )
+    pairs = features[0].fusion_pairs
+    if any(current.fusion_pairs != pairs for current in features):
+        raise ValueError("control caches mix classifier fusion trees")
+    combined = DSBaselineFeatures(
+        torch.cat(tuple(item.values for item in features), dim=0),
+        torch.cat(tuple(item.valid_mask for item in features), dim=0),
+        torch.cat(tuple(item.observed_mask for item in features), dim=0),
+        torch.cat(tuple(item.conflict_valid_mask for item in features), dim=0),
+        pairs,
+    )
+    return DSControlRows(
+        tuple(record.exam_key for record in records),
+        combined,
+        torch.cat(tuple(bundle.features.prediction for bundle in bundles), dim=0).long(),
+    )
+
+
+def _calibration_rows_from_control_caches(
+    method: str,
+    entries: tuple[dict[str, object], ...],
+    records,
+    *,
+    manifest,
+    classifier: ClassifierProvenance,
+) -> tuple[ScalarCalibrationRows, object]:
+    bundles = _load_control_cache_bundles(
+        entries,
+        records,
+        manifest=manifest,
+        operation=Operation.TUNE_SELECTION,
+        role=Role.TUNE,
+        classifier=classifier,
+    )
+    values = []
+    orientation = None
+    for bundle in bundles:
+        if method == "absolute_omission_sensitivity":
+            raw = prepare_raw_head_inputs(
+                bundle.features, backbone=bundle.provenance.backbone
+            )
+            result = absolute_omission_sensitivity(
+                raw.omission_score_differences, raw.removal_valid_mask
+            )
+        else:
+            result = scalar_baseline_scores(bundle.features.scores)[method]
+        if orientation is not None and result.orientation != orientation:
+            raise RuntimeError("scalar control orientation changed across cache batches")
+        orientation = result.orientation
+        values.append(result.values)
+    assert orientation is not None
+    return (
+        ScalarCalibrationRows(
+            tuple(record.exam_key for record in records),
+            torch.cat(tuple(values), dim=0),
+            torch.cat(tuple(bundle.features.prediction for bundle in bundles), dim=0).long(),
+        ),
+        orientation,
+    )
 
 def _evaluation_cache_index(path: str | Path) -> tuple[dict[str, object], ...]:
     _require_external_or_ignored_destination(Path(path).resolve())
@@ -537,6 +680,68 @@ def _evaluation_cache_index(path: str | Path) -> tuple[dict[str, object], ...]:
             }
         )
     return tuple(result)
+
+
+
+def _evaluation_cell_key(cell: Mapping[str, object]) -> tuple[object, ...]:
+    return (
+        cell["panel"],
+        cell["family"],
+        cell["severity"],
+        cell["target_view"],
+        cell["variant"],
+        cell["mask"],
+        cell["realization_id"],
+    )
+
+
+def _prevalidate_evaluation_cache_entries(
+    plan,
+    entries: tuple[dict[str, object], ...],
+    records,
+    *,
+    manifest,
+    expected_by_cell: Mapping[tuple[object, ...], set[str]] | None = None,
+) -> None:
+    """Validate all private metadata and exact cohorts before tensor access."""
+
+    record_by_exam = {record.exam_key: record for record in records}
+    expected_exams = set(record_by_exam)
+    seen: dict[tuple[object, ...], set[str]] = {}
+    for entry in entries:
+        cell = entry["cell"]
+        cell_key = _evaluation_cell_key(cell)
+        if expected_by_cell is not None and cell_key not in expected_by_cell:
+            raise ValueError("evaluation cache index contains an unrequested panel/cell")
+        provenance = load_cache_provenance(
+            entry["metadata_path"],
+            expected_provenance=entry["provenance"],
+            manifest=manifest,
+            operation=Operation.PILOT_EVALUATION,
+            role=Role.PILOT,
+        )
+        if (
+            provenance.batch_size != 1
+            or provenance.exam_keys[0] not in record_by_exam
+        ):
+            raise ValueError("evaluation cache must contain one authorized exam")
+        exam_key = provenance.exam_keys[0]
+        validate_evaluation_cache_provenance(
+            plan, provenance, cell, record_by_exam[exam_key]
+        )
+        group = seen.setdefault(cell_key, set())
+        if exam_key in group:
+            raise ValueError("evaluation cache index duplicates an authorized exam")
+        group.add(exam_key)
+    expected_cells = (
+        {cell: set(exams) for cell, exams in expected_by_cell.items()}
+        if expected_by_cell is not None
+        else {cell: expected_exams for cell in seen}
+    )
+    if set(seen) != set(expected_cells) or any(
+        seen[cell] != expected_cells[cell] for cell in expected_cells
+    ):
+        raise ValueError("every evaluation cell must contain the exact authorized exam cohort")
 
 
 def _tune_cache_index(path: str | Path) -> tuple[dict[str, object], ...]:
@@ -1036,13 +1241,27 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
         analytic_methods = RAW_CONTROL_METHODS | {"temperature_scaled_msp", "ds_logistic"}
         if args.method not in analytic_methods or args.seed not in config.seeds:
             raise ValueError("analytic control method/seed is outside the frozen table")
+        if args.calibrate_scalar and args.method not in RAW_CONTROL_METHODS:
+            raise ValueError("scalar calibration is available only for raw scalar controls")
+        needs_tune = args.method in {"temperature_scaled_msp", "ds_logistic"} or (
+            args.calibrate_scalar
+        )
+        classifier = load_selected_classifier_artifact(
+            args.classifier_artifact, expected_config=config
+        ).classifier
         tune_manifest = None
-        confidence_manifest = None
-        if args.method in {"temperature_scaled_msp", "ds_logistic"}:
+        tune_entries = None
+        tune_evidence = None
+        if needs_tune:
             if not all(
-                (args.tune_manifest, args.tune_manifest_binding, args.tune_private_root, args.tune_input)
+                (
+                    args.tune_manifest,
+                    args.tune_manifest_binding,
+                    args.tune_private_root,
+                    args.tune_cache_index,
+                )
             ):
-                raise ValueError("fitted analytic control requires complete tune inputs")
+                raise ValueError("fitted analytic control requires complete tune cache inputs")
             tune_manifest = load_role_manifest_for_operation(
                 args.tune_manifest,
                 expected=_manifest_binding(args.tune_manifest_binding),
@@ -1050,16 +1269,25 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
                 operation=Operation.TUNE_SELECTION,
                 role=Role.TUNE,
             )
+            tune_entries = _control_cache_index(
+                args.tune_cache_index, classifier=classifier
+            )
+            tune_evidence = _control_cache_evidence(
+                args.tune_cache_index, tune_entries, prefix="tune"
+            )
+        confidence_manifest = None
+        confidence_entries = None
+        confidence_evidence = None
         if args.method == "ds_logistic":
             if not all(
                 (
                     args.confidence_manifest,
                     args.confidence_manifest_binding,
                     args.confidence_private_root,
-                    args.confidence_input,
+                    args.confidence_cache_index,
                 )
             ):
-                raise ValueError("DS control requires complete confidence-fit inputs")
+                raise ValueError("DS control requires complete confidence-fit cache inputs")
             confidence_manifest = load_role_manifest_for_operation(
                 args.confidence_manifest,
                 expected=_manifest_binding(args.confidence_manifest_binding),
@@ -1067,10 +1295,29 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
                 operation=Operation.CONFIDENCE_FITTING,
                 role=Role.CONFIDENCE_FIT,
             )
-        classifier = load_selected_classifier_artifact(
-            args.classifier_artifact, expected_config=config
-        ).classifier
-        if args.method in RAW_CONTROL_METHODS:
+            confidence_entries = _control_cache_index(
+                args.confidence_cache_index, classifier=classifier
+            )
+            confidence_evidence = _control_cache_evidence(
+                args.confidence_cache_index,
+                confidence_entries,
+                prefix="confidence",
+            )
+        if args.method in RAW_CONTROL_METHODS and not args.calibrate_scalar:
+            if any(
+                value is not None
+                for value in (
+                    args.tune_manifest,
+                    args.tune_manifest_binding,
+                    args.tune_private_root,
+                    args.tune_cache_index,
+                    args.confidence_manifest,
+                    args.confidence_manifest_binding,
+                    args.confidence_private_root,
+                    args.confidence_cache_index,
+                )
+            ):
+                raise ValueError("raw ranking controls do not consume fitting caches")
             artifact = create_raw_control_artifact(
                 args.output,
                 method=args.method,
@@ -1078,20 +1325,53 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
                 classifier=classifier,
                 seed=args.seed,
             )
+        elif args.calibrate_scalar:
+            assert tune_manifest is not None and tune_entries is not None
+            rows, orientation = _calibration_rows_from_control_caches(
+                args.method,
+                tune_entries,
+                tune_manifest.records,
+                manifest=tune_manifest,
+                classifier=classifier,
+            )
+            artifact = fit_scalar_calibration_artifact_with_role_access(
+                args.output,
+                method=args.method,
+                orientation=orientation,
+                config=config,
+                classifier=classifier,
+                seed=args.seed,
+                tune_manifest=tune_manifest,
+                row_reader=lambda _records: rows,
+                tune_manifest_path=args.tune_manifest,
+                tune_evidence_files=tune_evidence,
+            )
         elif args.method == "temperature_scaled_msp":
-            assert tune_manifest is not None
+            assert tune_manifest is not None and tune_entries is not None
             artifact = fit_temperature_control_artifact_with_role_access(
                 args.output,
                 config=config,
                 classifier=classifier,
                 seed=args.seed,
                 tune_manifest=tune_manifest,
-                row_reader=lambda _records: _scalar_control_rows(args.tune_input),
+                row_reader=lambda records: _scalar_rows_from_control_caches(
+                    tune_entries,
+                    records,
+                    manifest=tune_manifest,
+                    operation=Operation.TUNE_SELECTION,
+                    role=Role.TUNE,
+                    classifier=classifier,
+                ),
                 tune_manifest_path=args.tune_manifest,
-                tune_input_path=args.tune_input,
+                tune_evidence_files=tune_evidence,
             )
         else:
-            assert tune_manifest is not None and confidence_manifest is not None
+            assert (
+                tune_manifest is not None
+                and tune_entries is not None
+                and confidence_manifest is not None
+                and confidence_entries is not None
+            )
             artifact = fit_ds_control_artifact_with_role_access(
                 args.output,
                 config=config,
@@ -1099,12 +1379,26 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
                 seed=args.seed,
                 confidence_manifest=confidence_manifest,
                 tune_manifest=tune_manifest,
-                confidence_reader=lambda _records: _ds_control_rows(args.confidence_input),
-                tune_reader=lambda _records: _ds_control_rows(args.tune_input),
+                confidence_reader=lambda records: _ds_rows_from_control_caches(
+                    confidence_entries,
+                    records,
+                    manifest=confidence_manifest,
+                    operation=Operation.CONFIDENCE_FITTING,
+                    role=Role.CONFIDENCE_FIT,
+                    classifier=classifier,
+                ),
+                tune_reader=lambda records: _ds_rows_from_control_caches(
+                    tune_entries,
+                    records,
+                    manifest=tune_manifest,
+                    operation=Operation.TUNE_SELECTION,
+                    role=Role.TUNE,
+                    classifier=classifier,
+                ),
                 confidence_manifest_path=args.confidence_manifest,
                 tune_manifest_path=args.tune_manifest,
-                confidence_input_path=args.confidence_input,
-                tune_input_path=args.tune_input,
+                confidence_evidence_files=confidence_evidence,
+                tune_evidence_files=tune_evidence,
             )
         return {
             "status": "control_fitted" if artifact.parameter_count else "control_recorded",
@@ -1248,12 +1542,48 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
     if args.command == "view-risk-freeze-classifier-predictions":
         if Path(args.output).resolve() != plan.authoritative_prediction_path:
             raise ValueError("output must be the plan-owned authoritative registration path")
+        entries = _evaluation_cache_index(args.cache_index)
+        _prevalidate_evaluation_cache_entries(
+            plan,
+            entries,
+            manifest.records,
+            manifest=manifest,
+        )
+        cache_files = tuple(bind_cache_files(entry["metadata_path"]) for entry in entries)
+
+        def prediction_reader(records):
+            record_by_exam = {record.exam_key: record for record in records}
+            rows = []
+            for entry in entries:
+                bundle = load_cache_bundle(
+                    entry["metadata_path"],
+                    expected_provenance=entry["provenance"],
+                    manifest=manifest,
+                    operation=Operation.PILOT_EVALUATION,
+                    role=Role.PILOT,
+                )
+                if (
+                    bundle.provenance.batch_size != 1
+                    or bundle.provenance.exam_keys[0] not in record_by_exam
+                ):
+                    raise ValueError("evaluation cache must contain one authorized exam")
+                rows.append(
+                    validate_evaluation_cache_bundle(
+                        plan,
+                        bundle,
+                        entry["cell"],
+                        record_by_exam[bundle.provenance.exam_keys[0]],
+                    )
+                )
+            return tuple(rows)
+
         predictions = freeze_authoritative_predictions(
             plan.authoritative_prediction_path,
             plan,
             manifest=manifest,
             role=Role.PILOT,
-            prediction_reader=lambda _records: _classifier_prediction_rows(args.input),
+            prediction_reader=prediction_reader,
+            source_cache_files=cache_files,
         )
         return {
             "status": "classifier_predictions_frozen",
@@ -1286,13 +1616,20 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
         )
 
         def score_reader(records, panel_rows):
-            del records
+            record_by_exam = {record.exam_key: record for record in records}
             entries = _evaluation_cache_index(args.cache_index)
             expected_by_cell: dict[tuple[object, ...], set[str]] = {}
             prediction_by_key = {}
             for row in panel_rows:
                 expected_by_cell.setdefault(row.cell_key, set()).add(row.exam_id)
                 prediction_by_key[row.row_key] = row.prediction
+            _prevalidate_evaluation_cache_entries(
+                plan,
+                entries,
+                records,
+                manifest=manifest,
+                expected_by_cell=expected_by_cell,
+            )
             seen: dict[tuple[object, ...], set[str]] = {
                 cell: set() for cell in expected_by_cell
             }
@@ -1318,6 +1655,19 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
                     operation=Operation.PILOT_EVALUATION,
                     role=Role.PILOT,
                 )
+                if (
+                    bundle.provenance.batch_size != 1
+                    or bundle.provenance.exam_keys[0] not in record_by_exam
+                ):
+                    raise ValueError("evaluation cache must contain one authorized exam")
+                validated = validate_evaluation_cache_bundle(
+                    plan,
+                    bundle,
+                    cell_value,
+                    record_by_exam[bundle.provenance.exam_keys[0]],
+                )
+                if validated.row_key not in prediction_by_key:
+                    raise ValueError("evaluation cache realization is not authoritative")
                 if (
                     bundle.provenance.checkpoint_sha256
                     != plan.classifier.checkpoint_sha256

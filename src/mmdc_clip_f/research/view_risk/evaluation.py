@@ -13,13 +13,22 @@ from typing import Callable, Mapping, Sequence, TypeVar
 from mmdc_clip_f.provenance import sha256_file
 
 from .artifacts import CONTROL_ARTIFACT_VERSION, ControlArtifact, load_control_artifact
-from .cache import _require_external_or_ignored_destination
+from .cache import (
+    CacheBundle,
+    CacheProvenance,
+    _require_external_or_ignored_destination,
+    bind_cache_files,
+    verify_cache_file_binding,
+)
+from .fusion import DDSM_FUSION_PAIRS, RSNA_FUSION_PAIRS
 from .inputs import CANONICAL_VIEWS
 from .metrics import EvaluationPrediction, confidence_panel_metrics, evaluate_aurc_panel
 from .perturbations import (
     FITTING_FAMILIES,
     FITTING_SEVERITIES,
+    PerturbationSpec,
     enumerate_evaluation_panels,
+    resolve_parameters,
 )
 from .roles import Operation, PrivateExamRecord, Role, RoleManifest, run_with_role_access
 from .training import (
@@ -37,7 +46,7 @@ from .training import (
 
 PILOT_PLAN_VERSION = "view-risk-pilot-plan/v2"
 PILOT_PLAN_ENVELOPE_VERSION = "view-risk-pilot-plan-envelope/v2"
-PREDICTION_SET_VERSION = "view-risk-authoritative-predictions/v1"
+PREDICTION_SET_VERSION = "view-risk-authoritative-predictions/v2"
 TUNE_GUARDRAIL = 0.005
 
 
@@ -57,6 +66,42 @@ def _is_sha256(value: object) -> bool:
     except ValueError:
         return False
     return value == value.lower()
+
+
+def _tune_cache_file_bindings(path: str | Path) -> tuple[dict[str, str], ...]:
+    """Bind every cache pair referenced by an accepted tune-cache index."""
+
+    source = Path(path).resolve()
+    _require_external_or_ignored_destination(source)
+    try:
+        value = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("tune cache evidence is unavailable or invalid") from exc
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != {"schema_version", "entries"}
+        or value["schema_version"] != "view-risk-tune-cache-index/v1"
+        or not isinstance(value["entries"], list)
+        or not value["entries"]
+    ):
+        raise ValueError("tune cache evidence has an invalid schema")
+    bindings = []
+    paths = set()
+    expected_entry = {
+        "family", "severity", "target_view", "metadata_path", "provenance"
+    }
+    for entry in value["entries"]:
+        if not isinstance(entry, Mapping) or set(entry) != expected_entry:
+            raise ValueError("tune cache evidence entry has an invalid schema")
+        metadata_path = entry["metadata_path"]
+        if not isinstance(metadata_path, str) or not Path(metadata_path).is_absolute():
+            raise ValueError("tune cache evidence paths must be absolute")
+        resolved = str(Path(metadata_path).resolve())
+        if resolved in paths:
+            raise ValueError("tune cache evidence contains duplicate cache paths")
+        paths.add(resolved)
+        bindings.append(bind_cache_files(resolved))
+    return tuple(bindings)
 
 
 def _evaluation_stress_table_sha256() -> str:
@@ -623,18 +668,27 @@ class ModelArtifactSelection:
         if expected_kind.get(current.method) != current.evidence_kind:
             raise ValueError("control artifact fitting evidence disagrees with its method")
         if classifier.kind == "public_pretrained_fresh":
-            required_evidence = {
-                "temperature_scaled_msp": {"tune_manifest", "tune_rows"},
-                "ds_logistic": {
-                    "confidence_manifest",
-                    "confidence_rows",
-                    "tune_manifest",
-                    "tune_rows",
-                },
-            }.get(current.method, set())
-            if {purpose for purpose, _path, _digest in current.evidence_files} != (
-                required_evidence
-            ):
+            purposes = {purpose for purpose, _path, _digest in current.evidence_files}
+            if current.method == "temperature_scaled_msp":
+                valid_evidence = (
+                    {"tune_manifest", "tune_cache_index"}.issubset(purposes)
+                    and any(item.startswith("tune_cache_metadata:") for item in purposes)
+                    and any(item.startswith("tune_cache_tensors:") for item in purposes)
+                )
+            elif current.method == "ds_logistic":
+                valid_evidence = (
+                    {
+                        "confidence_manifest", "confidence_cache_index",
+                        "tune_manifest", "tune_cache_index",
+                    }.issubset(purposes)
+                    and any(item.startswith("confidence_cache_metadata:") for item in purposes)
+                    and any(item.startswith("confidence_cache_tensors:") for item in purposes)
+                    and any(item.startswith("tune_cache_metadata:") for item in purposes)
+                    and any(item.startswith("tune_cache_tensors:") for item in purposes)
+                )
+            else:
+                valid_evidence = not purposes
+            if not valid_evidence:
                 raise ValueError("production control fitting evidence is incomplete")
         return cls(
             method=current.method,
@@ -775,8 +829,13 @@ class ModelArtifactSelection:
         staging = evidence.with_name(f".{evidence.name}.{os.getpid()}.tmp")
         for candidate in (evidence, staging):
             _require_external_or_ignored_destination(candidate)
+        tune_cache_files = (
+            None
+            if tune_evidence_path is None
+            else list(_tune_cache_file_bindings(tune_evidence_path))
+        )
         payload = {
-            "schema_version": "view-risk-learned-selection-evidence/v2",
+            "schema_version": "view-risk-learned-selection-evidence/v3",
             "method": method,
             "seed": seed,
             "config_sha256": config.sha256,
@@ -803,6 +862,7 @@ class ModelArtifactSelection:
                 if tune_evidence_path is None
                 else sha256_file(Path(tune_evidence_path).resolve())
             ),
+            "tune_cache_files": tune_cache_files,
             "reference": _checkpoint_payload(clean_reference),
             "selected": _checkpoint_payload(selected),
             "checkpoint_results": [
@@ -919,6 +979,7 @@ def _read_learned_selection_evidence(path: str | Path) -> tuple[Mapping[str, obj
         "training_artifact_file_sha256",
         "tune_evidence_path",
         "tune_evidence_file_sha256",
+        "tune_cache_files",
         "reference",
         "selected",
         "checkpoint_results",
@@ -928,7 +989,7 @@ def _read_learned_selection_evidence(path: str | Path) -> tuple[Mapping[str, obj
     if (
         not isinstance(value, Mapping)
         or set(value) != expected
-        or value["schema_version"] != "view-risk-learned-selection-evidence/v2"
+        or value["schema_version"] != "view-risk-learned-selection-evidence/v3"
     ):
         raise ValueError("learned selection evidence schema is invalid")
     return value, source
@@ -1028,6 +1089,18 @@ def load_model_artifact_selection(
         or payload["eligible"] is not True
     ):
         raise ValueError("learned selection training/budget evidence is incomplete")
+    tune_evidence_path = payload["tune_evidence_path"]
+    stored_tune_cache_files = payload["tune_cache_files"]
+    if tune_evidence_path is None:
+        if stored_tune_cache_files is not None:
+            raise ValueError("learned selection has unexpected tune-cache bindings")
+    elif (
+        not isinstance(tune_evidence_path, str)
+        or not isinstance(stored_tune_cache_files, list)
+        or list(_tune_cache_file_bindings(tune_evidence_path))
+        != stored_tune_cache_files
+    ):
+        raise ValueError("learned selection tune-cache evidence changed")
     if classifier.kind == "public_pretrained_fresh":
         if training.software_only != (not classifier.patient_readiness_verified):
             raise ValueError(
@@ -1743,6 +1816,231 @@ class FrozenClassifierPrediction:
         }
 
 
+
+
+def _evaluation_cell_mode(cell: Mapping[str, object]) -> str:
+    expected = {
+        "panel", "family", "severity", "target_view", "variant", "mask",
+        "realization_id",
+    }
+    if not isinstance(cell, Mapping) or set(cell) != expected:
+        raise ValueError("evaluation cell has missing or unknown fields")
+    panel = cell["panel"]
+    mask = tuple(cell["mask"]) if not isinstance(cell["mask"], str) else ()
+    if not mask or mask != tuple(view for view in CANONICAL_VIEWS if view in mask):
+        raise ValueError("evaluation cell mask is invalid")
+    panels = enumerate_evaluation_panels()
+    family = cell["family"]
+    severity = cell["severity"]
+    target = cell["target_view"]
+    variant = cell["variant"]
+    if panel == "clean_four_view":
+        valid = (
+            mask == panels.clean_four_view
+            and family is None and severity is None and target is None and variant is None
+        )
+        mode = "clean"
+    elif panel == "clean_masks":
+        valid = (
+            mask in panels.clean_masks
+            and family is None and severity is None and target is None and variant is None
+        )
+        mode = "clean"
+    elif panel == "primary":
+        valid = mask == panels.clean_four_view and any(
+            family == current.family
+            and severity == current.severity
+            and target == current.target_view
+            and variant in current.variants
+            for current in panels.primary_cells
+        )
+        mode = "single"
+    elif panel == "strong_seen":
+        valid = mask == panels.clean_four_view and any(
+            family == current.family
+            and severity == current.severity
+            and target == current.target_view
+            and variant in current.variants
+            for current in panels.strong_seen_family_cells
+        )
+        mode = "single"
+    elif panel == "common_mode":
+        valid = mask == panels.clean_four_view and target is None and any(
+            family == current.family
+            and severity == current.severity
+            and variant in current.variants
+            for current in panels.common_mode_cells
+        )
+        mode = "common"
+    else:
+        valid = False
+        mode = "invalid"
+    if not valid:
+        raise ValueError("evaluation cell is outside the frozen P4A panel table")
+    return mode
+
+
+def evaluation_cache_cell_name(cell: Mapping[str, object]) -> str:
+    """Return the stable accepted seed namespace for one evaluation cell."""
+
+    _evaluation_cell_mode(cell)
+    return "/".join(
+        (
+            str(cell["panel"]),
+            str(cell["family"] or "clean"),
+            str(cell["severity"] or "none"),
+            str(cell["target_view"] or "all"),
+            str(cell["variant"] or "default"),
+            "-".join(cell["mask"]),
+        )
+    )
+
+
+def _expected_evaluation_spec(
+    plan: PilotPlan,
+    cell: Mapping[str, object],
+    record: PrivateExamRecord,
+) -> PerturbationSpec | None:
+    if _evaluation_cell_mode(cell) == "clean":
+        return None
+    return PerturbationSpec.for_sample(
+        str(cell["family"]),
+        str(cell["severity"]),
+        private_sample_key=f"{record.patient_key}\0{record.exam_key}",
+        cell=evaluation_cache_cell_name(cell),
+        seed=plan.stress_seed,
+        variant=cell["variant"],  # type: ignore[arg-type]
+    )
+
+
+def evaluation_cache_realization_id(
+    plan: PilotPlan,
+    bundle: CacheBundle | CacheProvenance,
+    cell: Mapping[str, object],
+    record: PrivateExamRecord,
+) -> str:
+    """Derive the immutable realization identity from cell, seed, and cache parent."""
+
+    if isinstance(bundle, CacheBundle):
+        provenance = bundle.provenance
+    elif isinstance(bundle, CacheProvenance):
+        provenance = bundle
+    else:
+        raise TypeError("evaluation realization identity requires cache provenance")
+
+    spec = _expected_evaluation_spec(plan, cell, record)
+    return _sha256_json(
+        {
+            "schema_version": "view-risk-evaluation-realization/v1",
+            "cell": evaluation_cache_cell_name(cell),
+            "stress_seed": plan.stress_seed,
+            "spec": None if spec is None else spec.to_dict(),
+            "parent_identity_sha256": provenance.parent_identity_sha256,
+            "observed_views": list(provenance.observed_views),
+        }
+    )
+
+
+def validate_evaluation_cache_provenance(
+    plan: PilotPlan,
+    provenance: CacheProvenance,
+    cell: Mapping[str, object],
+    record: PrivateExamRecord,
+) -> str:
+    """Validate one evaluation cell using metadata only, before tensor access."""
+
+    if not isinstance(provenance, CacheProvenance) or not isinstance(
+        record, PrivateExamRecord
+    ):
+        raise TypeError("evaluation metadata validation requires authorized provenance")
+    mode = _evaluation_cell_mode(cell)
+    classifier = plan.classifier
+    expected_fusion = (
+        RSNA_FUSION_PAIRS if plan.dataset == "RSNA" else DDSM_FUSION_PAIRS
+    )
+    if (
+        provenance.batch_size != 1
+        or provenance.exam_keys != (record.exam_key,)
+        or provenance.patient_keys != (record.patient_key,)
+        or provenance.role != Role.PILOT.value
+        or provenance.operation != Operation.PILOT_EVALUATION.value
+        or provenance.manifest_sha256
+        != dict(plan.manifest_sha256_by_role)[Role.PILOT.value]
+        or provenance.checkpoint_sha256 != classifier.checkpoint_sha256
+        or provenance.backbone != classifier.backbone
+        or provenance.hf_model != classifier.hf_model
+        or provenance.backbone_revision != classifier.revision
+        or provenance.image_size != classifier.image_size
+        or provenance.hidden_size != classifier.hidden_size
+        or provenance.preprocessing != classifier.preprocessing
+        or provenance.image_mean != classifier.image_mean
+        or provenance.image_std != classifier.image_std
+        or provenance.prompt_order != classifier.prompts
+        or provenance.fusion_pairs != expected_fusion
+        or provenance.observed_views != tuple(cell["mask"])
+    ):
+        raise ValueError("evaluation cache cohort/classifier/mask binding is stale")
+    expected_spec = _expected_evaluation_spec(plan, cell, record)
+    stressed = set(provenance.observed_views) if mode == "common" else {
+        cell["target_view"]
+    } if mode == "single" else set()
+    for view in provenance.observed_views:
+        metadata = provenance.perturbations[view]
+        if metadata is None:
+            raise ValueError("evaluation cache is missing complete perturbation metadata")
+        actual_spec = PerturbationSpec.from_dict(metadata["spec"])
+        if view not in stressed:
+            if actual_spec != PerturbationSpec("clean") or dict(metadata["parameters"]):
+                raise ValueError("evaluation cache perturbs a nominally clean view")
+            continue
+        if expected_spec is None:
+            raise ValueError("evaluation cache contains an undeclared perturbation")
+        if actual_spec != expected_spec:
+            raise ValueError("evaluation cache perturbation/seed/variant is stale")
+        parameters = dict(metadata["parameters"])
+        expected_parameters = resolve_parameters(expected_spec, provenance.image_size)
+        if expected_spec.family == "crop":
+            top = parameters.pop("top", None)
+            left = parameters.pop("left", None)
+            maximum = provenance.image_size - int(expected_parameters["crop_side"])
+            if (
+                isinstance(top, bool) or not isinstance(top, int)
+                or isinstance(left, bool) or not isinstance(left, int)
+                or not 0 <= top <= maximum or not 0 <= left <= maximum
+            ):
+                raise ValueError("evaluation crop realization parameters are invalid")
+        if parameters != expected_parameters:
+            raise ValueError("evaluation cache realized parameters are stale")
+    realization_id = evaluation_cache_realization_id(plan, provenance, cell, record)
+    if cell["realization_id"] != realization_id:
+        raise ValueError("evaluation cache realization identity is stale")
+    return realization_id
+
+
+def validate_evaluation_cache_bundle(
+    plan: PilotPlan,
+    bundle: CacheBundle,
+    cell: Mapping[str, object],
+    record: PrivateExamRecord,
+) -> FrozenClassifierPrediction:
+    """Validate a cache and return its frozen, label-free classifier prediction."""
+
+    if not isinstance(bundle, CacheBundle):
+        raise TypeError("evaluation cache validation requires a cache bundle")
+    realization_id = validate_evaluation_cache_provenance(
+        plan, bundle.provenance, cell, record
+    )
+    return FrozenClassifierPrediction(
+        exam_id=record.exam_key,
+        panel=str(cell["panel"]),
+        prediction=int(bundle.features.prediction[0]),
+        family=cell["family"],  # type: ignore[arg-type]
+        severity=cell["severity"],  # type: ignore[arg-type]
+        target_view=cell["target_view"],  # type: ignore[arg-type]
+        variant=cell["variant"],  # type: ignore[arg-type]
+        mask=tuple(cell["mask"]),
+        realization_id=realization_id,
+    )
 _AUTHORITATIVE_PREDICTION_TOKEN = object()
 
 
@@ -1752,6 +2050,7 @@ class AuthoritativePredictionSet:
     classifier_checkpoint_sha256: str
     manifest_sha256: str
     rows: tuple[FrozenClassifierPrediction, ...]
+    cache_files: tuple[dict[str, str], ...]
     sha256: str
     source_path: Path | None
 
@@ -1762,6 +2061,7 @@ class AuthoritativePredictionSet:
         classifier_checkpoint_sha256: str,
         manifest_sha256: str,
         rows: Sequence[FrozenClassifierPrediction],
+        cache_files: Sequence[Mapping[str, object]] = (),
         source_path: str | Path | None,
         _factory_token: object,
     ) -> None:
@@ -1773,17 +2073,24 @@ class AuthoritativePredictionSet:
         materialized = tuple(rows)
         if not materialized or len({row.row_key for row in materialized}) != len(materialized):
             raise ValueError("authoritative classifier predictions are empty or duplicated")
+        bound_files = tuple(dict(binding) for binding in cache_files)
+        if len({binding.get("metadata_path") for binding in bound_files}) != len(bound_files):
+            raise ValueError("authoritative cache bindings are duplicated")
+        for binding in bound_files:
+            verify_cache_file_binding(binding)
         payload = {
             "schema_version": PREDICTION_SET_VERSION,
             "plan_sha256": plan_sha256,
             "classifier_checkpoint_sha256": classifier_checkpoint_sha256,
             "manifest_sha256": manifest_sha256,
             "rows": [row.to_dict() for row in materialized],
+            "cache_files": list(bound_files),
         }
         object.__setattr__(self, "plan_sha256", plan_sha256)
         object.__setattr__(self, "classifier_checkpoint_sha256", classifier_checkpoint_sha256)
         object.__setattr__(self, "manifest_sha256", manifest_sha256)
         object.__setattr__(self, "rows", materialized)
+        object.__setattr__(self, "cache_files", bound_files)
         object.__setattr__(self, "sha256", _sha256_json(payload))
         object.__setattr__(
             self, "source_path", None if source_path is None else Path(source_path).resolve()
@@ -1796,6 +2103,7 @@ class AuthoritativePredictionSet:
             "classifier_checkpoint_sha256": self.classifier_checkpoint_sha256,
             "manifest_sha256": self.manifest_sha256,
             "rows": [row.to_dict() for row in self.rows],
+            "cache_files": list(self.cache_files),
         }
 
 
@@ -1848,9 +2156,14 @@ def bind_authoritative_predictions_with_role_access(
     prediction_reader: Callable[
         [tuple[PrivateExamRecord, ...]], Sequence[FrozenClassifierPrediction]
     ],
+    source_cache_files: Sequence[Mapping[str, object]] = (),
 ) -> AuthoritativePredictionSet:
     """Bind post-freeze, label-free classifier predictions to every pilot cell."""
 
+    if plan.classifier.kind == "public_pretrained_fresh" and not source_cache_files:
+        raise PermissionError(
+            "production authoritative predictions require verified evaluation caches"
+        )
     if role is not Role.PILOT:
         raise PermissionError("only pilot label-free predictions may be bound")
     if dict(plan.manifest_sha256_by_role)[Role.PILOT.value] != manifest.manifest_sha256:
@@ -1875,6 +2188,7 @@ def bind_authoritative_predictions_with_role_access(
             classifier_checkpoint_sha256=plan.classifier.checkpoint_sha256,
             manifest_sha256=manifest.manifest_sha256,
             rows=rows,
+            cache_files=source_cache_files,
             source_path=None,
             _factory_token=_AUTHORITATIVE_PREDICTION_TOKEN,
         )
@@ -1896,6 +2210,7 @@ def freeze_authoritative_predictions(
     prediction_reader: Callable[
         [tuple[PrivateExamRecord, ...]], Sequence[FrozenClassifierPrediction]
     ],
+    source_cache_files: Sequence[Mapping[str, object]] = (),
 ) -> AuthoritativePredictionSet:
     """Exclusively persist the one reusable, private classifier-prediction set."""
 
@@ -1905,7 +2220,11 @@ def freeze_authoritative_predictions(
     if target.exists():
         raise FileExistsError("authoritative predictions are already registered for this plan")
     bound = bind_authoritative_predictions_with_role_access(
-        plan, manifest=manifest, role=role, prediction_reader=prediction_reader
+        plan,
+        manifest=manifest,
+        role=role,
+        prediction_reader=prediction_reader,
+        source_cache_files=source_cache_files,
     )
     if target.suffix != ".json" or not target.parent.exists():
         raise ValueError("classifier prediction artifact must be JSON in an existing directory")
@@ -1927,6 +2246,7 @@ def freeze_authoritative_predictions(
         classifier_checkpoint_sha256=bound.classifier_checkpoint_sha256,
         manifest_sha256=bound.manifest_sha256,
         rows=bound.rows,
+        cache_files=bound.cache_files,
         source_path=target,
         _factory_token=_AUTHORITATIVE_PREDICTION_TOKEN,
     )
@@ -1954,6 +2274,7 @@ def load_authoritative_predictions_with_role_access(
                 "classifier_checkpoint_sha256",
                 "manifest_sha256",
                 "rows",
+                "cache_files",
             }:
                 raise ValueError
             rows = tuple(
@@ -1967,9 +2288,14 @@ def load_authoritative_predictions_with_role_access(
             classifier_checkpoint_sha256=payload["classifier_checkpoint_sha256"],
             manifest_sha256=payload["manifest_sha256"],
             rows=rows,
+            cache_files=payload["cache_files"],
             source_path=path,
             _factory_token=_AUTHORITATIVE_PREDICTION_TOKEN,
         )
+        if plan.classifier.kind == "public_pretrained_fresh" and not result.cache_files:
+            raise PermissionError(
+                "production authoritative predictions require verified evaluation caches"
+            )
         if document["sha256"] != result.sha256:
             raise ValueError("classifier prediction artifact integrity check failed")
         if (
@@ -2264,6 +2590,8 @@ __all__ = [
     "bind_authoritative_predictions_with_role_access",
     "evaluate_pilot_with_role_access",
     "evaluate_prediction_panel_with_role_access",
+    "evaluation_cache_cell_name",
+    "evaluation_cache_realization_id",
     "evaluate_tune_cells_with_role_access",
     "freeze_authoritative_predictions",
     "freeze_pilot_plan",
@@ -2276,5 +2604,7 @@ __all__ = [
     "select_candidate_checkpoint",
     "select_clean_reference",
     "select_fresh_classifier_on_tune",
+    "validate_evaluation_cache_bundle",
+    "validate_evaluation_cache_provenance",
     "validate_checkpoint_selection_budget",
 ]

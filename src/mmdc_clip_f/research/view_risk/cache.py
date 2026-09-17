@@ -821,6 +821,42 @@ def _read_document(path: Path) -> dict[str, object]:
     return value
 
 
+def bind_cache_files(metadata_path: str | Path) -> dict[str, str]:
+    """Validate and bind the actual bytes of one persisted cache pair."""
+
+    metadata = Path(metadata_path).resolve()
+    _require_external_or_ignored_destination(metadata)
+    document = _read_document(metadata)
+    tensor_file = document["tensor_file"]
+    if not isinstance(tensor_file, str) or Path(tensor_file).name != tensor_file:
+        raise ArtifactIntegrityError("cache tensor filename is unsafe")
+    tensors = (metadata.parent / tensor_file).resolve()
+    _require_external_or_ignored_destination(tensors)
+    try:
+        metadata_sha256 = sha256_file(metadata)
+        tensors_sha256 = sha256_file(tensors)
+    except OSError as exc:
+        raise ArtifactIntegrityError("cache artifact file is unavailable") from exc
+    if tensors_sha256 != document["tensor_file_sha256"]:
+        raise ArtifactIntegrityError("cache tensor file integrity check failed")
+    return {
+        "metadata_path": str(metadata),
+        "metadata_sha256": metadata_sha256,
+        "tensors_path": str(tensors),
+        "tensors_sha256": tensors_sha256,
+    }
+
+
+def verify_cache_file_binding(binding: Mapping[str, object]) -> None:
+    """Rehash a previously bound cache pair and reject missing or changed bytes."""
+
+    expected = {"metadata_path", "metadata_sha256", "tensors_path", "tensors_sha256"}
+    if not isinstance(binding, Mapping) or set(binding) != expected:
+        raise ValueError("cache file binding has missing or unknown fields")
+    if bind_cache_files(str(binding["metadata_path"])) != dict(binding):
+        raise ArtifactIntegrityError("cache metadata/tensor evidence changed")
+
+
 def _verify_expected(actual: CacheProvenance, expected: CacheProvenance) -> None:
     for field in fields(CacheProvenance):
         name = field.name
@@ -955,6 +991,62 @@ def _load_cache_bundle_authorized(
     return bundle
 
 
+def load_cache_provenance(
+    metadata_path: str | Path,
+    *,
+    expected_provenance: CacheProvenance,
+    manifest: RoleManifest,
+    operation: Operation,
+    role: Role,
+) -> CacheProvenance:
+    """Authorize and load cache metadata without opening target-bearing tensors."""
+
+    if not isinstance(expected_provenance, CacheProvenance):
+        raise TypeError("expected_provenance must be supplied as CacheProvenance")
+    try:
+        normalized_operation = Operation(operation)
+    except (TypeError, ValueError) as exc:
+        raise PermissionError("unknown research operation") from exc
+    if normalized_operation not in _CACHE_OPERATIONS:
+        raise PermissionError("operation is not authorized for cache metadata loading")
+    try:
+        normalized_role = Role(role)
+    except (TypeError, ValueError) as exc:
+        raise PermissionError("unknown research role") from exc
+
+    def authorized(records: tuple[PrivateExamRecord, ...]) -> CacheProvenance:
+        if expected_provenance.dataset_namespace != manifest.dataset_namespace:
+            raise ProvenanceMismatchError("expected provenance mismatch: dataset_namespace")
+        if expected_provenance.manifest_sha256 != manifest.manifest_sha256:
+            raise ProvenanceMismatchError("expected provenance mismatch: manifest_sha256")
+        if expected_provenance.role != normalized_role.value:
+            raise ProvenanceMismatchError("expected provenance mismatch: role")
+        if expected_provenance.operation != normalized_operation.value:
+            raise ProvenanceMismatchError("expected provenance mismatch: operation")
+        by_exam = {record.exam_key: record for record in records}
+        if any(exam_key not in by_exam for exam_key in expected_provenance.exam_keys):
+            raise ProvenanceMismatchError("expected provenance mismatch: exam_keys")
+        ordered_records = tuple(by_exam[key] for key in expected_provenance.exam_keys)
+        if tuple(record.patient_key for record in ordered_records) != (
+            expected_provenance.patient_keys
+        ):
+            raise ProvenanceMismatchError("expected provenance mismatch: patient_keys")
+        source = Path(metadata_path).resolve()
+        _require_external_or_ignored_destination(source)
+        document = _read_document(source)
+        try:
+            actual = CacheProvenance.from_dict(document["provenance"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ArtifactIntegrityError("cache provenance metadata is invalid") from exc
+        _verify_expected(actual, expected_provenance)
+        return actual
+
+    return run_with_role_access(
+        manifest,
+        operation=normalized_operation,
+        roles=(normalized_role,),
+        loader=authorized,
+    )
 def load_cache_bundle(
     metadata_path: str | Path,
     *,

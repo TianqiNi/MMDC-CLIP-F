@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import hashlib
 from dataclasses import replace
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from mmdc_clip_f.provenance import sha256_file
@@ -25,6 +27,8 @@ from mmdc_clip_f.research.view_risk.evaluation import (
     select_candidate_checkpoint,
     select_clean_reference,
     select_fresh_classifier_on_tune,
+    evaluation_cache_realization_id,
+    evaluation_cache_cell_name,
 )
 from mmdc_clip_f.research.view_risk.metrics import EvaluationPrediction
 from mmdc_clip_f.cli import build_parser, main
@@ -33,10 +37,21 @@ from mmdc_clip_f.research.view_risk.roles import (
     PatientMappingDeclaration,
     PrivateExamRecord,
     Role,
+    Operation,
     RoleManifest,
     ViewReference,
     save_private_manifest,
 )
+from mmdc_clip_f.research.view_risk.cache import (
+    build_exam_cache_with_role_access,
+    save_cache_bundle,
+)
+from mmdc_clip_f.research.view_risk.features import load_verified_frozen_encoder
+from mmdc_clip_f.research.view_risk.fusion import RSNA_FUSION_PAIRS
+from mmdc_clip_f.research.view_risk.perturbations import PerturbationSpec, realize_parent
+from mmdc_clip_f.research.view_risk.production import save_tensor_checkpoint
+from mmdc_clip_f.backbones import PROMPTS
+from mmdc_clip_f.model import MultiViewCLIPClassifier
 from mmdc_clip_f.research.view_risk.training import (
     MANDATORY_METHODS,
     ClassifierProvenance,
@@ -312,8 +327,12 @@ def test_fresh_classifier_selection_reads_only_tune_and_remains_software_only() 
         selected.require_pilot_eligible()
 
 
-def _selections(config: ResearchRunConfig, directory) -> tuple[ModelArtifactSelection, ...]:
-    classifier = _fresh_selected()
+def _selections(
+    config: ResearchRunConfig,
+    directory,
+    classifier: ClassifierProvenance | None = None,
+) -> tuple[ModelArtifactSelection, ...]:
+    classifier = _fresh_selected() if classifier is None else classifier
     result = []
     for index, (method, seed) in enumerate(
         (method, seed) for method in config.methods for seed in config.seeds
@@ -700,25 +719,59 @@ def test_pilot_cli_verifies_frozen_plan_before_opening_target_manifest(
 
 
 def test_one_plan_rejects_two_conflicting_authoritative_registrations(tmp_path) -> None:
+    class TinyCLIP(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.visual_projection = nn.Linear(768, 4, bias=False)
+            self.logit_scale = nn.Parameter(torch.tensor(0.0))
+
+            class Vision(nn.Module):
+                def forward(self, *, pixel_values):
+                    level = pixel_values.mean(dim=(1, 2, 3))
+                    pooled = level[:, None].repeat(1, 768)
+                    return SimpleNamespace(
+                        pooler_output=pooled,
+                        last_hidden_state=torch.stack((pooled, pooled + 0.1), dim=1),
+                    )
+
+            self.vision_model = Vision()
+
+        def get_text_features(self, *, input_ids):
+            return torch.nn.functional.one_hot(
+                input_ids[:, 0] % 4, num_classes=4
+            ).float()
+
     config = ResearchRunConfig.default("RSNA")
     manifest = _manifest(Role.PILOT, 2)
+    model = MultiViewCLIPClassifier(
+        TinyCLIP(),
+        ("L_CC", "L_MLO", "R_CC", "R_MLO"),
+        RSNA_FUSION_PAIRS,
+    )
+    checkpoint = save_tensor_checkpoint(model, tmp_path / "registry-classifier.safetensors")
+    encoder = load_verified_frozen_encoder(
+        model,
+        torch.arange(4).reshape(-1, 1),
+        checkpoint,
+        backbone=config.backbone,
+        prompts=PROMPTS,
+    )
+    classifier = ClassifierProvenance.fresh_selected(
+        ClassifierProvenance.synthetic_injected("vit_b_32", "a" * 64),
+        checkpoint_sha256=encoder.identity.checkpoint_sha256,
+        classifier_fit_manifest_sha256=_manifest(Role.CLASSIFIER_FIT).manifest_sha256,
+        classifier_fit_update_count=config.epochs,
+        tune_selection_sha256="e" * 64,
+        tune_manifest_sha256="f" * 64,
+        readiness=audit_software_fixture(_manifest(Role.CLASSIFIER_FIT)),
+    )
     plan = freeze_pilot_plan(
         tmp_path / "registry-plan.json",
         config=config,
         manifest_sha256_by_role=_manifest_hashes(manifest.manifest_sha256),
-        classifier=_fresh_selected(),
-        selections=_selections(config, tmp_path),
+        classifier=classifier,
+        selections=_selections(config, tmp_path, classifier),
     )
-
-    def predictions(value):
-        return tuple(
-            FrozenClassifierPrediction(
-                exam_id=record.exam_key,
-                panel="clean_four_view",
-                prediction=value,
-            )
-            for record in manifest.records
-        )
     config_path = tmp_path / "registry-config.json"
     config_path.write_text(json.dumps(config.to_dict()), encoding="utf-8")
     manifest_path = tmp_path / "registry-manifest.json"
@@ -735,19 +788,65 @@ def test_one_plan_rejects_two_conflicting_authoritative_registrations(tmp_path) 
         ),
         encoding="utf-8",
     )
-    first_input = tmp_path / "complete-predictions-a.json"
-    second_input = tmp_path / "complete-predictions-b.json"
-    first_input.write_text(
-        json.dumps({"predictions": [row.to_dict() for row in predictions(0)]}),
-        encoding="utf-8",
-    )
-    second_input.write_text(
-        json.dumps({"predictions": [row.to_dict() for row in predictions(1)]}),
-        encoding="utf-8",
-    )
+
+    def cache_index(name, level):
+        entries = []
+        for index, record in enumerate(manifest.records):
+            images = {
+                view: torch.full((3, 16, 16), level + 0.01 * view_index)
+                for view_index, view in enumerate(("L_CC", "L_MLO", "R_CC", "R_MLO"))
+            }
+            bundle = build_exam_cache_with_role_access(
+                manifest,
+                operation=Operation.PILOT_EVALUATION,
+                role=Role.PILOT,
+                exam_key=record.exam_key,
+                sample_key=f"{name}-{index}",
+                parent_loader=lambda _record, current=images: realize_parent(
+                    current, tuple(current)
+                ),
+                encoder=encoder,
+                implementation_revision="p4b-authoritative-regression",
+            )
+            metadata_path = save_cache_bundle(
+                bundle, tmp_path / f"{name}-{index}.json"
+            ).metadata
+            cell = {
+                "panel": "clean_four_view",
+                "family": None,
+                "severity": None,
+                "target_view": None,
+                "variant": None,
+                "mask": ["L_CC", "L_MLO", "R_CC", "R_MLO"],
+                "realization_id": "pending",
+            }
+            cell["realization_id"] = evaluation_cache_realization_id(
+                plan, bundle, cell, record
+            )
+            entries.append(
+                {
+                    "cell": cell,
+                    "metadata_path": str(metadata_path),
+                    "provenance": bundle.provenance.to_dict(),
+                }
+            )
+        path = tmp_path / f"{name}-index.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "view-risk-evaluation-cache-index/v1",
+                    "entries": entries,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path, entries
+
+    first_index, first_entries = cache_index("complete-cache-a", 0.2)
+    second_index, _second_entries = cache_index("complete-cache-b", 0.7)
     parser = build_parser()
 
-    def command(input_path, *, plan_path=plan.source_path, output_path=None):
+    def command(index_path, *, plan_path=plan.source_path, output_path=None):
         output_path = output_path or plan.authoritative_prediction_path
         return parser.parse_args(
             [
@@ -757,12 +856,136 @@ def test_one_plan_rejects_two_conflicting_authoritative_registrations(tmp_path) 
                 "--manifest", str(manifest_path),
                 "--manifest-binding", str(binding_path),
                 "--private-root", str(tmp_path),
-                "--input", str(input_path),
+                "--cache-index", str(index_path),
                 "--output", str(output_path),
             ]
         )
 
-    first = run_view_risk_command(command(first_input))
+    relabeled_index, _relabeled_entries = cache_index("relabeled-source", 0.3)
+    relabeled = json.loads(relabeled_index.read_text())
+    relabeled_tensor = Path(relabeled["entries"][0]["metadata_path"]).with_suffix(
+        ".safetensors"
+    )
+    relabeled_tensor.write_bytes(b"must not be opened before stress validation")
+    relabeled["entries"][0]["cell"].update(
+        {
+            "panel": "primary",
+            "family": "contrast",
+            "severity": "mild",
+            "target_view": "L_CC",
+        }
+    )
+    relabeled_path = tmp_path / "relabeled-clean-index.json"
+    relabeled_path.write_text(json.dumps(relabeled), encoding="utf-8")
+    with pytest.raises(ValueError, match="perturbation|realization"):
+        run_view_risk_command(command(relabeled_path))
+
+    wrong_realization = json.loads(first_index.read_text())
+    wrong_realization["entries"][0]["cell"]["realization_id"] = "wrong-realization"
+    wrong_realization_path = tmp_path / "wrong-realization-index.json"
+    wrong_realization_path.write_text(json.dumps(wrong_realization), encoding="utf-8")
+    with pytest.raises(ValueError, match="realization"):
+        run_view_risk_command(command(wrong_realization_path))
+
+    wrong_mask = json.loads(first_index.read_text())
+    wrong_mask["entries"][0]["cell"]["mask"] = ["L_CC"]
+    wrong_mask_path = tmp_path / "wrong-mask-index.json"
+    wrong_mask_path.write_text(json.dumps(wrong_mask), encoding="utf-8")
+    with pytest.raises(ValueError, match="panel|mask"):
+        run_view_risk_command(command(wrong_mask_path))
+
+    def mismatched_stress_index(name, cell, actual_spec):
+        record = manifest.records[0]
+        images = {
+            view: torch.full((3, 16, 16), 0.25 + 0.01 * index)
+            for index, view in enumerate(("L_CC", "L_MLO", "R_CC", "R_MLO"))
+        }
+        bundle = build_exam_cache_with_role_access(
+            manifest,
+            operation=Operation.PILOT_EVALUATION,
+            role=Role.PILOT,
+            exam_key=record.exam_key,
+            sample_key=name,
+            parent_loader=lambda _record: realize_parent(
+                images, tuple(images), perturbations={"L_CC": actual_spec}
+            ),
+            encoder=encoder,
+            implementation_revision="p4b-evaluation-mismatch-regression",
+        )
+        metadata_path = save_cache_bundle(bundle, tmp_path / f"{name}.json").metadata
+        cell["realization_id"] = evaluation_cache_realization_id(
+            plan, bundle, cell, record
+        )
+        path = tmp_path / f"{name}-index.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "view-risk-evaluation-cache-index/v1",
+                    "entries": [
+                        {
+                            "cell": cell,
+                            "metadata_path": str(metadata_path),
+                            "provenance": bundle.provenance.to_dict(),
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    wrong_seed_cell = {
+        "panel": "primary",
+        "family": "contrast",
+        "severity": "mild",
+        "target_view": "L_CC",
+        "variant": None,
+        "mask": ["L_CC", "L_MLO", "R_CC", "R_MLO"],
+        "realization_id": "pending",
+    }
+    record = manifest.records[0]
+    wrong_seed_spec = PerturbationSpec.for_sample(
+        "contrast",
+        "mild",
+        private_sample_key=f"{record.patient_key}\0{record.exam_key}",
+        cell=evaluation_cache_cell_name(wrong_seed_cell),
+        seed=7,
+    )
+    with pytest.raises(ValueError, match="seed|perturbation"):
+        run_view_risk_command(
+            command(
+                mismatched_stress_index(
+                    "wrong-seed-cache", wrong_seed_cell, wrong_seed_spec
+                )
+            )
+        )
+
+    wrong_variant_cell = {
+        "panel": "primary",
+        "family": "brightness",
+        "severity": "mild",
+        "target_view": "L_CC",
+        "variant": "upper",
+        "mask": ["L_CC", "L_MLO", "R_CC", "R_MLO"],
+        "realization_id": "pending",
+    }
+    wrong_variant_spec = PerturbationSpec.for_sample(
+        "brightness",
+        "mild",
+        private_sample_key=f"{record.patient_key}\0{record.exam_key}",
+        cell=evaluation_cache_cell_name(wrong_variant_cell),
+        seed=plan.stress_seed,
+        variant="lower",
+    )
+    with pytest.raises(ValueError, match="variant|perturbation"):
+        run_view_risk_command(
+            command(
+                mismatched_stress_index(
+                    "wrong-variant-cache", wrong_variant_cell, wrong_variant_spec
+                )
+            )
+        )
+    first = run_view_risk_command(command(first_index))
     assert first["status"] == "classifier_predictions_frozen"
     copied_plan = tmp_path / "copied-registry-plan.json"
     copied_plan.write_bytes(plan.source_path.read_bytes())
@@ -770,7 +993,7 @@ def test_one_plan_rejects_two_conflicting_authoritative_registrations(tmp_path) 
     with pytest.raises((FileExistsError, ValueError), match="registered|authoritative|exist"):
         run_view_risk_command(
             command(
-                second_input,
+                second_index,
                 plan_path=copied_plan,
                 output_path=copied_registry,
             )
@@ -782,3 +1005,4 @@ def test_one_plan_rejects_two_conflicting_authoritative_registrations(tmp_path) 
         role=Role.PILOT,
     )
     assert loaded.sha256 == first["prediction_sha256"]
+    assert len(loaded.cache_files) == len(first_entries)
