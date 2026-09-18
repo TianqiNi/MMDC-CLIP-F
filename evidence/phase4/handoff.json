@@ -1,9 +1,9 @@
 {
-  "status": "P4A and P4B accepted; P4C next; publication pending",
-  "recorded_at_utc": "2026-09-18T19:30:00Z",
+  "status": "P4A and P4B accepted, published and cleaned up; P4C next",
+  "recorded_at_utc": "2026-09-18T19:34:40.939724+00:00",
   "latest_reviewed_candidate": "94c0e4a70f681392abd6d77ea2034d93507f1d54",
   "integrated_source_commit": "02c522345303166e0afae996a4c53874c750555f",
-  "source_integrated_to_remote": false,
+  "source_integrated_to_remote": true,
   "implementation_thread": "01a09172-4253-74b1-9029-76254f159a8c",
   "implementation_model": "gpt-5.6-sol",
   "implementation_effort": "xhigh",
@@ -17,5 +17,7 @@
     "P5"
   ],
   "no_real_data_training_or_pilot": true,
-  "next_action": "Complete P4B publication and task-owned cleanup, then P4C is the next task. Do not start P5 before P4C and G4 pass."
+  "next_action": "P4C smoke integration, cost procedure and CI. Then G4 phase gate; no P5 before Phase 4 acceptance.",
+  "publication_record": "evidence/phase4/p4b-publication.json",
+  "cleanup_record": "evidence/phase4/p4b-cleanup.json"
 }

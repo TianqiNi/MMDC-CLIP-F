@@ -1,10 +1,10 @@
 # Intervention-supervised MV-ACN implementation ledger
 
-Current status: **P1-P3 and tasks P4A/P4B are accepted.** P4B passed fresh
+Current status: **P1-P3 and tasks P4A/P4B are accepted and pushed in draft PR #1.** P4B passed fresh
 independent review at `94c0e4a` with no actionable Critical, High, or Medium
 findings and 261 research tests. Its source is integrated at `02c5223`; source,
 tests and dependency files match the reviewed candidate exactly. Publication
-and cleanup are recorded in `evidence/phase4/p4b-publication.json` when complete.
+and completed task cleanup are recorded in `evidence/phase4/p4b-publication.json`.
 P4C, G4 and P5 remain pending; Phase 4 as a whole is not yet accepted. No real
 classifier/confidence training, patient pilot or empirical improvement is claimed.
 The current continuation state is `evidence/phase4/handoff.json`; earlier rejected

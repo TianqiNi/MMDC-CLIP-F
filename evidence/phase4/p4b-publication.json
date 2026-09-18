@@ -1,0 +1,17 @@
+{
+  "status": "P4B accepted, published and cleaned up",
+  "published_history_commit": "3abcfc7069de70ed22c1988cc639776c8d9aba55",
+  "reviewed_candidate": "94c0e4a70f681392abd6d77ea2034d93507f1d54",
+  "integrated_source_commit": "02c522345303166e0afae996a4c53874c750555f",
+  "remote": "origin",
+  "branch": "research/intervention-supervised-confidence",
+  "pr_url": "https://github.com/TianqiNi/MMDC-CLIP-F/pull/1",
+  "pr_updated_at_utc": "2026-09-18T19:31:47Z",
+  "recorded_at_utc": "2026-09-18T19:34:40.939724+00:00",
+  "research_tests_passed": 261,
+  "review_decision": "PASS; no actionable Critical, High or Medium findings",
+  "cleanup_record": "evidence/phase4/p4b-cleanup.json",
+  "phase4_gate": "pending",
+  "next_task": "P4C smoke integration and costs; G4 afterward; no P5 before phase acceptance",
+  "no_real_data_training_or_pilot": true
+}
