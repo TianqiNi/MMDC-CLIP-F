@@ -1,0 +1,50 @@
+{
+  "status": "candidate_unreviewed",
+  "launch": {
+    "name": "p4-training-fix7",
+    "model": "gpt-5.6-sol",
+    "effort": "xhigh",
+    "cwd": "/home/tianqini/research/.ivr-p4-worktrees/p4-training",
+    "pane": "wP:p1",
+    "deadline": "2026-09-19T00:02:09Z",
+    "resume": "01a09172-4253-74b1-9029-76254f159a8c",
+    "ref": "HEAD"
+  },
+  "checks": [
+    {
+      "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest tests/research/test_view_risk_training.py::test_public_research_config_rejects_non_protocol_optimizer --basetemp=.cache/pytest-p4b-red -q'",
+      "exit_code": 1,
+      "output_tail": "non_protocol_optimizer(\n        field: str, value: float | int\n    ) -> None:\n        default = ResearchRunConfig.default(\"RSNA\", \"vit_b_32\")\n        payload = default.to_dict()\n        optimizer = dict(payload[\"optimizer\"])\n        optimizer[field] = value\n        payload[\"optimizer\"] = optimizer\n    \n>       with pytest.raises(ValueError, match=\"frozen protocol optimizer\"):\nE       Failed: DID NOT RAISE <class 'ValueError'>\n\ntests/research/test_view_risk_training.py:147: Failed\n___ test_public_research_config_rejects_non_protocol_optimizer[batch_size-3] ___\n\nfield = 'batch_size', value = 3\n\n    @pytest.mark.parametrize(\n        (\"field\", \"value\"),\n        (\n            (\"learning_rate\", 2e-4),\n            (\"weight_decay\", 1e-3),\n            (\"batch_size\", 3),\n        ),\n    )\n    def test_public_research_config_rejects_non_protocol_optimizer(\n        field: str, value: float | int\n    ) -> None:\n        default = ResearchRunConfig.default(\"RSNA\", \"vit_b_32\")\n        payload = default.to_dict()\n        optimizer = dict(payload[\"optimizer\"])\n        optimizer[field] = value\n        payload[\"optimizer\"] = optimizer\n    \n>       with pytest.raises(ValueError, match=\"frozen protocol optimizer\"):\nE       Failed: DID NOT RAISE <class 'ValueError'>\n\ntests/research/test_view_risk_training.py:147: Failed\n=========================== short test summary info ============================\nFAILED tests/research/test_view_risk_training.py::test_public_research_config_rejects_non_protocol_optimizer[learning_rate-0.0002]\nFAILED tests/research/test_view_risk_training.py::test_public_research_config_rejects_non_protocol_optimizer[weight_decay-0.001]\nFAILED tests/research/test_view_risk_training.py::test_public_research_config_rejects_non_protocol_optimizer[batch_size-3]\n3 failed in 0.62s\n"
+    },
+    {
+      "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest tests/research/test_view_risk_training.py::test_defaults_are_frozen_complete_and_unknown_configuration_is_rejected tests/research/test_view_risk_training.py::test_public_research_config_rejects_non_protocol_optimizer tests/research/test_view_risk_training.py::test_optimizer_updates_resume_exactly_and_preserves_frozen_module --basetemp=.cache/pytest-p4b-targeted -q'",
+      "exit_code": 1,
+      "output_tail": "....E                                                                    [100%]\n==================================== ERRORS ====================================\n_ ERROR at setup of test_optimizer_updates_resume_exactly_and_preserves_frozen_module _\n\nself = PosixPath('/home/tianqini/research/.ivr-p4-worktrees/p4-training/.cache/pytest-p4b-targeted')\nmode = 448, parents = False, exist_ok = False\n\n    def mkdir(self, mode=0o777, parents=False, exist_ok=False):\n        \"\"\"\n        Create a new directory at this given path.\n        \"\"\"\n        try:\n>           os.mkdir(self, mode)\nE           FileNotFoundError: [Errno 2] No such file or directory: '/home/tianqini/research/.ivr-p4-worktrees/p4-training/.cache/pytest-p4b-targeted'\n\n../../../anaconda3/envs/te-clip/lib/python3.11/pathlib.py:1116: FileNotFoundError\n=========================== short test summary info ============================\nERROR tests/research/test_view_risk_training.py::test_optimizer_updates_resume_exactly_and_preserves_frozen_module\n4 passed, 1 error in 0.62s\n"
+    },
+    {
+      "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest tests/research/test_view_risk_training.py::test_defaults_are_frozen_complete_and_unknown_configuration_is_rejected tests/research/test_view_risk_training.py::test_public_research_config_rejects_non_protocol_optimizer tests/research/test_view_risk_training.py::test_optimizer_updates_resume_exactly_and_preserves_frozen_module --basetemp=.cache/pytest-p4b-targeted -q'",
+      "exit_code": 0,
+      "output_tail": ".....                                                                    [100%]\n=============================== warnings summary ===============================\ntests/research/test_view_risk_training.py::test_optimizer_updates_resume_exactly_and_preserves_frozen_module\n  /home/tianqini/research/MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/cuda/__init__.py:619: UserWarning: Can't initialize NVML\n    warnings.warn(\"Can't initialize NVML\")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n5 passed, 1 warning in 0.90s\n"
+    },
+    {
+      "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src tests/research'",
+      "exit_code": 0,
+      "output_tail": "All checks passed!\n"
+    },
+    {
+      "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m compileall -q src tests/research'",
+      "exit_code": 0,
+      "output_tail": ""
+    },
+    {
+      "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest tests/research --basetemp=.cache/pytest-p4b-full -q'",
+      "exit_code": 0,
+      "output_tail": "........................................................................ [ 27%]\n........................................................................ [ 55%]\n........................................................................ [ 82%]\n.............................................                            [100%]\n=============================== warnings summary ===============================\ntests/research/test_view_risk_artifacts.py::test_temperature_artifact_authorizes_before_reader_and_binds_fitted_state\n  /home/tianqini/research/MMDC-CLIP-IVR/.venv/lib/python3.11/site-packages/torch/cuda/__init__.py:619: UserWarning: Can't initialize NVML\n    warnings.warn(\"Can't initialize NVML\")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n261 passed, 1 warning in 21.17s\n"
+    },
+    {
+      "command": "/bin/bash -lc 'git diff --check'",
+      "exit_code": 0,
+      "output_tail": ""
+    }
+  ]
+}

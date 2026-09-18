@@ -127,6 +127,29 @@ def test_defaults_are_frozen_complete_and_unknown_configuration_is_rejected() ->
         )
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("learning_rate", 2e-4),
+        ("weight_decay", 1e-3),
+        ("batch_size", 3),
+    ),
+)
+def test_public_research_config_rejects_non_protocol_optimizer(
+    field: str, value: float | int
+) -> None:
+    default = ResearchRunConfig.default("RSNA", "vit_b_32")
+    payload = default.to_dict()
+    optimizer = dict(payload["optimizer"])
+    optimizer[field] = value
+    payload["optimizer"] = optimizer
+
+    with pytest.raises(ValueError, match="frozen protocol optimizer"):
+        ResearchRunConfig.from_dict(payload)
+
+    assert ResearchRunConfig.from_dict(default.to_dict()) == default
+
+
 def test_role_is_rejected_before_training_reader_hook() -> None:
     manifest = _manifest(Role.TUNE)
     called = False
