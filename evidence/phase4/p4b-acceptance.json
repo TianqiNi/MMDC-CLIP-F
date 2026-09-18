@@ -1,0 +1,20 @@
+{
+  "status": "P4B accepted and integrated; publication pending",
+  "recorded_at_utc": "2026-09-18T19:30:00Z",
+  "reviewed_commit": "94c0e4a70f681392abd6d77ea2034d93507f1d54",
+  "integrated_source_commit": "02c522345303166e0afae996a4c53874c750555f",
+  "review": "evidence/phase4/p4-training-review8.md",
+  "review_model": "gpt-5.6-sol",
+  "review_effort": "xhigh",
+  "open_findings_above_low": [],
+  "research_tests_passed": 261,
+  "source_tests_dependencies_identical_to_reviewed_candidate": true,
+  "integration_conflict": "Historical fix3 evidence differed only by final newline; no source conflict.",
+  "phase4_gate": "pending: P4C not yet implemented",
+  "no_real_data_training_or_pilot": true,
+  "pending": [
+    "P4C",
+    "G4",
+    "P5"
+  ]
+}

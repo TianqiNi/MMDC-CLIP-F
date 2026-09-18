@@ -1,29 +1,21 @@
 {
-  "status": "P4A accepted; P4B latest partial-fix candidate NOT ACCEPTED after fresh bounded review",
-  "recorded_at_utc": "2026-09-12T03:39:13Z",
-  "latest_local_candidate": "fcdb2532eaaf9906644cfcff3dafe8f3087d6df0",
-  "prior_rejected_candidate": "ed093038b9a5f7e297a8f55c3df821c7c72350be",
+  "status": "P4A and P4B accepted; P4C next; publication pending",
+  "recorded_at_utc": "2026-09-18T19:30:00Z",
+  "latest_reviewed_candidate": "94c0e4a70f681392abd6d77ea2034d93507f1d54",
+  "integrated_source_commit": "02c522345303166e0afae996a4c53874c750555f",
   "source_integrated_to_remote": false,
-  "unfinished_implementation_worktree": "/home/tianqini/research/.ivr-p4-worktrees/p4-training",
   "implementation_thread": "01a09172-4253-74b1-9029-76254f159a8c",
   "implementation_model": "gpt-5.6-sol",
   "implementation_effort": "xhigh",
-  "latest_review": "evidence/phase4/p4-training-review2.md",
-  "open_findings": [
-    "Critical: plan reload restores production provenance from unverified self-hashed fields instead of verified initialization and readiness artifacts.",
-    "High: multiple authoritative prediction sets with different classifier decisions can be accepted under the same plan.",
-    "High: verified learned-selection reload and production freeze remain incomplete.",
-    "High: production classifier/batch CLI, per-epoch inference-to-selection wiring, analytic dispatch/reload and model-to-prediction workflows remain disconnected."
-  ],
-  "local_test_status": "250 research tests passed; lint and compile passed. Fresh bounded review independently reproduced two remaining failures. Test success does not establish acceptance.",
-  "effective_deadline_utc": "2026-09-12T03:42:00Z",
-  "stop_reason": "Remaining active-work allowance cannot fit another implementation and fresh-review cycle. No further agent work started.",
+  "latest_review": "evidence/phase4/p4-training-review8.md",
+  "open_findings": [],
+  "local_test_status": "261 research tests independently passed; lint and compile passed; integration source/tests/dependencies byte-identical to reviewed candidate.",
+  "effective_deadline_utc": "2026-09-19T00:02:09Z",
   "pending": [
-    "P4B fixes and fresh full acceptance review",
     "P4C",
     "G4",
     "P5"
   ],
   "no_real_data_training_or_pilot": true,
-  "next_action": "Reuse the original implementation thread to fix the exact new review findings and complete the still-required production workflows. Then freeze a new local candidate and obtain a fresh independent Sol xhigh review. No P4C/P5 release or source publication before P4B acceptance."
+  "next_action": "Complete P4B publication and task-owned cleanup, then P4C is the next task. Do not start P5 before P4C and G4 pass."
 }

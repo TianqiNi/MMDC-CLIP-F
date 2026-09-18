@@ -1,15 +1,14 @@
 # Intervention-supervised MV-ACN implementation ledger
 
-Current status: **P1-P3 and task P4A are accepted and pushed in draft PR #1.**
-P4A passed independent review with 223 research tests. **P4B remains NOT
-ACCEPTED:** partial-fix candidate `fcdb253` passes 250 tests, but fresh bounded
-review reproduced critical plan-reload provenance and high shared-prediction
-identity failures. Verified selection reload and connected production workflows
-also remain unfinished. The unaccepted candidate is committed only in the
-preserved local implementation worktree. P4C, G4 and P5 remain pending. No real
+Current status: **P1-P3 and tasks P4A/P4B are accepted.** P4B passed fresh
+independent review at `94c0e4a` with no actionable Critical, High, or Medium
+findings and 261 research tests. Its source is integrated at `02c5223`; source,
+tests and dependency files match the reviewed candidate exactly. Publication
+and cleanup are recorded in `evidence/phase4/p4b-publication.json` when complete.
+P4C, G4 and P5 remain pending; Phase 4 as a whole is not yet accepted. No real
 classifier/confidence training, patient pilot or empirical improvement is claimed.
-The newest continuation state is `evidence/phase4/handoff.json`; earlier status
-and quota/deadline records are historical.
+The current continuation state is `evidence/phase4/handoff.json`; earlier rejected
+candidates and quota/deadline records remain historical evidence.
 
 Scope is the single intervention-supervised confidence project described in
 [view_risk_protocol.md](view_risk_protocol.md). Related evidence-gating and
@@ -92,7 +91,7 @@ not failed or complete.
 | P3A — relation head and loss | 128-dimensional pooled views, two four-head relation layers, learned effect representations feeding global risk, constrained reported effects and raw-logit auxiliary CE plus error BCE; depends on accepted P2. | Frozen encoder gradients/parameters; both backbone dimensions; missing-view masks; parent-normalized raw-logit CE including deterministic-unchanged cases; exact reported `[0,1,0]` for identical predictions; effect-to-risk gradient path; singleton finite loss; lambda zero retains risk gradients; unchanged classifier predictions. | Fresh task review accepted `c3e7a67`; 191 tests passed; G3 pending. |
 | P3B — fair baselines and ablations | All controls and ablations in protocol section 6, including same-input MLP/four-class and regenerated-target augmentation controls; depends on P3A input/loss contracts. | Input/exposure/capacity audit; score orientation; original four-view MV-ACN equivalence with labeled subset adaptation; auxiliary classifier never replaces frozen predictions; ViLU adaptation documented. | Fresh review accepted `8dc66ca`; 211 integrated tests passed; actual exposure matching remains P4/P5. |
 | P4A — metrics and paired inference | AURC/tie policy, both AP orientations, risk at coverage, Brier, effects, patient-paired bootstrap and seed summaries; depends on accepted P3. | Hand-computable ranking/tie/sign fixtures; one-class AP handling; all variants retained within patient clusters; paired difference and seed/patient separation. | Accepted task: fresh review PASS at `6d2da0f`; 223 tests. Phase 4 gate remains pending. |
-| P4B — training/evaluation/CLI | Explicit role access, fresh-classifier initialization path, confidence fitting, tune selection, immutable pilot plan and lock enforcement; depends on P4A and P2/P3 artifacts. | Forbidden-role negative tests; deterministic resume/provenance; regenerated targets; fresh public CLIP versus diagnostic checkpoint distinction; no test-selection bypass. | Pending. |
+| P4B — training/evaluation/CLI | Explicit role access, fresh-classifier initialization path, confidence fitting, tune selection, immutable pilot plan and lock enforcement; depends on P4A and P2/P3 artifacts. | Forbidden-role negative tests; deterministic resume/provenance; regenerated targets; fresh public CLIP versus diagnostic checkpoint distinction; no test-selection bypass. | Accepted task: fresh review8 PASS at `94c0e4a`; 261 tests; source integrated at `02c5223`. P4C/G4 remain pending. |
 | P4C — smoke integration and costs | End-to-end synthetic tiny run plus external-resource preflight; depends on P4B. | Synthetic nonempty masks and corruptions flow through target/head/control/metrics; CLI/config sanity; CPU smoke feasible without downloading weights; latency/memory procedure ready. Smoke outputs labeled non-scientific. | Pending. |
 | P5A — fresh classifier pilot prerequisite | Audit real external resources; fit classifier only on classifier-fit, select on tune, freeze checkpoint; depends on accepted P4. | Public pinned initialization, permitted-role exposure log, actual counts, checkpoint/manifest hashes, verified predictions; original checkpoint results diagnostic only. | Pending; no training launched by P1A. |
 | P5B — confidence/control fitting and freeze | Fit candidate and mandatory controls with matched draws/budgets, tune only, freeze evaluation table; depends on P5A. | Actual run/seed completion; candidate/control selections and hashes; no pilot/test exposure; incomplete controls disclosed. | Pending. |
@@ -431,3 +430,18 @@ The continuation stops within its remaining active-work allowance ending
 fit. The latest candidate and original implementation thread are preserved for
 that cycle. Only review/test/status evidence is published on the accepted branch;
 no unaccepted P4B source is integrated or pushed. No P4C, G4 or P5 work starts.
+
+## P4B acceptance — 2026-09-18
+
+Fresh review7 closed the classifier identity, deterministic realization, cache,
+control, role, selection, immutable-plan and production-workflow findings. Review8
+then accepted the final public optimizer validation fix at `94c0e4a` and independently
+passed 261 research tests, lint and compilation. The integrated source commit is
+`02c5223`. See `evidence/phase4/p4b-acceptance.json` and the review8 report.
+
+P4B now connects pinned public classifier initialization, role-bound fitting and
+resume, inference-derived tune selection, learned and analytic confidence methods,
+verified artifact reload, one plan-owned authoritative prediction registry, and
+confidence scoring/evaluation. This is software acceptance using synthetic models;
+real-data readiness, pretrained parity, performance/cost measurements and scientific
+benefit are not established. P4C provides the next smoke/cost/CI work; G4 follows it.
