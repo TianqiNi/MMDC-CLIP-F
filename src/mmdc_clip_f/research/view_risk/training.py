@@ -239,6 +239,8 @@ class ResearchRunConfig:
         if dataset not in ("RSNA", "DDSM"):
             raise ValueError("dataset must be RSNA or DDSM")
         spec = get_backbone(self.backbone)
+        if self.optimizer != OptimizerConfig():
+            raise ValueError("research runs must use the frozen protocol optimizer")
         expected_epochs = 20 if dataset == "RSNA" else 50
         if (
             isinstance(self.epochs, bool)
