@@ -103,6 +103,7 @@ def _authorize_rows(
     role: Role,
     row_count: int,
     exam_keys: Sequence[str],
+    expected_exam_keys: Sequence[str] | None = None,
 ) -> tuple[int, ...]:
     """Bind fitting rows to selected records and return authoritative densities."""
 
@@ -118,13 +119,18 @@ def _authorize_rows(
         raise PermissionError(f"manifest has no records authorized for {operation.value}")
     selected_keys = tuple(record.exam_key for record in selected_records)
     supplied_keys = tuple(exam_keys)
+    expected_keys = (
+        selected_keys if expected_exam_keys is None else tuple(expected_exam_keys)
+    )
     if (
         len(supplied_keys) != row_count
-        or len(set(supplied_keys)) != len(supplied_keys)
-        or supplied_keys != selected_keys
+        or supplied_keys != expected_keys
+        or any(key not in set(selected_keys) for key in supplied_keys)
+        or (expected_exam_keys is None and len(set(supplied_keys)) != len(supplied_keys))
     ):
-        raise ValueError("tensor rows are not identity-bound in manifest-selected record order")
-    return tuple(record.density for record in selected_records)
+        raise ValueError("tensor rows are not identity-bound to the authorized schedule")
+    densities = {record.exam_key: record.density for record in selected_records}
+    return tuple(densities[key] for key in supplied_keys)
 
 
 class TemperatureScaler:
@@ -490,6 +496,8 @@ class DSLogisticErrorControl:
         confidence_exam_keys: Sequence[str],
         tune_manifest: RoleManifest,
         tune_exam_keys: Sequence[str],
+        confidence_expected_exam_keys: Sequence[str] | None = None,
+        tune_expected_exam_keys: Sequence[str] | None = None,
         regularizations: Sequence[float] = (0.0, 1e-4, 1e-3, 1e-2),
         max_iter: int = 64,
     ) -> "DSLogisticErrorControl":
@@ -522,6 +530,7 @@ class DSLogisticErrorControl:
             role=Role.CONFIDENCE_FIT,
             row_count=confidence_matrix.shape[0],
             exam_keys=confidence_exam_keys,
+            expected_exam_keys=confidence_expected_exam_keys,
         )
         _authorize_rows(
             tune_manifest,
@@ -529,6 +538,7 @@ class DSLogisticErrorControl:
             role=Role.TUNE,
             row_count=tune_matrix.shape[0],
             exam_keys=tune_exam_keys,
+            expected_exam_keys=tune_expected_exam_keys,
         )
         fitted: list[tuple[float, Tensor, Tensor, Tensor, Tensor, float]] = []
         for regularization in candidates:

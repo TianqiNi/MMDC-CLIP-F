@@ -318,6 +318,27 @@ def resolve_parameters(
     }
 
 
+def resolve_realized_parameters(
+    spec: PerturbationSpec, resolution: int
+) -> dict[str, int | float | str]:
+    """Replay every persisted realization parameter, including seeded crop offsets."""
+
+    parameters = resolve_parameters(spec, resolution)
+    if spec.family == "crop":
+        crop_side = int(parameters["crop_side"])
+        max_offset = resolution - crop_side
+        coordinates = torch.rand(
+            2, generator=_generator(spec.realization_seed), dtype=torch.float64
+        )
+        parameters["top"] = min(
+            math.floor(float(coordinates[0]) * (max_offset + 1)), max_offset
+        )
+        parameters["left"] = min(
+            math.floor(float(coordinates[1]) * (max_offset + 1)), max_offset
+        )
+    return parameters
+
+
 def _validate_image(image: Tensor) -> int:
     if not isinstance(image, Tensor):
         raise TypeError("image must be a torch.Tensor")
@@ -383,7 +404,7 @@ def apply_perturbation(
     resolution = _validate_image(image)
     if not isinstance(spec, PerturbationSpec):
         raise TypeError("spec must be a PerturbationSpec")
-    parameters = resolve_parameters(spec, resolution)
+    parameters = resolve_realized_parameters(spec, resolution)
     if spec.family == "clean":
         return image, PerturbationMetadata(spec, ())
 
@@ -407,14 +428,8 @@ def apply_perturbation(
         stressed = image * float(parameters["factor"])
     elif spec.family == "crop":
         crop_side = int(parameters["crop_side"])
-        max_offset = resolution - crop_side
-        coordinates = torch.rand(
-            2,
-            generator=_generator(spec.realization_seed),
-            dtype=torch.float64,
-        )
-        top = min(math.floor(float(coordinates[0]) * (max_offset + 1)), max_offset)
-        left = min(math.floor(float(coordinates[1]) * (max_offset + 1)), max_offset)
+        top = int(parameters["top"])
+        left = int(parameters["left"])
         crop = image[:, top : top + crop_side, left : left + crop_side]
         stressed = F.interpolate(
             crop.unsqueeze(0),
@@ -423,8 +438,6 @@ def apply_perturbation(
             align_corners=False,
             antialias=True,
         ).squeeze(0)
-        parameters["top"] = top
-        parameters["left"] = left
     else:
         kernel = _motion_kernel(int(parameters["length"]), str(parameters["orientation"]))
         stressed = _convolve_reflect(image, kernel)

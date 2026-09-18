@@ -29,6 +29,7 @@ from .baselines import (
     scalar_baseline_scores,
 )
 from .head_inputs import prepare_raw_head_inputs
+from .fusion import DDSM_FUSION_PAIRS, RSNA_FUSION_PAIRS
 
 from .cache import (
     bind_cache_files,
@@ -73,11 +74,16 @@ from .training import (
     ConfidenceFitBatch,
     TrainingBinding,
     build_learned_method,
+    build_method_training_schedule,
+    build_training_schedule,
     confidence_bundle_scores,
     fit_confidence_method_with_role_access,
     load_research_run_config,
     load_role_manifest_for_operation,
     load_pinned_public_clip_classifier,
+    tune_selection_cells,
+    validate_scheduled_cache_provenance,
+    validate_tune_cache_provenance,
 )
 from .production import (
     fit_classifier_images_with_role_access,
@@ -463,37 +469,61 @@ def _control_cache_index(
     path: str | Path,
     *,
     classifier: ClassifierProvenance,
+    semantics: str,
 ) -> tuple[dict[str, object], ...]:
-    """Parse a strict selected-classifier-bound control cache index."""
+    """Parse an explicit method-specific selected-classifier cache schedule."""
 
+    allowed = {"clean_full_tune", "ds_confidence_fit", "ds_tune_regularization"}
+    if semantics not in allowed:
+        raise ValueError("control cache semantics are unsupported")
     source = Path(path).resolve()
     _require_external_or_ignored_destination(source)
     value = _read_json(source, description="private control cache index")
     if (
         not isinstance(value, dict)
-        or set(value) != {"schema_version", "classifier", "entries"}
-        or value["schema_version"] != "view-risk-control-cache-index/v1"
+        or set(value) != {"schema_version", "classifier", "semantics", "entries"}
+        or value["schema_version"] != "view-risk-control-cache-index/v2"
         or value["classifier"] != classifier.to_dict()
+        or value["semantics"] != semantics
         or not isinstance(value["entries"], list)
         or not value["entries"]
     ):
-        raise ValueError("control cache index/classifier binding is invalid")
+        raise ValueError("control cache schedule/classifier binding is invalid")
     result = []
     paths = set()
     for entry in value["entries"]:
-        if not isinstance(entry, dict) or set(entry) != {"metadata_path", "provenance"}:
-            raise ValueError("control cache entry has missing or unknown fields")
+        common = {"metadata_path", "provenance"}
+        expected = (
+            common
+            if semantics == "clean_full_tune"
+            else common | {"epoch"}
+            if semantics == "ds_confidence_fit"
+            else common | {"family", "severity", "target_view"}
+        )
+        if not isinstance(entry, dict) or set(entry) != expected:
+            raise ValueError("control cache schedule entry has an invalid schema")
         path_value = entry["metadata_path"]
         if not isinstance(path_value, str) or not Path(path_value).is_absolute():
             raise ValueError("control cache paths must be absolute")
         metadata = Path(path_value).resolve()
         if metadata in paths:
-            raise ValueError("control cache index contains duplicate cache paths")
+            raise ValueError("control cache schedule contains duplicate cache paths")
         paths.add(metadata)
-        provenance = CacheProvenance.from_dict(entry["provenance"])
-        if provenance.checkpoint_sha256 != classifier.checkpoint_sha256:
-            raise ValueError("control cache classifier binding is stale")
-        result.append({"metadata_path": metadata, "provenance": provenance})
+        record = {
+            "metadata_path": metadata,
+            "provenance": CacheProvenance.from_dict(entry["provenance"]),
+        }
+        if semantics == "ds_confidence_fit":
+            epoch = entry["epoch"]
+            if isinstance(epoch, bool) or not isinstance(epoch, int) or epoch < 1:
+                raise ValueError("DS confidence-fit cache epoch is invalid")
+            record["epoch"] = epoch
+        elif semantics == "ds_tune_regularization":
+            cell = (entry["family"], entry["severity"], entry["target_view"])
+            if cell not in tune_selection_cells():
+                raise ValueError("DS tune cache cell is outside the frozen panel")
+            record["cell"] = cell
+        result.append(record)
     return tuple(result)
 
 
@@ -511,74 +541,148 @@ def _control_cache_evidence(
     return evidence
 
 
-def _load_control_cache_bundles(
-    entries: tuple[dict[str, object], ...],
+def _preflight_control_cache_entries(
+    entries,
     records,
     *,
+    semantics,
     manifest,
-    operation: Operation,
-    role: Role,
-    classifier: ClassifierProvenance,
-):
-    bundles = []
-    exam_keys = []
+    config,
+    seed,
+    encoder_identity,
+) -> tuple[str, ...]:
+    if encoder_identity is None:
+        raise ValueError("production controls require persisted encoder identity")
+    fusion_pairs = (
+        RSNA_FUSION_PAIRS if config.dataset == "RSNA" else DDSM_FUSION_PAIRS
+    )
+    expected_keys: list[str] = []
+    actual_keys: list[str] = []
     for entry in entries:
-        bundle = load_cache_bundle(
+        operation = (
+            Operation.CONFIDENCE_FITTING
+            if semantics == "ds_confidence_fit"
+            else Operation.TUNE_SELECTION
+        )
+        role = (
+            Role.CONFIDENCE_FIT
+            if semantics == "ds_confidence_fit"
+            else Role.TUNE
+        )
+        provenance = load_cache_provenance(
             entry["metadata_path"],
             expected_provenance=entry["provenance"],
             manifest=manifest,
             operation=operation,
             role=role,
         )
-        if bundle.provenance.checkpoint_sha256 != classifier.checkpoint_sha256:
-            raise ValueError("control cache classifier binding is stale")
-        bundles.append(bundle)
-        exam_keys.extend(bundle.provenance.exam_keys)
-    expected = tuple(record.exam_key for record in records)
-    if tuple(exam_keys) != expected or len(set(exam_keys)) != len(exam_keys):
-        raise ValueError("control caches must exactly follow the authorized manifest cohort")
-    return tuple(bundles)
+        if provenance.batch_size != 1:
+            raise ValueError("control schedule caches must contain one exam")
+        actual_keys.append(provenance.exam_keys[0])
+    if semantics == "clean_full_tune":
+        expected_keys = [record.exam_key for record in records]
+        if actual_keys != expected_keys:
+            raise ValueError("clean control caches must follow the exact tune cohort")
+        by_exam = {record.exam_key: record for record in records}
+        for entry in entries:
+            provenance = entry["provenance"]
+            validate_tune_cache_provenance(
+                provenance,
+                record=by_exam[provenance.exam_keys[0]],
+                cell=(None, None, None),
+                stress_seed=config.stress_seed,
+                encoder_identity=encoder_identity,
+                fusion_pairs=fusion_pairs,
+            )
+    elif semantics == "ds_confidence_fit":
+        schedules = {
+            epoch: {item.exam_key: item for item in build_training_schedule(
+                records, epoch=epoch, seed=seed
+            )}
+            for epoch in range(1, config.epochs + 1)
+        }
+        expected_pairs = [
+            (epoch, record.exam_key)
+            for epoch in range(1, config.epochs + 1)
+            for record in records
+        ]
+        actual_pairs = [
+            (entry["epoch"], entry["provenance"].exam_keys[0]) for entry in entries
+        ]
+        if actual_pairs != expected_pairs:
+            raise ValueError("DS confidence caches do not follow the finite draw schedule")
+        expected_keys = [exam_key for _epoch, exam_key in expected_pairs]
+        for entry in entries:
+            validate_scheduled_cache_provenance(
+                entry["provenance"],
+                manifest=manifest,
+                classifier_checkpoint_sha256=encoder_identity.checkpoint_sha256,
+                schedule=schedules[entry["epoch"]],
+                encoder_identity=encoder_identity,
+                fusion_pairs=fusion_pairs,
+            )
+    else:
+        expected_pairs = [
+            (cell, record.exam_key)
+            for cell in tune_selection_cells()
+            for record in records
+        ]
+        actual_pairs = [
+            (entry["cell"], entry["provenance"].exam_keys[0]) for entry in entries
+        ]
+        if actual_pairs != expected_pairs:
+            raise ValueError("DS tune caches do not follow the exact eligible tune schedule")
+        expected_keys = [exam_key for _cell, exam_key in expected_pairs]
+        by_exam = {record.exam_key: record for record in records}
+        for entry in entries:
+            provenance = entry["provenance"]
+            validate_tune_cache_provenance(
+                provenance,
+                record=by_exam[provenance.exam_keys[0]],
+                cell=entry["cell"],
+                stress_seed=config.stress_seed,
+                encoder_identity=encoder_identity,
+                fusion_pairs=fusion_pairs,
+            )
+    return tuple(expected_keys)
 
 
-def _scalar_rows_from_control_caches(
-    entries: tuple[dict[str, object], ...],
-    records,
+def _load_control_cache_bundles(
+    entries,
     *,
     manifest,
     operation: Operation,
     role: Role,
-    classifier: ClassifierProvenance,
+):
+    return tuple(
+        load_cache_bundle(
+            entry["metadata_path"],
+            expected_provenance=entry["provenance"],
+            manifest=manifest,
+            operation=operation,
+            role=role,
+        )
+        for entry in entries
+    )
+
+
+def _scalar_rows_from_control_caches(
+    entries, expected_exam_keys, *, manifest, operation: Operation, role: Role
 ) -> ScalarControlRows:
     bundles = _load_control_cache_bundles(
-        entries,
-        records,
-        manifest=manifest,
-        operation=operation,
-        role=role,
-        classifier=classifier,
+        entries, manifest=manifest, operation=operation, role=role
     )
     return ScalarControlRows(
-        tuple(record.exam_key for record in records),
+        tuple(expected_exam_keys),
         torch.cat(tuple(bundle.features.scores for bundle in bundles), dim=0),
     )
 
 
 def _ds_rows_from_control_caches(
-    entries: tuple[dict[str, object], ...],
-    records,
-    *,
-    manifest,
-    operation: Operation,
-    role: Role,
-    classifier: ClassifierProvenance,
+    entries, expected_exam_keys, *, manifest, operation: Operation, role: Role
 ) -> DSControlRows:
     bundles = _load_control_cache_bundles(
-        entries,
-        records,
-        manifest=manifest,
-        operation=operation,
-        role=role,
-        classifier=classifier,
+        entries, manifest=manifest, operation=operation, role=role
     )
     features = tuple(
         build_ds_features(
@@ -599,7 +703,7 @@ def _ds_rows_from_control_caches(
         pairs,
     )
     return DSControlRows(
-        tuple(record.exam_key for record in records),
+        tuple(expected_exam_keys),
         combined,
         torch.cat(tuple(bundle.features.prediction for bundle in bundles), dim=0).long(),
     )
@@ -608,18 +712,16 @@ def _ds_rows_from_control_caches(
 def _calibration_rows_from_control_caches(
     method: str,
     entries: tuple[dict[str, object], ...],
-    records,
+    expected_exam_keys,
     *,
     manifest,
     classifier: ClassifierProvenance,
 ) -> tuple[ScalarCalibrationRows, object]:
     bundles = _load_control_cache_bundles(
         entries,
-        records,
         manifest=manifest,
         operation=Operation.TUNE_SELECTION,
         role=Role.TUNE,
-        classifier=classifier,
     )
     values = []
     orientation = None
@@ -640,7 +742,7 @@ def _calibration_rows_from_control_caches(
     assert orientation is not None
     return (
         ScalarCalibrationRows(
-            tuple(record.exam_key for record in records),
+            tuple(expected_exam_keys),
             torch.cat(tuple(values), dim=0),
             torch.cat(tuple(bundle.features.prediction for bundle in bundles), dim=0).long(),
         ),
@@ -793,28 +895,117 @@ def _tune_cache_index(path: str | Path) -> tuple[dict[str, object], ...]:
     return tuple(result)
 
 
-def _validate_tune_cache_realization(
-    provenance: CacheProvenance,
-    cell: tuple[object, object, object],
+def _preflight_confidence_training_entries(
+    entries,
+    records,
+    *,
+    manifest,
+    config,
+    seed,
+    method,
+    encoder_identity,
 ) -> None:
-    family, severity, target_view = cell
-    for view in provenance.observed_views:
-        record = provenance.perturbations[view]
-        if not isinstance(record, Mapping) or not isinstance(
-            record.get("spec"), Mapping
-        ):
-            raise ValueError("tune cache perturbation provenance is incomplete")
-        spec = record["spec"]
-        if cell == (None, None, None):
-            expected = ("clean", None)
-        elif view == target_view:
-            expected = (family, severity)
-        else:
-            expected = ("clean", None)
-        if (spec.get("family"), spec.get("severity")) != expected:
-            raise ValueError("tune cache realization disagrees with its declared cell")
-    if target_view is not None and target_view not in provenance.observed_views:
-        raise ValueError("tune stress target is absent from the realized input")
+    """Validate every learned fit exposure from metadata before tensor loading."""
+
+    if encoder_identity is None:
+        raise ValueError("production confidence caches require persisted encoder identity")
+    fusion_pairs = (
+        RSNA_FUSION_PAIRS if config.dataset == "RSNA" else DDSM_FUSION_PAIRS
+    )
+    schedules = {
+        epoch: {item.exam_key: item for item in build_method_training_schedule(
+            records, epoch=epoch, seed=seed, method=method
+        )}
+        for epoch in range(1, config.epochs + 1)
+    }
+    seen = set()
+    actual_order = []
+    for entry in entries:
+        provenance = load_cache_provenance(
+            entry["metadata_path"],
+            expected_provenance=entry["provenance"],
+            manifest=manifest,
+            operation=Operation.CONFIDENCE_FITTING,
+            role=Role.CONFIDENCE_FIT,
+        )
+        epoch = entry["epoch"]
+        if provenance.batch_size != 1:
+            raise ValueError("confidence schedule caches must contain one exam")
+        validate_scheduled_cache_provenance(
+            provenance,
+            manifest=manifest,
+            classifier_checkpoint_sha256=encoder_identity.checkpoint_sha256,
+            schedule=schedules.get(epoch, {}),
+            encoder_identity=encoder_identity,
+            fusion_pairs=fusion_pairs,
+        )
+        key = (epoch, provenance.exam_keys[0])
+        if key in seen:
+            raise ValueError("confidence cache index duplicates an epoch/exam exposure")
+        seen.add(key)
+        actual_order.append(key)
+    expected = [
+        (epoch, record.exam_key)
+        for epoch in range(1, config.epochs + 1)
+        for record in records
+    ]
+    if actual_order != expected:
+        raise ValueError(
+            "confidence cache index does not follow the exact ordered exposure budget"
+        )
+
+
+
+def _preflight_tune_cache_entries(
+    entries,
+    records,
+    *,
+    manifest,
+    config,
+    encoder_identity,
+) -> None:
+    """Reject any incomplete/wrong tune realization before target tensors open."""
+
+    if encoder_identity is None:
+        raise ValueError("tune cache validation requires persisted encoder identity")
+    record_by_exam = {record.exam_key: record for record in records}
+    fusion_pairs = (
+        RSNA_FUSION_PAIRS if config.dataset == "RSNA" else DDSM_FUSION_PAIRS
+    )
+    seen = set()
+    for entry in entries:
+        provenance = load_cache_provenance(
+            entry["metadata_path"],
+            expected_provenance=entry["provenance"],
+            manifest=manifest,
+            operation=Operation.TUNE_SELECTION,
+            role=Role.TUNE,
+        )
+        if provenance.batch_size != 1:
+            raise ValueError("tune realization caches must contain one authorized exam")
+        exam_key = provenance.exam_keys[0]
+        record = record_by_exam.get(exam_key)
+        if record is None:
+            raise ValueError("tune cache contains an unauthorized exam")
+        validate_tune_cache_provenance(
+            provenance,
+            record=record,
+            cell=entry["cell"],
+            stress_seed=config.stress_seed,
+            encoder_identity=encoder_identity,
+            fusion_pairs=fusion_pairs,
+        )
+        key = (entry["cell"], exam_key)
+        if key in seen:
+            raise ValueError("tune cache index duplicates a cell/exam realization")
+        seen.add(key)
+    expected = {
+        (cell, record.exam_key)
+        for cell in tune_selection_cells()
+        for record in records
+    }
+    if seen != expected:
+        raise ValueError("tune cache index must cover every cell and authorized exam exactly")
 
 
 def _write_private_predictions(
@@ -858,12 +1049,15 @@ def _run_confidence_training(args: argparse.Namespace) -> dict[str, object]:
     )
 
     def authorized(_records):
-        verified_classifier = (
+        selected_classifier = (
             None
             if args.classifier_artifact is None
             else load_selected_classifier_artifact(
                 args.classifier_artifact, expected_config=config
-            ).classifier
+            )
+        )
+        verified_classifier = (
+            None if selected_classifier is None else selected_classifier.classifier
         )
         classifier, entries = _cache_index(
             args.cache_index, expected_classifier=verified_classifier
@@ -879,6 +1073,19 @@ def _run_confidence_training(args: argparse.Namespace) -> dict[str, object]:
             raise ValueError("cache-index classifier backbone disagrees with configuration")
         if {entry["epoch"] for entry in entries} != set(config.search_table.checkpoint_epochs):
             raise ValueError("cache index epochs disagree with the frozen search table")
+        _preflight_confidence_training_entries(
+            entries,
+            _records,
+            manifest=manifest,
+            config=config,
+            seed=args.seed,
+            method=args.method,
+            encoder_identity=(
+                None
+                if selected_classifier is None
+                else selected_classifier.encoder_identity
+            ),
+        )
         first = entries[0]
         first_path = Path(first["metadata_path"]).resolve()
         _require_external_or_ignored_destination(first_path)
@@ -968,6 +1175,11 @@ def _run_confidence_training(args: argparse.Namespace) -> dict[str, object]:
             seed=args.seed,
             binding=binding,
             batch_loader=batches,
+            encoder_identity=(
+                None
+                if selected_classifier is None
+                else selected_classifier.encoder_identity
+            ),
             checkpoint_path=args.checkpoint,
             resume=args.resume,
             stop_after_epoch=args.stop_after_epoch,
@@ -984,6 +1196,9 @@ def _run_confidence_training(args: argparse.Namespace) -> dict[str, object]:
             binding=binding,
             result=result,
             checkpoint_paths=checkpoint_paths,
+            input_cache_file_bindings=tuple(
+                bind_cache_files(entry["metadata_path"]) for entry in entries
+            ),
         )
         return {
             "status": "trained" if result.completed_epoch == config.epochs else "partial",
@@ -1022,6 +1237,13 @@ def _run_confidence_selection(args: argparse.Namespace) -> dict[str, object]:
 
         def predictions(records, *, current_epoch=epoch):
             entries = _tune_cache_index(args.tune_cache_index)
+            _preflight_tune_cache_entries(
+                entries,
+                records,
+                manifest=manifest,
+                config=config,
+                encoder_identity=fit.encoder_identity,
+            )
             labels = {record.exam_key: record.density for record in records}
             model = None
             rows = []
@@ -1035,7 +1257,6 @@ def _run_confidence_selection(args: argparse.Namespace) -> dict[str, object]:
                 )
                 if bundle.provenance.checkpoint_sha256 != fit.classifier.checkpoint_sha256:
                     raise ValueError("tune cache classifier binding is stale")
-                _validate_tune_cache_realization(bundle.provenance, entry["cell"])
                 if model is None:
                     model = load_learned_confidence_checkpoint(
                         method=fit.result.method,
@@ -1246,21 +1467,20 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
         needs_tune = args.method in {"temperature_scaled_msp", "ds_logistic"} or (
             args.calibrate_scalar
         )
-        classifier = load_selected_classifier_artifact(
+        selected_classifier = load_selected_classifier_artifact(
             args.classifier_artifact, expected_config=config
-        ).classifier
+        )
+        classifier = selected_classifier.classifier
+        encoder_identity = selected_classifier.encoder_identity
         tune_manifest = None
         tune_entries = None
+        tune_expected_exam_keys = None
         tune_evidence = None
         if needs_tune:
-            if not all(
-                (
-                    args.tune_manifest,
-                    args.tune_manifest_binding,
-                    args.tune_private_root,
-                    args.tune_cache_index,
-                )
-            ):
+            if not all((
+                args.tune_manifest, args.tune_manifest_binding,
+                args.tune_private_root, args.tune_cache_index,
+            )):
                 raise ValueError("fitted analytic control requires complete tune cache inputs")
             tune_manifest = load_role_manifest_for_operation(
                 args.tune_manifest,
@@ -1269,24 +1489,37 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
                 operation=Operation.TUNE_SELECTION,
                 role=Role.TUNE,
             )
+            tune_semantics = (
+                "ds_tune_regularization"
+                if args.method == "ds_logistic"
+                else "clean_full_tune"
+            )
             tune_entries = _control_cache_index(
-                args.tune_cache_index, classifier=classifier
+                args.tune_cache_index,
+                classifier=classifier,
+                semantics=tune_semantics,
+            )
+            tune_expected_exam_keys = _preflight_control_cache_entries(
+                tune_entries,
+                tune_manifest.records,
+                semantics=tune_semantics,
+                manifest=tune_manifest,
+                config=config,
+                seed=args.seed,
+                encoder_identity=encoder_identity,
             )
             tune_evidence = _control_cache_evidence(
                 args.tune_cache_index, tune_entries, prefix="tune"
             )
         confidence_manifest = None
         confidence_entries = None
+        confidence_expected_exam_keys = None
         confidence_evidence = None
         if args.method == "ds_logistic":
-            if not all(
-                (
-                    args.confidence_manifest,
-                    args.confidence_manifest_binding,
-                    args.confidence_private_root,
-                    args.confidence_cache_index,
-                )
-            ):
+            if not all((
+                args.confidence_manifest, args.confidence_manifest_binding,
+                args.confidence_private_root, args.confidence_cache_index,
+            )):
                 raise ValueError("DS control requires complete confidence-fit cache inputs")
             confidence_manifest = load_role_manifest_for_operation(
                 args.confidence_manifest,
@@ -1296,41 +1529,48 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
                 role=Role.CONFIDENCE_FIT,
             )
             confidence_entries = _control_cache_index(
-                args.confidence_cache_index, classifier=classifier
+                args.confidence_cache_index,
+                classifier=classifier,
+                semantics="ds_confidence_fit",
+            )
+            confidence_expected_exam_keys = _preflight_control_cache_entries(
+                confidence_entries,
+                confidence_manifest.records,
+                semantics="ds_confidence_fit",
+                manifest=confidence_manifest,
+                config=config,
+                seed=args.seed,
+                encoder_identity=encoder_identity,
             )
             confidence_evidence = _control_cache_evidence(
-                args.confidence_cache_index,
-                confidence_entries,
-                prefix="confidence",
+                args.confidence_cache_index, confidence_entries, prefix="confidence"
             )
         if args.method in RAW_CONTROL_METHODS and not args.calibrate_scalar:
-            if any(
-                value is not None
-                for value in (
-                    args.tune_manifest,
-                    args.tune_manifest_binding,
-                    args.tune_private_root,
-                    args.tune_cache_index,
-                    args.confidence_manifest,
-                    args.confidence_manifest_binding,
-                    args.confidence_private_root,
-                    args.confidence_cache_index,
-                )
-            ):
+            if any(value is not None for value in (
+                args.tune_manifest, args.tune_manifest_binding, args.tune_private_root,
+                args.tune_cache_index, args.confidence_manifest,
+                args.confidence_manifest_binding, args.confidence_private_root,
+                args.confidence_cache_index,
+            )):
                 raise ValueError("raw ranking controls do not consume fitting caches")
             artifact = create_raw_control_artifact(
                 args.output,
                 method=args.method,
                 config=config,
                 classifier=classifier,
+                encoder_identity=encoder_identity,
                 seed=args.seed,
             )
         elif args.calibrate_scalar:
-            assert tune_manifest is not None and tune_entries is not None
+            assert (
+                tune_manifest is not None
+                and tune_entries is not None
+                and tune_expected_exam_keys is not None
+            )
             rows, orientation = _calibration_rows_from_control_caches(
                 args.method,
                 tune_entries,
-                tune_manifest.records,
+                tune_expected_exam_keys,
                 manifest=tune_manifest,
                 classifier=classifier,
             )
@@ -1340,6 +1580,7 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
                 orientation=orientation,
                 config=config,
                 classifier=classifier,
+                encoder_identity=encoder_identity,
                 seed=args.seed,
                 tune_manifest=tune_manifest,
                 row_reader=lambda _records: rows,
@@ -1347,20 +1588,24 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
                 tune_evidence_files=tune_evidence,
             )
         elif args.method == "temperature_scaled_msp":
-            assert tune_manifest is not None and tune_entries is not None
+            assert (
+                tune_manifest is not None
+                and tune_entries is not None
+                and tune_expected_exam_keys is not None
+            )
             artifact = fit_temperature_control_artifact_with_role_access(
                 args.output,
                 config=config,
                 classifier=classifier,
+                encoder_identity=encoder_identity,
                 seed=args.seed,
                 tune_manifest=tune_manifest,
-                row_reader=lambda records: _scalar_rows_from_control_caches(
+                row_reader=lambda _records: _scalar_rows_from_control_caches(
                     tune_entries,
-                    records,
+                    tune_expected_exam_keys,
                     manifest=tune_manifest,
                     operation=Operation.TUNE_SELECTION,
                     role=Role.TUNE,
-                    classifier=classifier,
                 ),
                 tune_manifest_path=args.tune_manifest,
                 tune_evidence_files=tune_evidence,
@@ -1369,36 +1614,39 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
             assert (
                 tune_manifest is not None
                 and tune_entries is not None
+                and tune_expected_exam_keys is not None
                 and confidence_manifest is not None
                 and confidence_entries is not None
+                and confidence_expected_exam_keys is not None
             )
             artifact = fit_ds_control_artifact_with_role_access(
                 args.output,
                 config=config,
                 classifier=classifier,
+                encoder_identity=encoder_identity,
                 seed=args.seed,
                 confidence_manifest=confidence_manifest,
                 tune_manifest=tune_manifest,
-                confidence_reader=lambda records: _ds_rows_from_control_caches(
+                confidence_reader=lambda _records: _ds_rows_from_control_caches(
                     confidence_entries,
-                    records,
+                    confidence_expected_exam_keys,
                     manifest=confidence_manifest,
                     operation=Operation.CONFIDENCE_FITTING,
                     role=Role.CONFIDENCE_FIT,
-                    classifier=classifier,
                 ),
-                tune_reader=lambda records: _ds_rows_from_control_caches(
+                tune_reader=lambda _records: _ds_rows_from_control_caches(
                     tune_entries,
-                    records,
+                    tune_expected_exam_keys,
                     manifest=tune_manifest,
                     operation=Operation.TUNE_SELECTION,
                     role=Role.TUNE,
-                    classifier=classifier,
                 ),
                 confidence_manifest_path=args.confidence_manifest,
                 tune_manifest_path=args.tune_manifest,
                 confidence_evidence_files=confidence_evidence,
                 tune_evidence_files=tune_evidence,
+                confidence_expected_exam_keys=confidence_expected_exam_keys,
+                tune_expected_exam_keys=tune_expected_exam_keys,
             )
         return {
             "status": "control_fitted" if artifact.parameter_count else "control_recorded",

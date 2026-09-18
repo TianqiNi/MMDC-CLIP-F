@@ -25,11 +25,13 @@ from .baselines import (
     scalar_baseline_scores,
 )
 from .cache import _require_external_or_ignored_destination
+from .features import FrozenEncoderIdentity
+from .fusion import DDSM_FUSION_PAIRS, RSNA_FUSION_PAIRS
 from .roles import Operation, PrivateExamRecord, Role, RoleManifest, run_with_role_access
 from .training import ClassifierProvenance, ResearchRunConfig
 
 
-CONTROL_ARTIFACT_VERSION = "view-risk-control-artifact/v2"
+CONTROL_ARTIFACT_VERSION = "view-risk-control-artifact/v3"
 RAW_CONTROL_METHODS = frozenset(
     {"msp", "margin", "negative_entropy", "energy", "absolute_omission_sensitivity"}
 )
@@ -120,6 +122,7 @@ class ControlArtifact:
     seed: int
     config_sha256: str
     classifier_checkpoint_sha256: str
+    encoder_identity: FrozenEncoderIdentity | None
     confidence_manifest_sha256: str | None
     tune_manifest_sha256: str
     evidence_kind: str
@@ -178,6 +181,9 @@ class ControlArtifact:
             "seed": self.seed,
             "config_sha256": self.config_sha256,
             "classifier_checkpoint_sha256": self.classifier_checkpoint_sha256,
+            "encoder_identity": (
+                None if self.encoder_identity is None else self.encoder_identity.to_dict()
+            ),
             "confidence_manifest_sha256": self.confidence_manifest_sha256,
             "tune_manifest_sha256": self.tune_manifest_sha256,
             "evidence_kind": self.evidence_kind,
@@ -209,6 +215,21 @@ def _validate_rows(
     if tuple(exam_keys) != expected or len(set(exam_keys)) != len(exam_keys):
         raise ValueError("control rows must exactly follow the authorized manifest cohort")
     return tuple(record.density for record in records)
+
+
+def _validate_exposure_rows(
+    records: Sequence[PrivateExamRecord],
+    exam_keys: Sequence[str],
+    expected_exam_keys: Sequence[str] | None,
+) -> tuple[int, ...]:
+    if expected_exam_keys is None:
+        return _validate_rows(records, exam_keys)
+    expected = tuple(expected_exam_keys)
+    supplied = tuple(exam_keys)
+    authorized = {record.exam_key: record.density for record in records}
+    if supplied != expected or any(key not in authorized for key in supplied):
+        raise ValueError("control rows do not follow the exact authorized draw schedule")
+    return tuple(authorized[key] for key in supplied)
 
 
 def _require_exact_manifest_role(manifest: RoleManifest, role: Role) -> None:
@@ -248,6 +269,7 @@ def _artifact_from_payload(
         "seed",
         "config_sha256",
         "classifier_checkpoint_sha256",
+        "encoder_identity",
         "confidence_manifest_sha256",
         "tune_manifest_sha256",
         "evidence_kind",
@@ -289,6 +311,11 @@ def _artifact_from_payload(
         seed=payload["seed"],  # type: ignore[arg-type]
         config_sha256=payload["config_sha256"],  # type: ignore[arg-type]
         classifier_checkpoint_sha256=payload["classifier_checkpoint_sha256"],  # type: ignore[arg-type]
+        encoder_identity=(
+            None
+            if payload["encoder_identity"] is None
+            else FrozenEncoderIdentity.from_dict(payload["encoder_identity"])
+        ),
         confidence_manifest_sha256=payload["confidence_manifest_sha256"],  # type: ignore[arg-type]
         tune_manifest_sha256=payload["tune_manifest_sha256"],  # type: ignore[arg-type]
         evidence_kind=payload["evidence_kind"],  # type: ignore[arg-type]
@@ -329,6 +356,7 @@ def _base_payload(
     method: str,
     config: ResearchRunConfig,
     classifier: ClassifierProvenance,
+    encoder_identity: FrozenEncoderIdentity | None,
     seed: int,
     confidence_manifest_sha256: str | None,
     tune_manifest_sha256: str,
@@ -343,6 +371,23 @@ def _base_payload(
     evidence_files: Mapping[str, str | Path] | None = None,
 ) -> dict[str, object]:
     _validate_classifier(config, classifier)
+    if classifier.kind == "public_pretrained_fresh" and encoder_identity is None:
+        raise ValueError("production control artifact requires exact encoder identity")
+    if encoder_identity is not None and (
+        encoder_identity.checkpoint_sha256 != classifier.checkpoint_sha256
+        or encoder_identity.backbone != classifier.backbone
+        or encoder_identity.hf_model != classifier.hf_model
+        or encoder_identity.backbone_revision != classifier.revision
+        or encoder_identity.image_size != classifier.image_size
+        or encoder_identity.hidden_size != classifier.hidden_size
+        or encoder_identity.preprocessing != classifier.preprocessing
+        or encoder_identity.image_mean != classifier.image_mean
+        or encoder_identity.image_std != classifier.image_std
+        or encoder_identity.prompt_order != classifier.prompts
+        or encoder_identity.fusion_pairs
+        != (RSNA_FUSION_PAIRS if config.dataset == "RSNA" else DDSM_FUSION_PAIRS)
+    ):
+        raise ValueError("control encoder identity disagrees with selected classifier")
     bound_evidence = {}
     for purpose, raw_path in (evidence_files or {}).items():
         source = Path(raw_path).resolve()
@@ -357,6 +402,9 @@ def _base_payload(
         "seed": seed,
         "config_sha256": config.sha256,
         "classifier_checkpoint_sha256": classifier.checkpoint_sha256,
+        "encoder_identity": (
+            None if encoder_identity is None else encoder_identity.to_dict()
+        ),
         "confidence_manifest_sha256": confidence_manifest_sha256,
         "tune_manifest_sha256": tune_manifest_sha256,
         "evidence_kind": evidence_kind,
@@ -377,6 +425,7 @@ def create_raw_control_artifact(
     method: str,
     config: ResearchRunConfig,
     classifier: ClassifierProvenance,
+    encoder_identity: FrozenEncoderIdentity | None = None,
     seed: int,
 ) -> ControlArtifact:
     """Record an unfitted raw-ranking control without calling identity a fitted scaler."""
@@ -390,6 +439,7 @@ def create_raw_control_artifact(
             method=method,
             config=config,
             classifier=classifier,
+            encoder_identity=encoder_identity,
             seed=seed,
             confidence_manifest_sha256=None,
             tune_manifest_sha256=classifier.tune_manifest_sha256,
@@ -410,6 +460,7 @@ def fit_temperature_control_artifact_with_role_access(
     *,
     config: ResearchRunConfig,
     classifier: ClassifierProvenance,
+    encoder_identity: FrozenEncoderIdentity | None = None,
     seed: int,
     tune_manifest: RoleManifest,
     row_reader: Callable[[tuple[PrivateExamRecord, ...]], ScalarControlRows],
@@ -454,6 +505,7 @@ def fit_temperature_control_artifact_with_role_access(
                 method="temperature_scaled_msp",
                 config=config,
                 classifier=classifier,
+                encoder_identity=encoder_identity,
                 seed=seed,
                 confidence_manifest_sha256=None,
                 tune_manifest_sha256=tune_manifest.manifest_sha256,
@@ -482,6 +534,7 @@ def fit_ds_control_artifact_with_role_access(
     *,
     config: ResearchRunConfig,
     classifier: ClassifierProvenance,
+    encoder_identity: FrozenEncoderIdentity | None = None,
     seed: int,
     confidence_manifest: RoleManifest,
     tune_manifest: RoleManifest,
@@ -491,6 +544,8 @@ def fit_ds_control_artifact_with_role_access(
     tune_manifest_path: str | Path | None = None,
     confidence_evidence_files: Mapping[str, str | Path] | None = None,
     tune_evidence_files: Mapping[str, str | Path] | None = None,
+    confidence_expected_exam_keys: Sequence[str] | None = None,
+    tune_expected_exam_keys: Sequence[str] | None = None,
 ) -> ControlArtifact:
     """Fit the DS scaler/weights on confidence_fit and select regularization on tune."""
 
@@ -543,8 +598,14 @@ def fit_ds_control_artifact_with_role_access(
     tune_rows = tune_reader(tune_records)
     if not isinstance(confidence_rows, DSControlRows) or not isinstance(tune_rows, DSControlRows):
         raise TypeError("DS reader returned invalid rows")
-    confidence_labels = _validate_rows(confidence_records, confidence_rows.exam_keys)
-    tune_labels = _validate_rows(tune_records, tune_rows.exam_keys)
+    confidence_labels = _validate_exposure_rows(
+        confidence_records,
+        confidence_rows.exam_keys,
+        confidence_expected_exam_keys,
+    )
+    tune_labels = _validate_exposure_rows(
+        tune_records, tune_rows.exam_keys, tune_expected_exam_keys
+    )
     confidence_targets = torch.tensor(
         confidence_labels, dtype=torch.long, device=confidence_rows.classifier_prediction.device
     )
@@ -562,6 +623,8 @@ def fit_ds_control_artifact_with_role_access(
         confidence_exam_keys=confidence_rows.exam_keys,
         tune_manifest=tune_manifest,
         tune_exam_keys=tune_rows.exam_keys,
+        confidence_expected_exam_keys=confidence_expected_exam_keys,
+        tune_expected_exam_keys=tune_expected_exam_keys,
         regularizations=config.search_table.ds_regularizations,
     )
     state = {
@@ -577,6 +640,7 @@ def fit_ds_control_artifact_with_role_access(
             method="ds_logistic",
             config=config,
             classifier=classifier,
+            encoder_identity=encoder_identity,
             seed=seed,
             confidence_manifest_sha256=confidence_manifest.manifest_sha256,
             tune_manifest_sha256=tune_manifest.manifest_sha256,
@@ -585,8 +649,8 @@ def fit_ds_control_artifact_with_role_access(
             update_count=control.selection_trials,
             selection_trials=control.selection_trials,
             exposure_by_role={
-                Role.CONFIDENCE_FIT.value: len(confidence_records),
-                Role.TUNE.value: len(tune_records),
+                Role.CONFIDENCE_FIT.value: len(confidence_rows.exam_keys),
+                Role.TUNE.value: len(tune_rows.exam_keys),
             },
             scaling="confidence_fit_fitted_feature_scaler",
             output_kind="probability",
@@ -603,6 +667,7 @@ def fit_scalar_calibration_artifact_with_role_access(
     orientation: ScoreOrientation,
     config: ResearchRunConfig,
     classifier: ClassifierProvenance,
+    encoder_identity: FrozenEncoderIdentity | None = None,
     seed: int,
     tune_manifest: RoleManifest,
     row_reader: Callable[[tuple[PrivateExamRecord, ...]], ScalarCalibrationRows],
@@ -647,6 +712,7 @@ def fit_scalar_calibration_artifact_with_role_access(
                 method=method,
                 config=config,
                 classifier=classifier,
+                encoder_identity=encoder_identity,
                 seed=seed,
                 confidence_manifest_sha256=None,
                 tune_manifest_sha256=tune_manifest.manifest_sha256,

@@ -41,13 +41,17 @@ from .baselines import (
 )
 from .cache import (
     CacheBundle,
+    CacheProvenance,
     CachedTargets,
     _require_external_or_ignored_destination,
+    validate_cache_encoder_identity,
+    validate_cache_realization,
 )
 from .features import (
     LEGACY_IMAGE_MEAN,
     LEGACY_IMAGE_STD,
     LEGACY_PREPROCESSING,
+    FrozenEncoderIdentity,
     FrozenViewFeatures,
     VerifiedFrozenEncoder,
     tensor_sha256,
@@ -1105,6 +1109,73 @@ def build_training_schedule(
     return tuple(result)
 
 
+def tune_selection_cells() -> tuple[tuple[str | None, str | None, str | None], ...]:
+    """Return clean plus the frozen balanced 16 single-view tune cells."""
+
+    return (
+        (None, None, None),
+        *(
+            (family, severity, view)
+            for family in ("gaussian_noise", "gaussian_blur")
+            for severity in ("mild", "moderate")
+            for view in CANONICAL_VIEWS
+        ),
+    )
+
+
+def expected_tune_cache_realization(
+    record: PrivateExamRecord,
+    cell: tuple[str | None, str | None, str | None],
+    *,
+    stress_seed: int,
+) -> tuple[tuple[str, ...], dict[str, PerturbationSpec]]:
+    """Derive one exact full-view tune realization from the authorized record."""
+
+    if cell not in tune_selection_cells():
+        raise ValueError("tune cell is outside the frozen clean/balanced panel")
+    family, severity, target_view = cell
+    specs = {view: PerturbationSpec("clean") for view in CANONICAL_VIEWS}
+    if family is not None:
+        assert severity is not None and target_view is not None
+        private_key = f"{record.patient_key}\0{record.exam_key}"
+        specs[target_view] = PerturbationSpec.for_sample(
+            family,
+            severity,
+            private_sample_key=private_key,
+            cell=f"tune/{family}/{severity}/{target_view}",
+            seed=stress_seed,
+        )
+    return tuple(CANONICAL_VIEWS), specs
+
+
+def validate_tune_cache_provenance(
+    provenance: CacheProvenance,
+    *,
+    record: PrivateExamRecord,
+    cell: tuple[str | None, str | None, str | None],
+    stress_seed: int,
+    encoder_identity: FrozenEncoderIdentity,
+    fusion_pairs: FusionPairs,
+) -> str:
+    """Validate exact identity, cohort, mask, seed, target and parameters for tune."""
+
+    if (
+        provenance.batch_size != 1
+        or provenance.exam_keys != (record.exam_key,)
+        or provenance.patient_keys != (record.patient_key,)
+    ):
+        raise ValueError("tune cache must contain exactly its authorized exam")
+    observed, specs = expected_tune_cache_realization(
+        record, cell, stress_seed=stress_seed
+    )
+    validate_cache_encoder_identity(
+        provenance, encoder_identity, fusion_pairs=fusion_pairs
+    )
+    return validate_cache_realization(
+        provenance, observed_views=observed, spec_by_view=specs
+    )
+
+
 def build_method_training_schedule(
     records: Sequence[PrivateExamRecord], *, epoch: int, seed: int, method: str
 ) -> tuple[ScheduledExample, ...]:
@@ -1794,20 +1865,21 @@ class ConfidenceFitBatch:
         object.__setattr__(self, "corruption_targets", targets)
 
 
-def _expected_perturbation(draw: TrainingSampleSpec, view: str) -> Mapping[str, object]:
+def _expected_perturbation(draw: TrainingSampleSpec, view: str) -> PerturbationSpec:
     if view not in draw.stressed_views or draw.perturbation is None:
-        return PerturbationSpec("clean").to_dict()
-    return draw.perturbation.to_dict()
+        return PerturbationSpec("clean")
+    return draw.perturbation
 
 
-def _validate_scheduled_bundle(
-    bundle: CacheBundle,
+def validate_scheduled_cache_provenance(
+    provenance: CacheProvenance,
     *,
     manifest: RoleManifest,
     classifier_checkpoint_sha256: str,
     schedule: Mapping[str, ScheduledExample],
+    encoder_identity: FrozenEncoderIdentity | None,
+    fusion_pairs: FusionPairs,
 ) -> None:
-    provenance = bundle.provenance
     if (
         provenance.dataset_namespace != manifest.dataset_namespace
         or provenance.manifest_sha256 != manifest.manifest_sha256
@@ -1816,20 +1888,41 @@ def _validate_scheduled_bundle(
         or provenance.checkpoint_sha256 != classifier_checkpoint_sha256
     ):
         raise ValueError("confidence cache provenance binding is stale or mismatched")
+    if encoder_identity is not None:
+        validate_cache_encoder_identity(
+            provenance, encoder_identity, fusion_pairs=fusion_pairs
+        )
     for exam_key in provenance.exam_keys:
         scheduled = schedule.get(exam_key)
         if scheduled is None:
             raise ValueError("confidence cache contains an unauthorized scheduled row")
-        if provenance.observed_views != scheduled.draw.observed_views:
-            raise ValueError("confidence cache observed mask disagrees with frozen schedule")
-        for view in provenance.observed_views:
-            record = provenance.perturbations[view]
-            if record is None or not isinstance(record.get("spec"), Mapping):
-                raise ValueError("confidence cache perturbation binding is incomplete")
-            spec = record["spec"]
-            actual = dict(spec)
-            if actual != _expected_perturbation(scheduled.draw, view):
-                raise ValueError("confidence cache perturbation disagrees with frozen schedule")
+        validate_cache_realization(
+            provenance,
+            observed_views=scheduled.draw.observed_views,
+            spec_by_view={
+                view: _expected_perturbation(scheduled.draw, view)
+                for view in scheduled.draw.observed_views
+            },
+        )
+
+
+def _validate_scheduled_bundle(
+    bundle: CacheBundle,
+    *,
+    manifest: RoleManifest,
+    classifier_checkpoint_sha256: str,
+    schedule: Mapping[str, ScheduledExample],
+    encoder_identity: FrozenEncoderIdentity | None,
+    fusion_pairs: FusionPairs,
+) -> None:
+    validate_scheduled_cache_provenance(
+        bundle.provenance,
+        manifest=manifest,
+        classifier_checkpoint_sha256=classifier_checkpoint_sha256,
+        schedule=schedule,
+        encoder_identity=encoder_identity,
+        fusion_pairs=fusion_pairs,
+    )
 
 
 def fit_confidence_method_with_role_access(
@@ -1846,6 +1939,7 @@ def fit_confidence_method_with_role_access(
         Iterable[ConfidenceFitBatch],
     ],
     frozen_encoder: VerifiedFrozenEncoder | None = None,
+    encoder_identity: FrozenEncoderIdentity | None = None,
     checkpoint_path: str | Path | None = None,
     resume: bool = False,
     stop_after_epoch: int | None = None,
@@ -1879,8 +1973,12 @@ def fit_confidence_method_with_role_access(
         raise ValueError("training protocol binding is stale")
     if binding.classifier_checkpoint_sha256 != classifier.checkpoint_sha256:
         raise ValueError("training classifier binding is stale")
+    if classifier.kind == "public_pretrained_fresh" and encoder_identity is None:
+        raise ValueError("production confidence fitting requires exact encoder identity")
     if frozen_encoder is not None:
         identity = frozen_encoder.identity
+        if encoder_identity is not None and identity != encoder_identity:
+            raise ValueError("frozen encoder disagrees with persisted selected identity")
         if (
             identity.checkpoint_sha256 != classifier.checkpoint_sha256
             or identity.backbone != classifier.backbone
@@ -1918,6 +2016,12 @@ def fit_confidence_method_with_role_access(
                     manifest=manifest,
                     classifier_checkpoint_sha256=classifier.checkpoint_sha256,
                     schedule=schedule_by_key,
+                    encoder_identity=encoder_identity,
+                    fusion_pairs=(
+                        RSNA_FUSION_PAIRS
+                        if config.dataset == "RSNA"
+                        else DDSM_FUSION_PAIRS
+                    ),
                 )
                 exam_keys.extend(bundle.provenance.exam_keys)
             yield RoleBoundBatch(tuple(exam_keys), batch)
@@ -1981,6 +2085,7 @@ __all__ = [
     "build_learned_method",
     "build_method_training_schedule",
     "build_training_schedule",
+    "expected_tune_cache_realization",
     "checked_intervention_targets",
     "confidence_bundle_loss",
     "fit_role_bound_module",
@@ -1997,4 +2102,7 @@ __all__ = [
     "pinned_public_clip_configuration",
     "save_readiness_audit",
     "state_dict_sha256",
+    "tune_selection_cells",
+    "validate_scheduled_cache_provenance",
+    "validate_tune_cache_provenance",
 ]

@@ -1,0 +1,42 @@
+{
+  "reviewed_commit": "b91cc5c9404445d8c644136f404ed7e5d07de6c9",
+  "decision": "NOT ACCEPTED",
+  "launch": {
+    "name": "p4-training-review6",
+    "model": "gpt-5.6-sol",
+    "effort": "xhigh",
+    "cwd": "/home/tianqini/research/.ivr-p4-worktrees/p4-training-review6",
+    "pane": "wH:p1",
+    "deadline": "2026-09-17T20:36:32Z",
+    "resume": null,
+    "ref": "b91cc5c9404445d8c644136f404ed7e5d07de6c9"
+  },
+  "thread": "01a0b004-37d8-7182-8e65-ed90fd877e3c",
+  "checks": [
+    {
+      "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/ruff check src tests/research'",
+      "exit_code": 0,
+      "output_tail": "All checks passed!\n"
+    },
+    {
+      "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m compileall -q src tests/research && git diff --check 2711fbf0a73365633090eedeaa6133004c140071 b91cc5c9404445d8c644136f404ed7e5d07de6c9'",
+      "exit_code": 2,
+      "output_tail": "evidence/phase4/p4-training-review4.md:5: trailing whitespace.\n+Accepted base: `8562a4b0b6fe5c3baf0e463c9ab213e00aae1dcd`  \n"
+    },
+    {
+      "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research'",
+      "exit_code": 0,
+      "output_tail": "........................................................................ [ 27%]\n........................................................................ [ 55%]\n........................................................................ [ 83%]\n..........................................                               [100%]\n258 passed in 12.51s\n"
+    },
+    {
+      "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_cache.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_artifacts.py tests/research/test_view_risk_production.py'",
+      "exit_code": 0,
+      "output_tail": "....................................................................     [100%]\n68 passed in 12.75s\n"
+    },
+    {
+      "command": "/bin/bash -lc \"git status --short && git rev-parse HEAD && git merge-base --is-ancestor 8562a4b0b6fe5c3baf0e463c9ab213e00aae1dcd b91cc5c9404445d8c644136f404ed7e5d07de6c9 && git merge-base --is-ancestor 2711fbf0a73365633090eedeaa6133004c140071 b91cc5c9404445d8c644136f404ed7e5d07de6c9 && git diff --check 2711fbf0a73365633090eedeaa6133004c140071 b91cc5c9404445d8c644136f404ed7e5d07de6c9 -- src tests/research && date -u '+%Y-%m-%d %H:%M:%S UTC'\"",
+      "exit_code": 0,
+      "output_tail": "b91cc5c9404445d8c644136f404ed7e5d07de6c9\n2026-09-17 15:48:55 UTC\n"
+    }
+  ]
+}

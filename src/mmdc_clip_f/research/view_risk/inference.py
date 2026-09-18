@@ -10,7 +10,7 @@ from torch import Tensor, nn
 
 from .artifacts import analytic_control_confidence, load_control_artifact
 from .baselines import build_ds_features
-from .cache import CacheBundle
+from .cache import CacheBundle, validate_cache_encoder_identity
 from .evaluation import ModelArtifactSelection
 from .head_inputs import prepare_raw_head_inputs
 from .production import load_tensor_checkpoint_state
@@ -28,6 +28,20 @@ class ConfidenceBatchOutput:
     confidence: Tensor
     confidence_kind: str
     classifier_prediction: Tensor
+
+
+def _validate_selection_bundle_identity(
+    selection: ModelArtifactSelection, bundle: CacheBundle
+) -> None:
+    if selection.encoder_identity is None:
+        if selection.evidence_kind != "synthetic_software":
+            raise ValueError("selection is missing exact encoder identity")
+        return
+    validate_cache_encoder_identity(
+        bundle.provenance,
+        selection.encoder_identity,
+        fusion_pairs=selection.encoder_identity.fusion_pairs,
+    )
 
 
 def load_learned_confidence_model(
@@ -48,6 +62,7 @@ def load_learned_confidence_model(
         or selection.tune_manifest_sha256 != classifier.tune_manifest_sha256
     ):
         raise ValueError("learned confidence selection binding is stale")
+    _validate_selection_bundle_identity(selection, example)
     features = example.features
     torch.manual_seed(selection.seed)
     model = build_learned_method(
@@ -104,6 +119,7 @@ def score_confidence_cache_bundle(
     """Score one bounded cache using only label-free feature tensors."""
 
     selection.verify_current_artifact()
+    _validate_selection_bundle_identity(selection, bundle)
     prediction = bundle.features.prediction.detach()
     if selection.method in LEARNED_TORCH_METHODS:
         if learned_model is None:
@@ -116,6 +132,8 @@ def score_confidence_cache_bundle(
     if learned_model is not None:
         raise ValueError("analytic confidence scoring cannot receive a learned model")
     artifact = load_control_artifact(selection.artifact_path)
+    if artifact.encoder_identity != selection.encoder_identity:
+        raise ValueError("control artifact encoder identity changed before scoring")
     raw = prepare_raw_head_inputs(
         bundle.features, backbone=bundle.provenance.backbone
     )

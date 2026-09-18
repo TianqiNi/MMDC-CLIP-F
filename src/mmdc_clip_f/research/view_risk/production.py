@@ -18,7 +18,10 @@ from torch.nn import functional as F
 from mmdc_clip_f.data import build_transforms
 from mmdc_clip_f.provenance import sha256_file
 
-from .cache import _require_external_or_ignored_destination
+from .cache import (
+    _require_external_or_ignored_destination,
+    verify_cache_file_binding,
+)
 from .fusion import DDSM_FUSION_PAIRS, RSNA_FUSION_PAIRS
 from .inputs import CANONICAL_VIEWS
 from .roles import Operation, PrivateExamRecord, Role, RoleManifest, run_with_role_access
@@ -38,13 +41,17 @@ from .training import (
     pinned_public_clip_configuration,
     state_dict_sha256,
 )
-from .features import tensor_sha256
+from .features import (
+    FrozenEncoderIdentity,
+    frozen_encoder_identity_from_inputs,
+    tensor_sha256,
+)
 
 
 PUBLIC_INITIALIZATION_VERSION = "view-risk-public-initialization/v1"
-SELECTED_CLASSIFIER_VERSION = "view-risk-selected-classifier/v1"
+SELECTED_CLASSIFIER_VERSION = "view-risk-selected-classifier/v2"
 CLASSIFIER_FIT_VERSION = "view-risk-classifier-fit/v1"
-CONFIDENCE_FIT_VERSION = "view-risk-confidence-fit/v1"
+CONFIDENCE_FIT_VERSION = "view-risk-confidence-fit/v3"
 
 
 def _require_config_dataset_namespace(
@@ -321,6 +328,7 @@ class SelectedClassifierArtifact:
     initialization: PublicInitializationArtifact
     readiness: ReadinessAudit
     selected_checkpoint_path: Path
+    encoder_identity: FrozenEncoderIdentity
     sha256: str
     source_path: Path
     config_sha256: str
@@ -341,12 +349,85 @@ class ClassifierFitArtifact:
 @dataclass(frozen=True)
 class ConfidenceFitArtifact:
     classifier: ClassifierProvenance
+    encoder_identity: FrozenEncoderIdentity | None
     binding: TrainingBinding
     result: TrainingResult
     checkpoint_paths: tuple[tuple[int, Path], ...]
     sha256: str
     source_path: Path
     config: ResearchRunConfig
+
+
+def _selected_encoder_identity(
+    initialization: PublicInitializationArtifact, checkpoint_path: str | Path
+) -> FrozenEncoderIdentity:
+    """Derive selected identity from current verified token and checkpoint bytes."""
+
+    current = load_public_initialization_artifact(initialization.source_path)
+    tokens = load_tensor_checkpoint_state(current.input_ids_path)
+    if set(tokens) != {"input_ids"}:
+        raise ValueError("public initialization token artifact is invalid")
+    checkpoint = Path(checkpoint_path).resolve()
+    load_tensor_checkpoint_state(checkpoint)
+    return frozen_encoder_identity_from_inputs(
+        checkpoint_sha256=sha256_file(checkpoint),
+        backbone=current.classifier.backbone,
+        prompts=current.classifier.prompts,
+        input_ids=tokens["input_ids"],
+        fusion_pairs=(
+            RSNA_FUSION_PAIRS
+            if current.dataset == "RSNA"
+            else DDSM_FUSION_PAIRS
+        ),
+    )
+
+
+def _verify_cache_file_binding_bytes(binding: object) -> None:
+    """Rehash bound cache files without opening private metadata before role access."""
+
+    expected = {"metadata_path", "metadata_sha256", "tensors_path", "tensors_sha256"}
+    if not isinstance(binding, Mapping) or set(binding) != expected:
+        raise ValueError("confidence cache-file binding schema is invalid")
+    for path_field, digest_field in (
+        ("metadata_path", "metadata_sha256"),
+        ("tensors_path", "tensors_sha256"),
+    ):
+        source = Path(str(binding[path_field])).resolve()
+        _require_external_or_ignored_destination(source)
+        if sha256_file(source) != binding[digest_field]:
+            raise ValueError("confidence cache-file evidence changed")
+
+
+def _confidence_cache_index_paths(
+    path: Path, classifier: ClassifierProvenance
+) -> tuple[Path, ...]:
+    """Read only the already-authorized training index and return exact cache paths."""
+
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("confidence cache index is unavailable or invalid") from exc
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != {"schema_version", "classifier", "entries"}
+        or value["schema_version"] != "view-risk-training-cache-index/v1"
+        or value["classifier"] != classifier.to_dict()
+        or not isinstance(value["entries"], list)
+    ):
+        raise ValueError("confidence cache index workflow binding is invalid")
+    result = []
+    for entry in value["entries"]:
+        if not isinstance(entry, Mapping) or set(entry) != {
+            "epoch", "metadata_path", "provenance"
+        }:
+            raise ValueError("confidence cache index entry schema is invalid")
+        raw_path = entry["metadata_path"]
+        if not isinstance(raw_path, str) or not Path(raw_path).is_absolute():
+            raise ValueError("confidence cache index path is invalid")
+        result.append(Path(raw_path).resolve())
+    if len(set(result)) != len(result):
+        raise ValueError("confidence cache index contains duplicate paths")
+    return tuple(result)
 
 
 def save_confidence_fit_artifact(
@@ -361,6 +442,7 @@ def save_confidence_fit_artifact(
     binding: TrainingBinding,
     result: TrainingResult,
     checkpoint_paths: Mapping[int, str | Path],
+    input_cache_file_bindings: Sequence[Mapping[str, object]] | None = None,
 ) -> ConfidenceFitArtifact:
     """Persist a learned confidence fit with actual checkpoint bytes."""
 
@@ -370,6 +452,7 @@ def save_confidence_fit_artifact(
         raise ValueError("confidence fit artifact must be JSON in an existing directory")
     classifier_path = None
     classifier_file_sha256 = None
+    encoder_identity = None
     if classifier.kind == "public_pretrained_fresh":
         if classifier_artifact_path is None:
             raise ValueError("production confidence fit requires selected classifier evidence")
@@ -384,6 +467,7 @@ def save_confidence_fit_artifact(
             )
         classifier_path = classifier_artifact.source_path
         classifier_file_sha256 = sha256_file(classifier_path)
+        encoder_identity = classifier_artifact.encoder_identity
     elif classifier.kind != "synthetic_injected" or classifier_artifact_path is not None:
         raise ValueError("confidence fit classifier evidence kind is invalid")
     role_path = Path(manifest_path).resolve()
@@ -430,17 +514,52 @@ def save_confidence_fit_artifact(
         normalized.append((epoch, checkpoint))
     if records[-1]["state_sha256"] != result.model_state_sha256:
         raise ValueError("confidence final checkpoint state disagrees with training result")
+    cache_file_bindings = None
+    if input_cache_file_bindings is not None:
+        normalized_bindings = []
+        seen_metadata_paths = set()
+        for binding_record in input_cache_file_bindings:
+            verify_cache_file_binding(binding_record)
+            normalized_binding = dict(binding_record)
+            metadata_path = normalized_binding["metadata_path"]
+            if metadata_path in seen_metadata_paths:
+                raise ValueError("confidence cache-file bindings contain duplicates")
+            seen_metadata_paths.add(metadata_path)
+            normalized_bindings.append(normalized_binding)
+        cache_file_bindings = normalized_bindings
+    expected_cache_count = config.epochs * result.exposed_record_count
+    if classifier.kind == "public_pretrained_fresh" and (
+        cache_file_bindings is None
+        or len(cache_file_bindings) != expected_cache_count
+    ):
+        raise ValueError(
+            "production confidence fit requires every realized cache file binding"
+        )
+    if cache_file_bindings is not None:
+        indexed_paths = _confidence_cache_index_paths(input_path, classifier)
+        bound_paths = tuple(
+            Path(str(record["metadata_path"])).resolve()
+            for record in cache_file_bindings
+        )
+        if indexed_paths != bound_paths:
+            raise ValueError(
+                "confidence cache-file bindings disagree with the authorized index"
+            )
     payload = {
         "schema_version": CONFIDENCE_FIT_VERSION,
         "config": config.to_dict(),
         "config_sha256": config.sha256,
         "classifier": classifier.to_dict(),
+        "encoder_identity": (
+            None if encoder_identity is None else encoder_identity.to_dict()
+        ),
         "classifier_artifact_path": None if classifier_path is None else str(classifier_path),
         "classifier_artifact_file_sha256": classifier_file_sha256,
         "manifest_path": str(role_path),
         "manifest_file_sha256": sha256_file(role_path),
         "input_evidence_path": str(input_path),
         "input_evidence_file_sha256": sha256_file(input_path),
+        "input_cache_files": cache_file_bindings,
         "binding": binding.to_dict(),
         "result": result.to_dict(),
         "checkpoints": records,
@@ -448,7 +567,7 @@ def save_confidence_fit_artifact(
     digest = _sha256_json(payload)
     _atomic_json(target, {"artifact_sha256": digest, "artifact": payload})
     return ConfidenceFitArtifact(
-        classifier, binding, result, tuple(normalized), digest, target, config
+        classifier, encoder_identity, binding, result, tuple(normalized), digest, target, config
     )
 
 
@@ -468,9 +587,10 @@ def load_confidence_fit_artifact(
         raise ValueError("confidence fit artifact is unavailable or invalid") from exc
     expected = {
         "schema_version", "config", "config_sha256", "classifier",
-        "classifier_artifact_path", "classifier_artifact_file_sha256", "manifest_path",
+        "encoder_identity", "classifier_artifact_path",
+        "classifier_artifact_file_sha256", "manifest_path",
         "manifest_file_sha256", "input_evidence_path", "input_evidence_file_sha256",
-        "binding", "result", "checkpoints",
+        "input_cache_files", "binding", "result", "checkpoints",
     }
     digest = _sha256_json(payload)
     if document["artifact_sha256"] != digest or set(payload) != expected or payload[
@@ -493,13 +613,20 @@ def load_confidence_fit_artifact(
             classifier_path, expected_config=config
         )
         classifier = selected_classifier.classifier
-        if classifier.to_dict() != raw_classifier:
+        encoder_identity = selected_classifier.encoder_identity
+        if (
+            classifier.to_dict() != raw_classifier
+            or encoder_identity.to_dict() != payload["encoder_identity"]
+        ):
             raise ValueError("confidence fit classifier binding is stale")
     elif raw_classifier.get("kind") == "synthetic_injected":
         if payload["classifier_artifact_path"] is not None or payload[
             "classifier_artifact_file_sha256"
         ] is not None:
             raise ValueError("synthetic confidence fit cannot claim production evidence")
+        if payload["encoder_identity"] is not None:
+            raise ValueError("synthetic confidence fit cannot claim production encoder identity")
+        encoder_identity = None
         classifier = ClassifierProvenance._restore_frozen_record(
             **{
                 **raw_classifier,
@@ -517,6 +644,17 @@ def load_confidence_fit_artifact(
         or sha256_file(input_path) != payload["input_evidence_file_sha256"]
     ):
         raise ValueError("confidence fit manifest/cache evidence changed")
+    raw_cache_files = payload["input_cache_files"]
+    if raw_cache_files is not None:
+        if not isinstance(raw_cache_files, list):
+            raise ValueError("confidence cache-file binding table is invalid")
+        for cache_binding in raw_cache_files:
+            _verify_cache_file_binding_bytes(cache_binding)
+        metadata_paths = [
+            cache_binding["metadata_path"] for cache_binding in raw_cache_files
+        ]
+        if len(set(metadata_paths)) != len(metadata_paths):
+            raise ValueError("confidence cache-file bindings contain duplicates")
     try:
         binding = TrainingBinding(**payload["binding"])
         result = TrainingResult(**payload["result"])
@@ -545,6 +683,14 @@ def load_confidence_fit_artifact(
             classifier.kind == "synthetic_injected"
             or not classifier.patient_readiness_verified
         )
+        or (
+            classifier.kind == "public_pretrained_fresh"
+            and (
+                raw_cache_files is None
+                or len(raw_cache_files)
+                != config.epochs * result.exposed_record_count
+            )
+        )
     ):
         raise ValueError("confidence fit workflow cannot reproduce its bindings")
     raw_records = payload["checkpoints"]
@@ -565,7 +711,7 @@ def load_confidence_fit_artifact(
     if raw_records[-1]["state_sha256"] != result.model_state_sha256:
         raise ValueError("confidence final checkpoint state disagrees with training result")
     return ConfidenceFitArtifact(
-        classifier, binding, result, tuple(paths), digest, source, config
+        classifier, encoder_identity, binding, result, tuple(paths), digest, source, config
     )
 
 
@@ -838,6 +984,9 @@ def save_selected_classifier_artifact(
         )
     chosen = min(checkpoints, key=lambda item: (item.tune_nll, item.epoch))
     selected_path = Path(checkpoint_paths[chosen.epoch]).resolve()
+    encoder_identity = _selected_encoder_identity(
+        current_initialization, selected_path
+    )
     if (
         selected.kind != "public_pretrained_fresh"
         or not selected.workflow_complete
@@ -880,6 +1029,7 @@ def save_selected_classifier_artifact(
         "schema_version": SELECTED_CLASSIFIER_VERSION,
         "config_sha256": config.sha256,
         "classifier": selected.to_dict(),
+        "encoder_identity": encoder_identity.to_dict(),
         "initialization_path": str(current_initialization.source_path),
         "initialization_file_sha256": sha256_file(current_initialization.source_path),
         "initialization_sha256": current_initialization.sha256,
@@ -905,6 +1055,7 @@ def save_selected_classifier_artifact(
         current_initialization,
         readiness,
         selected_path,
+        encoder_identity,
         digest,
         target,
         config.sha256,
@@ -937,6 +1088,7 @@ def load_selected_classifier_artifact(
         "schema_version",
         "config_sha256",
         "classifier",
+        "encoder_identity",
         "initialization_path",
         "initialization_file_sha256",
         "initialization_sha256",
@@ -1071,11 +1223,15 @@ def load_selected_classifier_artifact(
     selected_path = Path(str(payload["selected_checkpoint_path"])).resolve()
     if selected_path != Path(str(records[checkpoints.index(chosen)]["path"])).resolve():
         raise ValueError("selected classifier checkpoint path is stale")
+    encoder_identity = _selected_encoder_identity(initialization, selected_path)
+    if encoder_identity.to_dict() != payload["encoder_identity"]:
+        raise ValueError("selected classifier encoder/token identity changed")
     return SelectedClassifierArtifact(
         selected,
         initialization,
         readiness,
         selected_path,
+        encoder_identity,
         digest,
         source,
         str(payload["config_sha256"]),
