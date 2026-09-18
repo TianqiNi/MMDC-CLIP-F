@@ -35,7 +35,7 @@ from .perturbations import (
     PerturbationMetadata,
     PerturbationSpec,
     RealizedParent,
-    resolve_parameters,
+    resolve_realized_parameters,
     validate_training_perturbation,
 )
 from .roles import Operation, PrivateExamRecord, Role, RoleManifest, run_with_role_access
@@ -320,6 +320,83 @@ class CacheProvenance:
             raise ArtifactIntegrityError(f"invalid cache provenance: {exc}") from exc
 
 
+def validate_cache_encoder_identity(
+    provenance: CacheProvenance,
+    identity: FrozenEncoderIdentity,
+    *,
+    fusion_pairs: FusionPairs,
+) -> None:
+    """Require one cache to come from the exact token/config/weight identity."""
+
+    if not isinstance(provenance, CacheProvenance) or not isinstance(
+        identity, FrozenEncoderIdentity
+    ):
+        raise TypeError("cache encoder validation requires typed provenance and identity")
+    expected = {
+        "checkpoint_sha256": identity.checkpoint_sha256,
+        "backbone": identity.backbone,
+        "hf_model": identity.hf_model,
+        "backbone_revision": identity.backbone_revision,
+        "image_size": identity.image_size,
+        "hidden_size": identity.hidden_size,
+        "preprocessing": identity.preprocessing,
+        "image_mean": identity.image_mean,
+        "image_std": identity.image_std,
+        "prompt_order": identity.prompt_order,
+        "text_input_sha256": identity.text_input_sha256,
+        "fusion_pairs": identity.fusion_pairs,
+    }
+    if validate_fusion_pairs(fusion_pairs) != identity.fusion_pairs:
+        raise ValueError("requested dataset fusion disagrees with frozen encoder identity")
+    if any(getattr(provenance, name) != value for name, value in expected.items()):
+        raise ValueError("cache frozen encoder/token/fusion identity is stale or mismatched")
+
+
+def validate_cache_realization(
+    provenance: CacheProvenance,
+    *,
+    observed_views: tuple[str, ...],
+    spec_by_view: Mapping[str, PerturbationSpec],
+) -> str:
+    """Replay one complete mask/spec/parameter contract from metadata only."""
+
+    observed = canonicalize_observed_views(observed_views)
+    if tuple(observed_views) != observed or provenance.observed_views != observed:
+        raise ValueError("cache observed mask disagrees with the prescribed realization")
+    if set(spec_by_view) != set(observed):
+        raise ValueError("realization contract must specify every observed view")
+    realized: dict[str, object] = {}
+    for view in observed:
+        expected_spec = spec_by_view[view]
+        if not isinstance(expected_spec, PerturbationSpec):
+            raise TypeError("realization contract contains a non-perturbation specification")
+        metadata = provenance.perturbations[view]
+        if not isinstance(metadata, Mapping):
+            raise ValueError("cache perturbation metadata is incomplete")
+        try:
+            actual_spec = PerturbationSpec.from_dict(metadata["spec"])  # type: ignore[arg-type]
+            actual_parameters = dict(metadata["parameters"])  # type: ignore[arg-type]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("cache perturbation metadata is invalid") from exc
+        expected_parameters = resolve_realized_parameters(
+            expected_spec, provenance.image_size
+        )
+        if actual_spec != expected_spec or actual_parameters != expected_parameters:
+            raise ValueError("cache perturbation seed/variant/parameters are stale")
+        realized[view] = {
+            "spec": expected_spec.to_dict(),
+            "parameters": expected_parameters,
+        }
+    return _hash_json(
+        {
+            "schema_version": "view-risk-cache-realization/v1",
+            "observed_views": list(observed),
+            "realized": realized,
+            "parent_identity_sha256": provenance.parent_identity_sha256,
+        }
+    )
+
+
 @dataclass(frozen=True)
 class CachedTargets:
     """Label-supervised outputs kept separate from label-free inference features."""
@@ -416,9 +493,8 @@ def _validate_realized_perturbation_parameters(parent: RealizedParent) -> None:
         if any(not isinstance(key, str) or not key for key in keys) or len(set(keys)) != len(keys):
             raise ValueError("realized perturbation parameters require unique string fields")
         actual = dict(entries)
-        expected = resolve_parameters(metadata.spec, int(image.shape[-1]))
-        extra_fields = {"top", "left"} if metadata.spec.family == "crop" else set()
-        if set(actual) != set(expected) | extra_fields:
+        expected = resolve_realized_parameters(metadata.spec, int(image.shape[-1]))
+        if set(actual) != set(expected):
             raise ValueError(
                 "realized perturbation parameters have missing or unknown fields"
             )
@@ -428,18 +504,6 @@ def _validate_realized_perturbation_parameters(parent: RealizedParent) -> None:
                 raise ValueError(
                     f"realized perturbation parameters disagree with spec: {field}"
                 )
-        if metadata.spec.family == "crop":
-            maximum_offset = int(image.shape[-1]) - int(expected["crop_side"])
-            for field in ("top", "left"):
-                value = actual[field]
-                if isinstance(value, bool) or not isinstance(value, int):
-                    raise ValueError(
-                        f"realized perturbation parameters require integer {field}"
-                    )
-                if value < 0 or value > maximum_offset:
-                    raise ValueError(
-                        f"realized perturbation parameters contain out-of-bounds {field}"
-                    )
 
 
 def _provenance_for_exam(

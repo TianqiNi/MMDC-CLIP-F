@@ -19,7 +19,10 @@ from .cache import (
     _require_external_or_ignored_destination,
     bind_cache_files,
     verify_cache_file_binding,
+    validate_cache_encoder_identity,
+    validate_cache_realization,
 )
+from .features import FrozenEncoderIdentity
 from .fusion import DDSM_FUSION_PAIRS, RSNA_FUSION_PAIRS
 from .inputs import CANONICAL_VIEWS
 from .metrics import EvaluationPrediction, confidence_panel_metrics, evaluate_aurc_panel
@@ -28,7 +31,6 @@ from .perturbations import (
     FITTING_SEVERITIES,
     PerturbationSpec,
     enumerate_evaluation_panels,
-    resolve_parameters,
 )
 from .roles import Operation, PrivateExamRecord, Role, RoleManifest, run_with_role_access
 from .training import (
@@ -44,8 +46,8 @@ from .training import (
 )
 
 
-PILOT_PLAN_VERSION = "view-risk-pilot-plan/v2"
-PILOT_PLAN_ENVELOPE_VERSION = "view-risk-pilot-plan-envelope/v2"
+PILOT_PLAN_VERSION = "view-risk-pilot-plan/v3"
+PILOT_PLAN_ENVELOPE_VERSION = "view-risk-pilot-plan-envelope/v3"
 PREDICTION_SET_VERSION = "view-risk-authoritative-predictions/v2"
 TUNE_GUARDRAIL = 0.005
 
@@ -492,6 +494,7 @@ class ModelArtifactSelection:
     evidence_kind: str
     config_sha256: str
     classifier_checkpoint_sha256: str
+    encoder_identity: FrozenEncoderIdentity | None
     tune_manifest_sha256: str
     search_table_sha256: str
     selection_trials: int
@@ -510,6 +513,7 @@ class ModelArtifactSelection:
         evidence_kind: str,
         config_sha256: str,
         classifier_checkpoint_sha256: str,
+        encoder_identity: FrozenEncoderIdentity | None,
         tune_manifest_sha256: str,
         search_table_sha256: str,
         selection_trials: int,
@@ -545,6 +549,13 @@ class ModelArtifactSelection:
             raise ValueError("selection trial count must be a nonnegative integer")
         if not isinstance(eligible, bool) or not eligible:
             raise ValueError("incomplete or no-eligible selections cannot be frozen")
+        if (
+            encoder_identity is not None
+            and encoder_identity.checkpoint_sha256 != classifier_checkpoint_sha256
+        ):
+            raise ValueError("selection encoder identity disagrees with classifier checkpoint")
+        if evidence_kind != "synthetic_software" and encoder_identity is None:
+            raise ValueError("production selection requires exact encoder identity")
         values = {
             "method": method,
             "seed": seed,
@@ -553,6 +564,7 @@ class ModelArtifactSelection:
             "evidence_kind": evidence_kind,
             "config_sha256": config_sha256,
             "classifier_checkpoint_sha256": classifier_checkpoint_sha256,
+            "encoder_identity": encoder_identity,
             "tune_manifest_sha256": tune_manifest_sha256,
             "search_table_sha256": search_table_sha256,
             "selection_trials": selection_trials,
@@ -589,6 +601,7 @@ class ModelArtifactSelection:
             evidence_kind="synthetic_software",
             config_sha256=config.sha256,
             classifier_checkpoint_sha256=classifier.checkpoint_sha256,
+            encoder_identity=None,
             tune_manifest_sha256=classifier.tune_manifest_sha256,
             search_table_sha256=config.search_table.sha256,
             selection_trials=(
@@ -654,6 +667,7 @@ class ModelArtifactSelection:
             clean_reference.method != "correctness_mvacn"
             or clean_reference.seed != current.seed
             or clean_reference.classifier_checkpoint_sha256 != classifier.checkpoint_sha256
+            or current.encoder_identity != clean_reference.encoder_identity
         ):
             raise ValueError("analytic control requires the same-seed clean reference")
         expected_kind = {
@@ -697,6 +711,7 @@ class ModelArtifactSelection:
             evidence_kind=current.evidence_kind,
             config_sha256=config.sha256,
             classifier_checkpoint_sha256=classifier.checkpoint_sha256,
+            encoder_identity=current.encoder_identity,
             tune_manifest_sha256=current.tune_manifest_sha256,
             search_table_sha256=config.search_table.sha256,
             selection_trials=current.selection_trials,
@@ -745,8 +760,7 @@ class ModelArtifactSelection:
             != classifier.checkpoint_sha256
             or training_binding.method != method
             or training_binding.seed != seed
-            or
-            training_result.method != method
+            or training_result.method != method
             or training_result.seed != seed
             or training_result.completed_epoch != config.epochs
             or training_result.selection_trial_budget != config.epochs
@@ -756,6 +770,7 @@ class ModelArtifactSelection:
             or training_result.parameter_count < 1
         ):
             raise ValueError("learned training result is incomplete or budget-mismatched")
+        encoder_identity = None
         if classifier.kind == "public_pretrained_fresh":
             if training_result.software_only != (
                 not classifier.patient_readiness_verified
@@ -770,6 +785,7 @@ class ModelArtifactSelection:
             fit_artifact = load_confidence_fit_artifact(
                 training_artifact_path, expected_config=config
             )
+            encoder_identity = fit_artifact.encoder_identity
             if (
                 fit_artifact.classifier != classifier
                 or fit_artifact.binding != training_binding
@@ -791,6 +807,7 @@ class ModelArtifactSelection:
             fit_artifact = load_confidence_fit_artifact(
                 training_artifact_path, expected_config=config
             )
+            encoder_identity = fit_artifact.encoder_identity
             if (
                 fit_artifact.classifier != classifier
                 or fit_artifact.binding != training_binding
@@ -835,12 +852,15 @@ class ModelArtifactSelection:
             else list(_tune_cache_file_bindings(tune_evidence_path))
         )
         payload = {
-            "schema_version": "view-risk-learned-selection-evidence/v3",
+            "schema_version": "view-risk-learned-selection-evidence/v4",
             "method": method,
             "seed": seed,
             "config_sha256": config.sha256,
             "search_table_sha256": config.search_table.sha256,
             "classifier_checkpoint_sha256": classifier.checkpoint_sha256,
+            "encoder_identity": (
+                None if encoder_identity is None else encoder_identity.to_dict()
+            ),
             "confidence_fit_manifest_sha256": training_result.manifest_sha256,
             "tune_manifest_sha256": classifier.tune_manifest_sha256,
             "artifact_path": str(artifact),
@@ -891,6 +911,7 @@ class ModelArtifactSelection:
             ),
             config_sha256=config.sha256,
             classifier_checkpoint_sha256=classifier.checkpoint_sha256,
+            encoder_identity=encoder_identity,
             tune_manifest_sha256=classifier.tune_manifest_sha256,
             search_table_sha256=config.search_table.sha256,
             selection_trials=len(materialized),
@@ -970,6 +991,7 @@ def _read_learned_selection_evidence(path: str | Path) -> tuple[Mapping[str, obj
         "config_sha256",
         "search_table_sha256",
         "classifier_checkpoint_sha256",
+        "encoder_identity",
         "confidence_fit_manifest_sha256",
         "tune_manifest_sha256",
         "artifact_path",
@@ -989,7 +1011,7 @@ def _read_learned_selection_evidence(path: str | Path) -> tuple[Mapping[str, obj
     if (
         not isinstance(value, Mapping)
         or set(value) != expected
-        or value["schema_version"] != "view-risk-learned-selection-evidence/v3"
+        or value["schema_version"] != "view-risk-learned-selection-evidence/v4"
     ):
         raise ValueError("learned selection evidence schema is invalid")
     return value, source
@@ -1056,6 +1078,11 @@ def load_model_artifact_selection(
     ):
         raise ValueError("learned selection evidence has stale workflow bindings")
     try:
+        stored_encoder_identity = (
+            None
+            if payload["encoder_identity"] is None
+            else FrozenEncoderIdentity.from_dict(payload["encoder_identity"])
+        )
         binding = TrainingBinding(**payload["training_binding"])
         training = TrainingResult(**payload["training_result"])
         checkpoints = tuple(
@@ -1126,6 +1153,7 @@ def load_model_artifact_selection(
         )
         if (
             fit_artifact.classifier != classifier
+            or fit_artifact.encoder_identity != stored_encoder_identity
             or fit_artifact.binding != binding
             or fit_artifact.result != training
             or {
@@ -1158,6 +1186,7 @@ def load_model_artifact_selection(
             )
             if (
                 fit_artifact.classifier != classifier
+                or fit_artifact.encoder_identity != stored_encoder_identity
                 or fit_artifact.binding != binding
                 or fit_artifact.result != training
                 or {
@@ -1198,6 +1227,7 @@ def load_model_artifact_selection(
         ),
         config_sha256=config.sha256,
         classifier_checkpoint_sha256=classifier.checkpoint_sha256,
+        encoder_identity=stored_encoder_identity,
         tune_manifest_sha256=str(payload["tune_manifest_sha256"]),
         search_table_sha256=config.search_table.sha256,
         selection_trials=len(materialized),
@@ -1225,6 +1255,7 @@ class PilotPlan:
     stress_table_sha256: str
     manifest_sha256_by_role: tuple[tuple[str, str], ...]
     classifier: ClassifierProvenance
+    encoder_identity: FrozenEncoderIdentity | None
     classifier_artifact_path: Path | None
     classifier_artifact_file_sha256: str | None
     selection_map: tuple[tuple[str, str], ...]
@@ -1310,11 +1341,18 @@ class PilotPlan:
         ):
             raise ValueError("pilot plan has a missing or invalid selection record")
         if self.classifier.kind == "public_pretrained_fresh":
-            if self.classifier_artifact_path is None or not _is_sha256(
-                self.classifier_artifact_file_sha256
+            if (
+                self.encoder_identity is None
+                or self.classifier_artifact_path is None
+                or not _is_sha256(self.classifier_artifact_file_sha256)
             ):
-                raise ValueError("production pilot plan requires classifier artifact evidence")
-        elif self.classifier_artifact_path is not None or self.classifier_artifact_file_sha256 is not None:
+                raise ValueError(
+                    "production pilot plan requires exact classifier artifact identity"
+                )
+        elif (
+            self.classifier_artifact_path is not None
+            or self.classifier_artifact_file_sha256 is not None
+        ):
             raise ValueError("synthetic plan cannot bind production classifier evidence")
 
     def payload(self) -> dict[str, object]:
@@ -1333,6 +1371,9 @@ class PilotPlan:
             "stress_table_sha256": self.stress_table_sha256,
             "manifest_sha256_by_role": dict(self.manifest_sha256_by_role),
             "classifier": self.classifier.to_dict(),
+            "encoder_identity": (
+                None if self.encoder_identity is None else self.encoder_identity.to_dict()
+            ),
             "classifier_artifact_path": (
                 None
                 if self.classifier_artifact_path is None
@@ -1370,6 +1411,7 @@ def _plan_from_payload(payload: object, digest: str, source_path: str | Path) ->
         "stress_table_sha256",
         "manifest_sha256_by_role",
         "classifier",
+        "encoder_identity",
         "classifier_artifact_path",
         "classifier_artifact_file_sha256",
         "selection_map",
@@ -1427,12 +1469,20 @@ def _plan_from_payload(payload: object, digest: str, source_path: str | Path) ->
                 sha256_file(Path(classifier_artifact_path).resolve())
                 != classifier_artifact_file_sha256
                 or selected_artifact.classifier.to_dict() != raw_classifier
+                or selected_artifact.encoder_identity.to_dict()
+                != payload["encoder_identity"]
             ):
-                raise ValueError("production classifier artifact evidence changed")
+                raise ValueError("production classifier artifact identity changed")
             classifier = selected_artifact.classifier
+            encoder_identity = selected_artifact.encoder_identity
         else:
             if classifier_artifact_path is not None or classifier_artifact_file_sha256 is not None:
                 raise ValueError("non-production classifier cannot use production evidence")
+            encoder_identity = (
+                None
+                if payload["encoder_identity"] is None
+                else FrozenEncoderIdentity.from_dict(payload["encoder_identity"])
+            )
             classifier = ClassifierProvenance._restore_frozen_record(
                 **{**raw_classifier, "prompts": tuple(raw_classifier["prompts"]),
                    "image_mean": tuple(raw_classifier["image_mean"]),
@@ -1481,6 +1531,7 @@ def _plan_from_payload(payload: object, digest: str, source_path: str | Path) ->
             stress_table_sha256=payload["stress_table_sha256"],
             manifest_sha256_by_role=tuple(sorted(manifests.items())),
             classifier=classifier,
+            encoder_identity=encoder_identity,
             classifier_artifact_path=(
                 None
                 if classifier_artifact_path is None
@@ -1510,6 +1561,7 @@ def freeze_pilot_plan(
     classifier: ClassifierProvenance,
     selections: Sequence[ModelArtifactSelection],
     classifier_artifact_path: str | Path | None = None,
+    synthetic_encoder_identity: FrozenEncoderIdentity | None = None,
 ) -> PilotPlan:
     """Create, validate, and exclusively publish an immutable pilot plan."""
 
@@ -1521,7 +1573,10 @@ def freeze_pilot_plan(
         raise PermissionError("fresh classifier fitting/tune workflow is incomplete")
     classifier_evidence_path: Path | None = None
     classifier_evidence_file_sha256: str | None = None
+    encoder_identity = synthetic_encoder_identity
     if classifier.kind == "public_pretrained_fresh":
+        if synthetic_encoder_identity is not None:
+            raise ValueError("production plan identity must come from selected artifact bytes")
         if classifier_artifact_path is None:
             raise ValueError("production pilot freeze requires selected classifier artifact evidence")
         from .production import load_selected_classifier_artifact
@@ -1547,6 +1602,7 @@ def freeze_pilot_plan(
             raise ValueError("pilot manifests disagree with readiness evidence")
         classifier_evidence_path = selected_classifier.source_path
         classifier_evidence_file_sha256 = sha256_file(classifier_evidence_path)
+        encoder_identity = selected_classifier.encoder_identity
     elif classifier_artifact_path is not None:
         raise ValueError("synthetic classifier cannot bind production classifier evidence")
     materialized = tuple(selections)
@@ -1559,6 +1615,10 @@ def freeze_pilot_plan(
             or selection.search_table_sha256 != config.search_table.sha256
             or selection.classifier_checkpoint_sha256 != classifier.checkpoint_sha256
             or selection.tune_manifest_sha256 != classifier.tune_manifest_sha256
+            or (
+                encoder_identity is not None
+                and selection.encoder_identity != encoder_identity
+            )
         ):
             raise ValueError("selection evidence has a stale workflow binding")
         if (
@@ -1641,6 +1701,7 @@ def freeze_pilot_plan(
         stress_table_sha256=_evaluation_stress_table_sha256(),
         manifest_sha256_by_role=tuple(sorted(manifest_sha256_by_role.items())),
         classifier=classifier,
+        encoder_identity=encoder_identity,
         classifier_artifact_path=classifier_evidence_path,
         classifier_artifact_file_sha256=classifier_evidence_file_sha256,
         selection_map=selection_map,
@@ -1980,37 +2041,31 @@ def validate_evaluation_cache_provenance(
         or provenance.observed_views != tuple(cell["mask"])
     ):
         raise ValueError("evaluation cache cohort/classifier/mask binding is stale")
+    if plan.encoder_identity is not None:
+        validate_cache_encoder_identity(
+            provenance, plan.encoder_identity, fusion_pairs=expected_fusion
+        )
     expected_spec = _expected_evaluation_spec(plan, cell, record)
-    stressed = set(provenance.observed_views) if mode == "common" else {
-        cell["target_view"]
-    } if mode == "single" else set()
+    stressed = (
+        set(provenance.observed_views)
+        if mode == "common"
+        else {cell["target_view"]}
+        if mode == "single"
+        else set()
+    )
+    specs = {}
     for view in provenance.observed_views:
-        metadata = provenance.perturbations[view]
-        if metadata is None:
-            raise ValueError("evaluation cache is missing complete perturbation metadata")
-        actual_spec = PerturbationSpec.from_dict(metadata["spec"])
-        if view not in stressed:
-            if actual_spec != PerturbationSpec("clean") or dict(metadata["parameters"]):
-                raise ValueError("evaluation cache perturbs a nominally clean view")
-            continue
-        if expected_spec is None:
-            raise ValueError("evaluation cache contains an undeclared perturbation")
-        if actual_spec != expected_spec:
-            raise ValueError("evaluation cache perturbation/seed/variant is stale")
-        parameters = dict(metadata["parameters"])
-        expected_parameters = resolve_parameters(expected_spec, provenance.image_size)
-        if expected_spec.family == "crop":
-            top = parameters.pop("top", None)
-            left = parameters.pop("left", None)
-            maximum = provenance.image_size - int(expected_parameters["crop_side"])
-            if (
-                isinstance(top, bool) or not isinstance(top, int)
-                or isinstance(left, bool) or not isinstance(left, int)
-                or not 0 <= top <= maximum or not 0 <= left <= maximum
-            ):
-                raise ValueError("evaluation crop realization parameters are invalid")
-        if parameters != expected_parameters:
-            raise ValueError("evaluation cache realized parameters are stale")
+        if view in stressed:
+            if expected_spec is None:
+                raise ValueError("evaluation cache contains an undeclared perturbation")
+            specs[view] = expected_spec
+        else:
+            specs[view] = PerturbationSpec("clean")
+    validate_cache_realization(
+        provenance,
+        observed_views=tuple(cell["mask"]),
+        spec_by_view=specs,
+    )
     realization_id = evaluation_cache_realization_id(plan, provenance, cell, record)
     if cell["realization_id"] != realization_id:
         raise ValueError("evaluation cache realization identity is stale")

@@ -24,6 +24,7 @@ from mmdc_clip_f.research.view_risk.cache import (
     save_cache_bundle,
 )
 from mmdc_clip_f.research.view_risk.features import load_verified_frozen_encoder
+from mmdc_clip_f.research.view_risk.fusion import DDSM_FUSION_PAIRS
 from mmdc_clip_f.research.view_risk.evaluation import (
     ClassifierTuneCheckpoint,
     freeze_pilot_plan,
@@ -70,6 +71,7 @@ from mmdc_clip_f.research.view_risk.training import (
     TrainingResult,
     audit_software_fixture,
     build_method_training_schedule,
+    build_training_schedule,
     fit_fresh_classifier_with_role_access,
     load_verified_readiness_audit,
     load_pinned_public_clip_classifier,
@@ -636,7 +638,10 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
         prompts=PROMPTS,
     )
     images = {
-        view: torch.full((3, 32, 32), 0.2 + index * 0.15)
+        view: torch.full(
+            (3, selected.encoder_identity.image_size, selected.encoder_identity.image_size),
+            0.2 + index * 0.15,
+        )
         for index, view in enumerate(("L_CC", "L_MLO", "R_CC", "R_MLO"))
     }
     training_entries = []
@@ -721,7 +726,10 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
             spec = PerturbationSpec.for_sample(
                 family,
                 severity,
-                private_sample_key="tune-exam",
+                private_sample_key=(
+                    f"{tune_manifest.records[0].patient_key}\0"
+                    f"{tune_manifest.records[0].exam_key}"
+                ),
                 cell=f"tune/{family}/{severity}/{target_view}",
                 seed=config.stress_seed,
             )
@@ -762,8 +770,9 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
     )
     tune_control_index = tmp_path / "tune-control-cache-index.json"
     tune_control_document = {
-        "schema_version": "view-risk-control-cache-index/v1",
+        "schema_version": "view-risk-control-cache-index/v2",
         "classifier": selected.classifier.to_dict(),
+        "semantics": "clean_full_tune",
         "entries": [
             {
                 "metadata_path": tune_entries[0]["metadata_path"],
@@ -772,21 +781,315 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
         ],
     }
     tune_control_index.write_text(json.dumps(tune_control_document), encoding="utf-8")
+    ds_tune_control_index = tmp_path / "ds-tune-control-cache-index.json"
+    ds_tune_control_index.write_text(
+        json.dumps(
+            {
+                "schema_version": "view-risk-control-cache-index/v2",
+                "classifier": selected.classifier.to_dict(),
+                "semantics": "ds_tune_regularization",
+                "entries": tune_entries,
+            }
+        ),
+        encoding="utf-8",
+    )
+    ds_confidence_entries = []
+    for epoch in range(1, config.epochs + 1):
+        draw = build_training_schedule(
+            confidence_manifest.records, epoch=epoch, seed=42
+        )[0].draw
+        bundle = build_exam_cache_with_role_access(
+            confidence_manifest,
+            operation=Operation.CONFIDENCE_FITTING,
+            role=Role.CONFIDENCE_FIT,
+            exam_key=confidence_manifest.records[0].exam_key,
+            sample_key=f"ds-confidence-epoch-{epoch}",
+            parent_loader=lambda _record, current=draw: realize_training_parent(
+                images, current
+            ),
+            encoder=encoder,
+            implementation_revision="p4b-command-integration",
+        )
+        cache_path = save_cache_bundle(
+            bundle, tmp_path / f"ds-confidence-cache-{epoch}.json"
+        ).metadata
+        ds_confidence_entries.append(
+            {
+                "epoch": epoch,
+                "metadata_path": str(cache_path),
+                "provenance": bundle.provenance.to_dict(),
+            }
+        )
     confidence_control_index = tmp_path / "confidence-control-cache-index.json"
     confidence_control_index.write_text(
         json.dumps(
             {
-                "schema_version": "view-risk-control-cache-index/v1",
+                "schema_version": "view-risk-control-cache-index/v2",
                 "classifier": selected.classifier.to_dict(),
-                "entries": [
-                    {
-                        "metadata_path": training_entries[0]["metadata_path"],
-                        "provenance": training_entries[0]["provenance"],
-                    }
-                ],
+                "semantics": "ds_confidence_fit",
+                "entries": ds_confidence_entries,
             }
         ),
         encoding="utf-8",
+    )
+
+    def _save_tune_cache(name, current_encoder, parent):
+        bundle = build_exam_cache_with_role_access(
+            tune_manifest,
+            operation=Operation.TUNE_SELECTION,
+            role=Role.TUNE,
+            exam_key=tune_manifest.records[0].exam_key,
+            sample_key=name,
+            parent_loader=lambda _record, current=parent: current,
+            encoder=current_encoder,
+            implementation_revision="p4b-review6-regression",
+        )
+        metadata = save_cache_bundle(bundle, tmp_path / f"{name}.json").metadata
+        return {
+            "metadata_path": str(metadata),
+            "provenance": bundle.provenance.to_dict(),
+        }
+
+    def _expect_temperature_index_rejected(document, name):
+        path = tmp_path / f"{name}-control-index.json"
+        path.write_text(json.dumps(document), encoding="utf-8")
+        with pytest.raises(
+            ValueError,
+            match="identity|realization|mask|seed|stale|mismatched",
+        ):
+            run_view_risk_command(
+                parser.parse_args(
+                    [
+                        "view-risk-fit-control",
+                        "--config", str(config_path),
+                        "--classifier-artifact", str(selected.source_path),
+                        "--method", "temperature_scaled_msp",
+                        "--seed", "42",
+                        "--output", str(tmp_path / f"{name}-control.json"),
+                        "--tune-manifest", str(tune_manifest_path),
+                        "--tune-manifest-binding", str(tune_binding_path),
+                        "--tune-private-root", str(tmp_path),
+                        "--tune-cache-index", str(path),
+                    ]
+                )
+            )
+
+    clean_parent = realize_parent(images, tuple(images))
+    token_model, token_ids = reload_verified_public_classifier(selected.initialization)
+    altered_token_encoder = load_verified_frozen_encoder(
+        token_model,
+        token_ids + 1,
+        selected.selected_checkpoint_path,
+        backbone=config.backbone,
+        prompts=PROMPTS,
+    )
+    altered_token_entry = _save_tune_cache(
+        "altered-token-clean", altered_token_encoder, clean_parent
+    )
+    altered_token_document = json.loads(json.dumps(tune_control_document))
+    altered_token_document["entries"] = [altered_token_entry]
+    _expect_temperature_index_rejected(
+        altered_token_document, "altered-token"
+    )
+
+    prompt_model, prompt_ids = reload_verified_public_classifier(selected.initialization)
+    reversed_prompt_encoder = load_verified_frozen_encoder(
+        prompt_model,
+        prompt_ids,
+        selected.selected_checkpoint_path,
+        backbone=config.backbone,
+        prompts=tuple(reversed(PROMPTS)),
+    )
+    reversed_prompt_entry = _save_tune_cache(
+        "reversed-prompt-clean", reversed_prompt_encoder, clean_parent
+    )
+    reversed_prompt_document = json.loads(json.dumps(tune_control_document))
+    reversed_prompt_document["entries"] = [reversed_prompt_entry]
+    _expect_temperature_index_rejected(
+        reversed_prompt_document, "reversed-prompt"
+    )
+
+    fusion_model, fusion_ids = reload_verified_public_classifier(selected.initialization)
+    fusion_model.fusion_pairs = DDSM_FUSION_PAIRS
+    wrong_fusion_encoder = load_verified_frozen_encoder(
+        fusion_model,
+        fusion_ids,
+        selected.selected_checkpoint_path,
+        backbone=config.backbone,
+        prompts=PROMPTS,
+    )
+    wrong_fusion_entry = _save_tune_cache(
+        "wrong-fusion-clean", wrong_fusion_encoder, clean_parent
+    )
+    wrong_fusion_document = json.loads(json.dumps(tune_control_document))
+    wrong_fusion_document["entries"] = [wrong_fusion_entry]
+    _expect_temperature_index_rejected(
+        wrong_fusion_document, "wrong-fusion"
+    )
+
+    clean_metadata = Path(tune_entries[0]["metadata_path"])
+    preprocessing_document = json.loads(clean_metadata.read_text(encoding="utf-8"))
+    preprocessing_document["provenance"]["preprocessing"] = "different-preprocessing/v1"
+    preprocessing_document.pop("record_integrity_sha256")
+    preprocessing_document["record_integrity_sha256"] = hashlib.sha256(
+        json.dumps(
+            preprocessing_document,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    preprocessing_path = tmp_path / "wrong-preprocessing-cache.json"
+    preprocessing_path.write_text(
+        json.dumps(
+            preprocessing_document,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
+    preprocessing_control = json.loads(json.dumps(tune_control_document))
+    preprocessing_control["entries"] = [
+        {
+            "metadata_path": str(preprocessing_path),
+            "provenance": preprocessing_document["provenance"],
+        }
+    ]
+    _expect_temperature_index_rejected(
+        preprocessing_control, "wrong-preprocessing"
+    )
+
+    stressed_as_clean = json.loads(json.dumps(tune_control_document))
+    stressed_as_clean["entries"] = [
+        {
+            "metadata_path": tune_entries[1]["metadata_path"],
+            "provenance": tune_entries[1]["provenance"],
+        }
+    ]
+    _expect_temperature_index_rejected(stressed_as_clean, "stressed-ts")
+
+    def _expect_tune_index_rejected(entries, name):
+        index_path = tmp_path / f"{name}-tune-index.json"
+        index_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "view-risk-tune-cache-index/v1",
+                    "entries": entries,
+                }
+            ),
+            encoding="utf-8",
+        )
+        with pytest.raises(
+            ValueError,
+            match="identity|realization|mask|seed|parameters|stale",
+        ):
+            run_view_risk_command(
+                parser.parse_args(
+                    [
+                        "view-risk-select-confidence",
+                        "--config", str(config_path),
+                        "--training-artifact", str(confidence_fit.source_path),
+                        "--manifest", str(tune_manifest_path),
+                        "--manifest-binding", str(tune_binding_path),
+                        "--private-root", str(tmp_path),
+                        "--tune-cache-index", str(index_path),
+                        "--output", str(tmp_path / f"{name}-selection.json"),
+                    ]
+                )
+            )
+
+    family, severity, target_view = tune_cells[1]
+    assert family is not None and severity is not None and target_view is not None
+    private_key = (
+        f"{tune_manifest.records[0].patient_key}\0"
+        f"{tune_manifest.records[0].exam_key}"
+    )
+    wrong_seed_spec = PerturbationSpec.for_sample(
+        family,
+        severity,
+        private_sample_key=private_key,
+        cell=f"tune/{family}/{severity}/{target_view}",
+        seed=config.stress_seed + 1,
+    )
+    wrong_seed_entry = _save_tune_cache(
+        "wrong-tune-seed",
+        encoder,
+        realize_parent(
+            images,
+            tuple(images),
+            perturbations={target_view: wrong_seed_spec},
+        ),
+    )
+    wrong_seed_entries = json.loads(json.dumps(tune_entries))
+    wrong_seed_entries[1] = {
+        "family": family,
+        "severity": severity,
+        "target_view": target_view,
+        **wrong_seed_entry,
+    }
+    _expect_tune_index_rejected(wrong_seed_entries, "wrong-seed")
+
+    correct_spec = PerturbationSpec.for_sample(
+        family,
+        severity,
+        private_sample_key=private_key,
+        cell=f"tune/{family}/{severity}/{target_view}",
+        seed=config.stress_seed,
+    )
+    masked_views = tuple(view for view in images if view != "R_MLO")
+    wrong_mask_entry = _save_tune_cache(
+        "wrong-tune-mask",
+        encoder,
+        realize_parent(
+            images,
+            masked_views,
+            perturbations={target_view: correct_spec},
+        ),
+    )
+    wrong_mask_entries = json.loads(json.dumps(tune_entries))
+    wrong_mask_entries[1] = {
+        "family": family,
+        "severity": severity,
+        "target_view": target_view,
+        **wrong_mask_entry,
+    }
+    _expect_tune_index_rejected(wrong_mask_entries, "wrong-mask")
+
+    stressed_metadata = Path(tune_entries[1]["metadata_path"])
+    parameter_document = json.loads(stressed_metadata.read_text(encoding="utf-8"))
+    parameter_document["provenance"]["perturbations"][target_view]["parameters"][
+        "sigma"
+    ] += 0.001
+    parameter_document.pop("record_integrity_sha256")
+    parameter_document["record_integrity_sha256"] = hashlib.sha256(
+        json.dumps(
+            parameter_document,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    parameter_path = tmp_path / "wrong-tune-parameters.json"
+    parameter_path.write_text(
+        json.dumps(
+            parameter_document,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
+    wrong_parameter_entries = json.loads(json.dumps(tune_entries))
+    wrong_parameter_entries[1] = {
+        "family": family,
+        "severity": severity,
+        "target_view": target_view,
+        "metadata_path": str(parameter_path),
+        "provenance": parameter_document["provenance"],
+    }
+    _expect_tune_index_rejected(
+        wrong_parameter_entries, "wrong-parameters"
     )
 
     foreign_index = tmp_path / "foreign-control-cache-index.json"
@@ -830,6 +1133,68 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
     assert result["status"] == "control_fitted"
     control_paths["temperature_scaled_msp"] = temperature_output
 
+    scheduled_draws = [
+        build_training_schedule(
+            confidence_manifest.records, epoch=epoch, seed=42
+        )[0].draw
+        for epoch in range(1, config.epochs + 1)
+    ]
+    first_draw = scheduled_draws[0]
+    replacement_index = next(
+        index
+        for index, draw in enumerate(scheduled_draws[1:], start=1)
+        if (
+            draw.observed_views,
+            draw.stressed_views,
+            draw.perturbation,
+        )
+        != (
+            first_draw.observed_views,
+            first_draw.stressed_views,
+            first_draw.perturbation,
+        )
+    )
+    unmatched_ds_entries = json.loads(json.dumps(ds_confidence_entries))
+    unmatched_ds_entries[0]["metadata_path"] = ds_confidence_entries[
+        replacement_index
+    ]["metadata_path"]
+    unmatched_ds_entries[0]["provenance"] = ds_confidence_entries[
+        replacement_index
+    ]["provenance"]
+    unmatched_ds_index = tmp_path / "unmatched-ds-confidence-index.json"
+    unmatched_ds_index.write_text(
+        json.dumps(
+            {
+                "schema_version": "view-risk-control-cache-index/v2",
+                "classifier": selected.classifier.to_dict(),
+                "semantics": "ds_confidence_fit",
+                "entries": unmatched_ds_entries,
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="realization|schedule|seed|stale"):
+        run_view_risk_command(
+            parser.parse_args(
+                [
+                    "view-risk-fit-control",
+                    "--config", str(config_path),
+                    "--classifier-artifact", str(selected.source_path),
+                    "--method", "ds_logistic",
+                    "--seed", "42",
+                    "--output", str(tmp_path / "unmatched-ds-control.json"),
+                    "--tune-manifest", str(tune_manifest_path),
+                    "--tune-manifest-binding", str(tune_binding_path),
+                    "--tune-private-root", str(tmp_path),
+                    "--tune-cache-index", str(ds_tune_control_index),
+                    "--confidence-manifest", str(confidence_manifest_path),
+                    "--confidence-manifest-binding", str(confidence_binding_path),
+                    "--confidence-private-root", str(tmp_path),
+                    "--confidence-cache-index", str(unmatched_ds_index),
+                ]
+            )
+        )
+
     result = run_view_risk_command(
         parser.parse_args(
             [
@@ -842,7 +1207,7 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
                 "--tune-manifest", str(tune_manifest_path),
                 "--tune-manifest-binding", str(tune_binding_path),
                 "--tune-private-root", str(tmp_path),
-                "--tune-cache-index", str(tune_control_index),
+                "--tune-cache-index", str(ds_tune_control_index),
                 "--confidence-manifest", str(confidence_manifest_path),
                 "--confidence-manifest-binding", str(confidence_binding_path),
                 "--confidence-private-root", str(tmp_path),
@@ -911,7 +1276,8 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
                 "clf=load_selected_classifier_artifact(sys.argv[2],expected_config=cfg);"
                 "sel=load_model_artifact_selection(sys.argv[3],config=cfg,"
                 "classifier=clf.classifier);"
-                "assert sel.selection_trials==cfg.epochs"
+                "assert sel.selection_trials==cfg.epochs;"
+                "assert sel.encoder_identity==clf.encoder_identity"
             ),
             str(config_path),
             str(selected.source_path),
@@ -953,6 +1319,22 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
         confidence_selection, example, learned_model=confidence_model
     )
     assert torch.equal(scored.classifier_prediction, example.features.prediction)
+
+    training_tensor_path = Path(
+        training_entries[0]["metadata_path"]
+    ).with_suffix(".safetensors")
+    training_tensor_bytes = training_tensor_path.read_bytes()
+    training_tensor_path.write_bytes(b"changed training cache tensor bytes")
+    try:
+        with pytest.raises(ValueError, match="cache|evidence|integrity"):
+            load_confidence_fit_artifact(
+                confidence_fit.source_path, expected_config=config
+            )
+    finally:
+        training_tensor_path.write_bytes(training_tensor_bytes)
+    assert load_confidence_fit_artifact(
+        confidence_fit.source_path, expected_config=config
+    ).encoder_identity == selected.encoder_identity
 
     tune_tensor_path = Path(tune_entries[0]["metadata_path"]).with_suffix(".safetensors")
     tune_tensor_path.write_bytes(b"changed tune cache tensor bytes")

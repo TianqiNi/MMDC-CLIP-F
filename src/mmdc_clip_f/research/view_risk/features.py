@@ -91,6 +91,41 @@ class FrozenEncoderIdentity:
     image_std: tuple[float, float, float]
     prompt_order: tuple[str, ...]
     text_input_sha256: str
+    fusion_pairs: FusionPairs
+
+    def __post_init__(self) -> None:
+        spec = get_backbone(_required_string(self.backbone, "backbone"))
+        expected = (spec.hf_model, spec.revision, spec.image_size, spec.hidden_size)
+        actual = (
+            _required_string(self.hf_model, "hf_model"),
+            _required_string(self.backbone_revision, "backbone_revision"),
+            self.image_size,
+            self.hidden_size,
+        )
+        if actual != expected:
+            raise ValueError("frozen encoder identity disagrees with the pinned backbone")
+        for name in ("checkpoint_sha256", "text_input_sha256"):
+            value = getattr(self, name)
+            if not isinstance(value, str) or len(value) != 64:
+                raise ValueError(f"{name} must be a lowercase SHA-256 digest")
+            try:
+                int(value, 16)
+            except ValueError as exc:
+                raise ValueError(f"{name} must be a lowercase SHA-256 digest") from exc
+            if value != value.lower():
+                raise ValueError(f"{name} must be a lowercase SHA-256 digest")
+        if self.preprocessing != LEGACY_PREPROCESSING:
+            raise ValueError("frozen encoder preprocessing is not the study transform")
+        if tuple(self.image_mean) != LEGACY_IMAGE_MEAN or tuple(self.image_std) != LEGACY_IMAGE_STD:
+            raise ValueError("frozen encoder normalization is not the study normalization")
+        prompts = tuple(_required_string(value, "prompt_order") for value in self.prompt_order)
+        if len(prompts) != NUM_CLASSES:
+            raise ValueError("frozen encoder identity must contain four ordered prompts")
+        object.__setattr__(self, "backbone", spec.name)
+        object.__setattr__(self, "prompt_order", prompts)
+        object.__setattr__(self, "image_mean", tuple(self.image_mean))
+        object.__setattr__(self, "image_std", tuple(self.image_std))
+        object.__setattr__(self, "fusion_pairs", validate_fusion_pairs(self.fusion_pairs))
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -105,7 +140,86 @@ class FrozenEncoderIdentity:
             "image_std": list(self.image_std),
             "prompt_order": list(self.prompt_order),
             "text_input_sha256": self.text_input_sha256,
+            "fusion_pairs": [list(pair) for pair in self.fusion_pairs],
         }
+
+    @classmethod
+    def from_dict(cls, value: object) -> "FrozenEncoderIdentity":
+        if not isinstance(value, Mapping):
+            raise ValueError("frozen encoder identity must be an object")
+        expected = {
+            "checkpoint_sha256", "backbone", "hf_model", "backbone_revision",
+            "image_size", "hidden_size", "preprocessing", "image_mean",
+            "image_std", "prompt_order", "text_input_sha256", "fusion_pairs",
+        }
+        if set(value) != expected:
+            raise ValueError("frozen encoder identity has missing or unknown fields")
+        try:
+            return cls(
+                checkpoint_sha256=value["checkpoint_sha256"],  # type: ignore[arg-type]
+                backbone=value["backbone"],  # type: ignore[arg-type]
+                hf_model=value["hf_model"],  # type: ignore[arg-type]
+                backbone_revision=value["backbone_revision"],  # type: ignore[arg-type]
+                image_size=value["image_size"],  # type: ignore[arg-type]
+                hidden_size=value["hidden_size"],  # type: ignore[arg-type]
+                preprocessing=value["preprocessing"],  # type: ignore[arg-type]
+                image_mean=tuple(value["image_mean"]),  # type: ignore[arg-type]
+                image_std=tuple(value["image_std"]),  # type: ignore[arg-type]
+                prompt_order=tuple(value["prompt_order"]),  # type: ignore[arg-type]
+                text_input_sha256=value["text_input_sha256"],  # type: ignore[arg-type]
+                fusion_pairs=tuple(
+                    tuple(pair) for pair in value["fusion_pairs"]  # type: ignore[union-attr]
+                ),
+            )
+        except (KeyError, TypeError) as exc:
+            raise ValueError("frozen encoder identity schema is invalid") from exc
+
+
+def text_input_sha256(input_ids: Tensor, prompt_order: Sequence[str]) -> str:
+    """Bind exact token IDs to the ordered prompts whose rows they encode."""
+
+    prompts = tuple(_required_string(prompt, "prompt") for prompt in prompt_order)
+    if (
+        not isinstance(input_ids, Tensor)
+        or input_ids.ndim != 2
+        or input_ids.shape[0] != len(prompts)
+        or len(prompts) != NUM_CLASSES
+    ):
+        raise ValueError("input_ids must contain one row per ordered class prompt")
+    material = hashlib.sha256()
+    material.update(_tensor_bytes(input_ids))
+    material.update(
+        json.dumps(prompts, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
+    )
+    return material.hexdigest()
+
+
+def frozen_encoder_identity_from_inputs(
+    *,
+    checkpoint_sha256: str,
+    backbone: str,
+    prompts: Sequence[str],
+    input_ids: Tensor,
+    fusion_pairs: FusionPairs,
+) -> FrozenEncoderIdentity:
+    """Derive the complete study encoder identity from verified tensor inputs."""
+
+    spec = get_backbone(backbone)
+    prompt_order = tuple(prompts)
+    return FrozenEncoderIdentity(
+        checkpoint_sha256=checkpoint_sha256,
+        backbone=spec.name,
+        hf_model=spec.hf_model,
+        backbone_revision=spec.revision,
+        image_size=spec.image_size,
+        hidden_size=spec.hidden_size,
+        preprocessing=LEGACY_PREPROCESSING,
+        image_mean=LEGACY_IMAGE_MEAN,
+        image_std=LEGACY_IMAGE_STD,
+        prompt_order=prompt_order,
+        text_input_sha256=text_input_sha256(input_ids, prompt_order),
+        fusion_pairs=validate_fusion_pairs(fusion_pairs),
+    )
 
 
 @dataclass(frozen=True)
@@ -266,7 +380,7 @@ class VerifiedFrozenEncoder:
         return current
 
     def _assert_text_inputs_unchanged(self) -> None:
-        if _text_input_sha256(self._input_ids, self.identity.prompt_order) != (
+        if text_input_sha256(self._input_ids, self.identity.prompt_order) != (
             self.identity.text_input_sha256
         ):
             raise RuntimeError("verified frozen encoder text inputs changed after binding")
@@ -429,15 +543,6 @@ def _validate_normalized_views(values: Mapping[str, Tensor]) -> Mapping[str, Ten
     return MappingProxyType({view: supplied[view] for view in observed})
 
 
-def _text_input_sha256(input_ids: Tensor, prompt_order: tuple[str, ...]) -> str:
-    material = hashlib.sha256()
-    material.update(_tensor_bytes(input_ids))
-    material.update(
-        json.dumps(prompt_order, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
-    )
-    return material.hexdigest()
-
-
 def load_verified_frozen_encoder(
     classifier: MultiViewCLIPClassifier,
     input_ids: Tensor,
@@ -478,18 +583,12 @@ def load_verified_frozen_encoder(
     expected_state_sha256 = MappingProxyType(
         {name: tensor_sha256(value) for name, value in state.items()}
     )
-    identity = FrozenEncoderIdentity(
+    identity = frozen_encoder_identity_from_inputs(
         checkpoint_sha256=checkpoint_sha256,
         backbone=spec.name,
-        hf_model=spec.hf_model,
-        backbone_revision=spec.revision,
-        image_size=spec.image_size,
-        hidden_size=spec.hidden_size,
-        preprocessing=LEGACY_PREPROCESSING,
-        image_mean=LEGACY_IMAGE_MEAN,
-        image_std=LEGACY_IMAGE_STD,
-        prompt_order=prompt_order,
-        text_input_sha256=_text_input_sha256(bound_input_ids, prompt_order),
+        prompts=prompt_order,
+        input_ids=bound_input_ids,
+        fusion_pairs=classifier.fusion_pairs,
     )
     return VerifiedFrozenEncoder(
         classifier,
