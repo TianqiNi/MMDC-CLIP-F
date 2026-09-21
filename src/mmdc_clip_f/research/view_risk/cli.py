@@ -116,6 +116,8 @@ COMMANDS = frozenset(
         "view-risk-fit-control",
         "view-risk-score-confidence",
         "view-risk-select-confidence",
+        "view-risk-preflight",
+        "view-risk-smoke",
     }
 )
 
@@ -266,6 +268,28 @@ def add_view_risk_subparsers(subparsers: argparse._SubParsersAction) -> None:
     confidence_select.add_argument("--clean-reference-record")
     confidence_select.add_argument("--output", required=True)
     confidence_select.add_argument("--device", default="cpu")
+
+    preflight = subparsers.add_parser(
+        "view-risk-preflight",
+        help="Inspect local P4C software/resources without network, downloads, or private data",
+    )
+    preflight.add_argument("--device", default="cpu")
+
+    smoke = subparsers.add_parser(
+        "view-risk-smoke",
+        help="Run the deterministic no-download synthetic P4C software smoke and cost sample",
+    )
+    smoke.add_argument(
+        "--output-dir",
+        help="Optional new external or git-ignored directory to retain synthetic artifacts",
+    )
+    smoke.add_argument("--device", default="cpu", help="cpu (default) or an available cuda device")
+    smoke.add_argument(
+        "--warmup", type=int, default=2, help="Cheap smoke warmup calls per measured operation"
+    )
+    smoke.add_argument(
+        "--repeats", type=int, default=5, help="Cheap smoke timed calls per measured operation"
+    )
 
 
 def _read_json(path: str | Path, *, description: str) -> object:
@@ -1360,6 +1384,19 @@ def _run_confidence_selection(args: argparse.Namespace) -> dict[str, object]:
 def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
     if args.command not in COMMANDS:
         return None
+    if args.command == "view-risk-preflight":
+        from .smoke import resource_preflight
+
+        return resource_preflight(device=args.device)
+    if args.command == "view-risk-smoke":
+        from .smoke import run_synthetic_smoke
+
+        return run_synthetic_smoke(
+            output_dir=args.output_dir,
+            device=args.device,
+            warmup=args.warmup,
+            repeats=args.repeats,
+        )
     if args.command == "view-risk-validate-config":
         config = load_research_run_config(args.config)
         return {
