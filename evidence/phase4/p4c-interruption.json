@@ -1,0 +1,15 @@
+{
+  "status": "paused_after_usage_limit",
+  "candidate_commit": "0eea2089647b71b590ffd8d970bff4b86dfd4b04",
+  "review": "P4C review 1: one Medium coverage finding, not accepted",
+  "implementation_thread": "01a0c46c-b87c-7223-bc17-891b547c6aa1",
+  "fix_task": "p4c-fix1",
+  "fix_exit_code": 1,
+  "failure": "Agent reported usage limit before editing source or tests; no completion report",
+  "last_verified_tests": "268 research tests passed on the initial candidate; coverage finding still open",
+  "window_deadline_utc": "2026-09-21T19:40:54Z",
+  "next_action": "Resume the same implementation agent to fix downstream DDSM and control metric coverage, then fresh Sol xhigh review and Astra medium G4 gate",
+  "publication": "P4C not integrated, pushed or accepted; P4B remains accepted",
+  "resources": "Preserve paused implementation worktree and Herdr task resources for resumption",
+  "scientific_benchmarks": "No real-data benchmark or P5 run"
+}

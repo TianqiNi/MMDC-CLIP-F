@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -112,6 +114,136 @@ def test_public_cli_smoke_is_reproducible_and_non_promotable(tmp_path, capsys) -
     assert str(tmp_path) not in public_text
     assert "exam-" not in public_text
     assert "patient-" not in public_text
+
+
+def test_smoke_scores_each_tree_method_and_panel_through_accepted_metrics(
+    tmp_path, monkeypatch
+) -> None:
+    target_trees: Counter[object] = Counter()
+    learned_score_trees: Counter[tuple[str, object]] = Counter()
+    analytic_score_methods: Counter[str] = Counter()
+    analytic_score_trees: Counter[tuple[str, object]] = Counter()
+    score_tensor_trees: dict[int, object] = {}
+    confidence_results: list[dict[str, object]] = []
+    effect_results: list[dict[str, object]] = []
+
+    original_targets = smoke_module.checked_intervention_targets
+    original_learned = smoke_module.confidence_bundle_scores
+    original_analytic = smoke_module.analytic_control_confidence
+    original_confidence_metrics = smoke_module.confidence_panel_metrics
+    original_effect_metrics = smoke_module.effect_metrics
+
+    def observe_targets(features, cached_targets):
+        target_trees[features.fusion_pairs] += features.batch_size
+        score_tensor_trees[id(features.scores)] = features.fusion_pairs
+        return original_targets(features, cached_targets)
+
+    def observe_learned(model, method, bundle):
+        learned_score_trees[(method, bundle.features.fusion_pairs)] += (
+            bundle.features.batch_size
+        )
+        return original_learned(model, method, bundle)
+
+    def observe_analytic(artifact, **kwargs):
+        analytic_score_methods[artifact.method] += 1
+        if kwargs.get("scores") is not None:
+            tree = score_tensor_trees[id(kwargs["scores"])]
+        else:
+            tree = kwargs["ds_features"].fusion_pairs
+        analytic_score_trees[(artifact.method, tree)] += 1
+        return original_analytic(artifact, **kwargs)
+
+    def observe_confidence_metrics(correct, confidence, *, confidence_kind):
+        result = original_confidence_metrics(
+            correct, confidence, confidence_kind=confidence_kind
+        )
+        confidence_results.append(asdict(result))
+        return result
+
+    def observe_effect_metrics(
+        effect_targets, reported_probabilities, valid_slots, *, stressed
+    ):
+        result = original_effect_metrics(
+            effect_targets, reported_probabilities, valid_slots, stressed=stressed
+        )
+        effect_results.append(asdict(result))
+        return result
+
+    monkeypatch.setattr(smoke_module, "checked_intervention_targets", observe_targets)
+    monkeypatch.setattr(smoke_module, "confidence_bundle_scores", observe_learned)
+    monkeypatch.setattr(smoke_module, "analytic_control_confidence", observe_analytic)
+    monkeypatch.setattr(
+        smoke_module, "confidence_panel_metrics", observe_confidence_metrics
+    )
+    monkeypatch.setattr(smoke_module, "effect_metrics", observe_effect_metrics)
+
+    report = run_synthetic_smoke(
+        output_dir=tmp_path / "behavioral-smoke",
+        device="cpu",
+        warmup=0,
+        repeats=1,
+    )
+
+    expected_panels = {
+        "clean_four_view": 2,
+        "clean_masks": 28,
+        "permitted_single": 2,
+        "held_out_single": 2,
+        "common_mode": 2,
+    }
+    expected_methods = {
+        "candidate": "probability",
+        "same_input_mlp": "probability",
+        "msp": "ranking",
+        "ds_logistic": "probability",
+    }
+    matrix = report["scientific_outputs"]["coverage_matrix"]
+    reported_confidence_results = []
+    reported_effect_results = []
+    for method, confidence_kind in expected_methods.items():
+        assert matrix[method]["training_scope"]
+        for tree in ("RSNA", "DDSM"):
+            scoring = matrix[method]["scoring"][tree]
+            assert set(scoring) == set(expected_panels)
+            for panel, expected_count in expected_panels.items():
+                result = scoring[panel]
+                assert result["sample_count"] == expected_count
+                assert result["checked_target_count"] == expected_count
+                assert result["prediction_consistent_count"] == expected_count
+                assert result["confidence_kind"] == confidence_kind
+                assert result["confidence_metrics"]["n_exams"] == expected_count
+                assert result["confidence_metrics"]["confidence_kind"] == confidence_kind
+                if confidence_kind == "probability":
+                    assert result["confidence_metrics"]["brier"] is not None
+                else:
+                    assert result["confidence_metrics"]["brier"] is None
+                reported_confidence_results.append(result["confidence_metrics"])
+                if method == "candidate":
+                    reported_effect_results.append(result["effect_metrics"])
+                else:
+                    assert result["effect_metrics"] == "not_applicable_no_effect_output"
+            assert scoring["clean_masks"]["aurc_panel"]["cell_count"] == 14
+
+    assert target_trees.total() == 72
+    assert sorted(target_trees.values()) == [36, 36]
+    assert all(
+        learned_score_trees[(method, tree)] >= 36
+        for method in ("candidate", "same_input_mlp")
+        for tree in target_trees
+    )
+    assert analytic_score_methods["msp"] >= 72
+    assert analytic_score_methods["ds_logistic"] >= 72
+    assert all(
+        analytic_score_trees[(method, tree)] >= 36
+        for method in ("msp", "ds_logistic")
+        for tree in target_trees
+    )
+    assert Counter(
+        json.dumps(value, sort_keys=True) for value in reported_confidence_results
+    ) == Counter(json.dumps(value, sort_keys=True) for value in confidence_results)
+    assert Counter(
+        json.dumps(value, sort_keys=True) for value in reported_effect_results
+    ) == Counter(json.dumps(value, sort_keys=True) for value in effect_results)
 
 
 def test_smoke_refuses_existing_or_unignored_output_without_touching_user_files(

@@ -753,7 +753,7 @@ def _run_smoke_workspace(
     }
     for tree, encoder, records in (
         ("RSNA", rsna_encoder, pilot_manifest.records),
-        ("DDSM", ddsm_encoder, pilot_manifest.records[:1]),
+        ("DDSM", ddsm_encoder, pilot_manifest.records),
     ):
         for mask in all_masks:
             bundles = []
@@ -932,143 +932,294 @@ def _run_smoke_workspace(
             ),
         ),
     }
-    stressed_bundles: list[CacheBundle] = []
-    for label, (per_view, common) in representative_specs.items():
-        for record in pilot_manifest.records:
-            stressed_bundles.append(
-                _build_bundle(
-                    pilot_manifest,
-                    record,
-                    encoder=rsna_encoder,
-                    operation=Operation.PILOT_EVALUATION,
-                    role=Role.PILOT,
-                    sample_suffix=f"stress/{label}/{record.exam_key}",
-                    parent_factory=lambda record=record, per_view=per_view, common=common: (
-                        _realized_parent(
-                            record,
-                            _FULL_MASK,
-                            device=target_device,
-                            perturbations=per_view,
-                            common_mode=common,
-                        )
-                    ),
+    stressed_by_tree: dict[str, dict[str, tuple[CacheBundle, ...]]] = {}
+    for tree, encoder in (("RSNA", rsna_encoder), ("DDSM", ddsm_encoder)):
+        stressed_by_tree[tree] = {}
+        for label, (per_view, common) in representative_specs.items():
+            bundles = []
+            for record in pilot_manifest.records:
+                bundles.append(
+                    _build_bundle(
+                        pilot_manifest,
+                        record,
+                        encoder=encoder,
+                        operation=Operation.PILOT_EVALUATION,
+                        role=Role.PILOT,
+                        sample_suffix=f"{tree}/stress/{label}/{record.exam_key}",
+                        parent_factory=(
+                            lambda record=record, per_view=per_view, common=common: (
+                                _realized_parent(
+                                    record,
+                                    _FULL_MASK,
+                                    device=target_device,
+                                    perturbations=per_view,
+                                    common_mode=common,
+                                )
+                            )
+                        ),
+                    )
+                )
+            stressed_by_tree[tree][label] = tuple(bundles)
+
+    panels_by_tree: dict[str, dict[str, tuple[CacheBundle, ...]]] = {}
+    for tree in ("RSNA", "DDSM"):
+        panels_by_tree[tree] = {
+            "clean_four_view": tuple(clean_by_tree[tree][_FULL_MASK]),
+            "clean_masks": tuple(
+                bundle
+                for mask in enumerate_proper_masks()
+                for bundle in clean_by_tree[tree][mask]
+            ),
+            **stressed_by_tree[tree],
+        }
+
+    methods = {
+        "candidate": {
+            "confidence_kind": "probability",
+            "training_scope": {
+                "mode": "one_epoch_partial_synthetic_fit_reload",
+                "fusion_tree": "RSNA",
+                "role": Role.CONFIDENCE_FIT.value,
+                "record_count": len(confidence_manifest.records),
+            },
+        },
+        "same_input_mlp": {
+            "confidence_kind": "probability",
+            "training_scope": {
+                "mode": "one_epoch_partial_synthetic_fit_reload",
+                "fusion_tree": "RSNA",
+                "role": Role.CONFIDENCE_FIT.value,
+                "record_count": len(confidence_manifest.records),
+            },
+        },
+        "msp": {
+            "confidence_kind": "ranking",
+            "training_scope": {
+                "mode": "no_fit_raw_scalar_artifact_reload",
+                "fusion_tree": "not_applicable",
+                "record_count": 0,
+            },
+        },
+        "ds_logistic": {
+            "confidence_kind": "probability",
+            "training_scope": {
+                "mode": "synthetic_role_authorized_control_fit_and_reload",
+                "fusion_tree": "RSNA",
+                "confidence_fit_record_count": len(confidence_manifest.records),
+                "tune_record_count": len(tune_manifest.records),
+            },
+        },
+    }
+
+    def score_method(
+        method: str, bundle: CacheBundle
+    ) -> tuple[Tensor, str, bool]:
+        if method == "candidate":
+            values = confidence_bundle_scores(candidate, method, bundle)
+            return values, "probability", values.shape == bundle.features.prediction.shape
+        if method == "same_input_mlp":
+            values = confidence_bundle_scores(same_input, method, bundle)
+            return values, "probability", values.shape == bundle.features.prediction.shape
+        if method == "msp":
+            values, kind = analytic_control_confidence(
+                msp_artifact, scores=bundle.features.scores
+            )
+            fixed = bool(
+                values.shape == bundle.features.prediction.shape
+                and torch.equal(
+                    bundle.features.scores.argmax(1), bundle.features.prediction
                 )
             )
+            return values, kind, fixed
+        if method == "ds_logistic":
+            ds_features = build_ds_features(
+                bundle.features.logits_by_view,
+                bundle.features.observed_views,
+                fusion_pairs=bundle.features.fusion_pairs,
+            )
+            values, kind = analytic_control_confidence(
+                ds_artifact, ds_features=ds_features
+            )
+            return values, kind, values.shape == bundle.features.prediction.shape
+        raise RuntimeError(f"unsupported smoke method: {method}")
 
-    rsna_clean_bundles = tuple(
-        bundle for mask in all_masks for bundle in clean_by_tree["RSNA"][mask]
-    )
     effects = {-1: 0, 0: 0, 1: 0}
     predictions_fixed = True
     targets_regenerated = True
     singleton_invalid = True
-    effect_targets: list[np.ndarray] = []
-    effect_probabilities: list[np.ndarray] = []
-    effect_valid: list[np.ndarray] = []
-    effect_stressed: list[bool] = []
-    candidate_confidences: list[float] = []
-    correct: list[int] = []
-    clean_mask_rows: list[EvaluationPrediction] = []
-    stressed_bundle_ids = {id(bundle) for bundle in stressed_bundles}
-    for bundle in (*rsna_clean_bundles, *stressed_bundles):
-        regenerated = checked_intervention_targets(bundle.features, bundle.targets)
-        targets_regenerated &= bool(
-            torch.equal(regenerated.observed_prediction, bundle.targets.observed_prediction)
-            and torch.equal(regenerated.omission_effects, bundle.targets.omission_effects)
-        )
-        valid = bundle.targets.valid_removal_mask
-        valid_rows = valid.unsqueeze(0).expand(bundle.features.batch_size, -1)
-        for value in bundle.targets.omission_effects[valid_rows].detach().cpu().tolist():
-            effects[int(value)] += 1
-        if len(bundle.features.observed_views) == 1:
-            singleton_invalid &= not bool(valid.any())
-        candidate_score = confidence_bundle_scores(candidate, "candidate", bundle)
-        same_score = confidence_bundle_scores(same_input, "same_input_mlp", bundle)
-        predictions_fixed &= (
-            candidate_score.shape == same_score.shape == bundle.features.prediction.shape
-            and torch.equal(bundle.targets.observed_prediction, bundle.features.prediction)
-        )
-        with torch.no_grad():
-            head_output = candidate(
-                prepare_raw_head_inputs(bundle.features, backbone="vit_b_32")
-            )
-        predictions_fixed &= bool(
-            torch.equal(head_output.classifier_prediction, bundle.features.prediction)
-        )
-        effect_targets.append(bundle.targets.omission_effects.detach().cpu().numpy())
-        effect_probabilities.append(
-            head_output.reported_auxiliary_probabilities.detach().cpu().numpy()
-        )
-        effect_valid.append(valid_rows.detach().cpu().numpy())
-        effect_stressed.extend([id(bundle) in stressed_bundle_ids] * bundle.features.batch_size)
-        candidate_confidences.extend(candidate_score.detach().cpu().tolist())
-        correct.extend(
-            (bundle.features.prediction == bundle.targets.labels).long().cpu().tolist()
-        )
-
-    for mask in enumerate_proper_masks():
-        for bundle in clean_by_tree["RSNA"][mask]:
-            confidence = float(
-                confidence_bundle_scores(candidate, "candidate", bundle).cpu()[0]
-            )
-            record_index = pilot_manifest.records.index(
-                next(
-                    record
-                    for record in pilot_manifest.records
-                    if record.exam_key == bundle.provenance.exam_keys[0]
-                )
-            )
-            clean_mask_rows.append(
-                EvaluationPrediction(
-                    dataset="SYNTHETIC",
-                    role=Role.PILOT.value,
-                    cohort="software-smoke-cohort",
-                    method="candidate",
-                    training_seed=42,
-                    patient_id=f"group-{record_index}",
-                    exam_id=f"sample-{record_index}",
-                    panel="clean_masks",
-                    target=int(bundle.targets.labels[0]),
-                    prediction=int(bundle.features.prediction[0]),
-                    confidence=confidence,
-                    confidence_kind="probability",
-                    mask=mask,
-                    realization_id="synthetic-clean-v1",
-                )
-            )
-
     full_example = clean_by_tree["RSNA"][_FULL_MASK][0]
-    msp_confidence, msp_kind = analytic_control_confidence(
-        msp_artifact, scores=full_example.features.scores
-    )
     full_ds = build_ds_features(
         full_example.features.logits_by_view,
         full_example.features.observed_views,
         fusion_pairs=full_example.features.fusion_pairs,
     )
-    ds_confidence, ds_kind = analytic_control_confidence(
-        ds_artifact, ds_features=full_ds
-    )
-    same_input_confidence = confidence_bundle_scores(
-        same_input, "same_input_mlp", full_example
-    )
-    predictions_fixed &= bool(
-        msp_artifact.method == "msp"
-        and torch.equal(
-            full_example.features.scores.argmax(1), full_example.features.prediction
-        )
-    )
+    record_index_by_key = {
+        record.exam_key: index for index, record in enumerate(pilot_manifest.records)
+    }
+    coverage_matrix: dict[str, dict[str, object]] = {
+        method: {
+            "training_scope": details["training_scope"],
+            "scoring_scope": (
+                "two synthetic fusion-tree configurations; all clean masks and "
+                "three representative stress panels"
+            ),
+            "scoring": {"RSNA": {}, "DDSM": {}},
+        }
+        for method, details in methods.items()
+    }
+    representative_confidence: dict[str, list[float]] = {}
 
-    panel_metrics = confidence_panel_metrics(
-        correct, candidate_confidences, confidence_kind="probability"
-    )
-    clean_mask_panel = evaluate_aurc_panel(clean_mask_rows)
-    effect_result = effect_metrics(
-        np.concatenate(effect_targets),
-        np.concatenate(effect_probabilities),
-        np.concatenate(effect_valid),
-        stressed=np.asarray(effect_stressed, dtype=np.bool_),
-    )
+    for tree, panels in panels_by_tree.items():
+        for panel, bundles in panels.items():
+            correct: list[int] = []
+            predictions: list[int] = []
+            targets: list[int] = []
+            effect_targets: list[np.ndarray] = []
+            effect_probabilities: list[np.ndarray] = []
+            effect_valid: list[np.ndarray] = []
+            checked_target_count = 0
+            panel_is_stressed = panel not in ("clean_four_view", "clean_masks")
+
+            for bundle in bundles:
+                regenerated = checked_intervention_targets(bundle.features, bundle.targets)
+                target_matches = bool(
+                    torch.equal(
+                        regenerated.observed_prediction,
+                        bundle.targets.observed_prediction,
+                    )
+                    and torch.equal(
+                        regenerated.omission_effects, bundle.targets.omission_effects
+                    )
+                )
+                targets_regenerated &= target_matches
+                checked_target_count += bundle.features.batch_size if target_matches else 0
+                predictions_fixed &= bool(
+                    torch.equal(
+                        bundle.targets.observed_prediction,
+                        bundle.features.prediction,
+                    )
+                )
+                valid = bundle.targets.valid_removal_mask
+                valid_rows = valid.unsqueeze(0).expand(bundle.features.batch_size, -1)
+                for value in (
+                    bundle.targets.omission_effects[valid_rows].detach().cpu().tolist()
+                ):
+                    effects[int(value)] += 1
+                if len(bundle.features.observed_views) == 1:
+                    singleton_invalid &= not bool(valid.any())
+
+                with torch.no_grad():
+                    head_output = candidate(
+                        prepare_raw_head_inputs(bundle.features, backbone="vit_b_32")
+                    )
+                predictions_fixed &= bool(
+                    torch.equal(
+                        head_output.classifier_prediction, bundle.features.prediction
+                    )
+                )
+                effect_targets.append(
+                    bundle.targets.omission_effects.detach().cpu().numpy()
+                )
+                effect_probabilities.append(
+                    head_output.reported_auxiliary_probabilities.detach().cpu().numpy()
+                )
+                effect_valid.append(valid_rows.detach().cpu().numpy())
+                correct.extend(
+                    (bundle.features.prediction == bundle.targets.labels)
+                    .long()
+                    .cpu()
+                    .tolist()
+                )
+                predictions.extend(bundle.features.prediction.detach().cpu().tolist())
+                targets.extend(bundle.targets.labels.detach().cpu().tolist())
+
+            panel_effect_metrics = effect_metrics(
+                np.concatenate(effect_targets),
+                np.concatenate(effect_probabilities),
+                np.concatenate(effect_valid),
+                stressed=np.full(
+                    len(correct), panel_is_stressed, dtype=np.bool_
+                ),
+            )
+
+            for method, details in methods.items():
+                confidence: list[float] = []
+                prediction_consistent_count = 0
+                observed_kind: str | None = None
+                for bundle in bundles:
+                    values, kind, fixed = score_method(method, bundle)
+                    confidence.extend(values.detach().cpu().tolist())
+                    prediction_consistent_count += (
+                        bundle.features.batch_size if fixed else 0
+                    )
+                    predictions_fixed &= fixed
+                    if observed_kind is None:
+                        observed_kind = kind
+                    elif observed_kind != kind:
+                        raise RuntimeError("control confidence kind changed within a panel")
+                expected_kind = details["confidence_kind"]
+                if observed_kind != expected_kind:
+                    raise RuntimeError(
+                        f"{method} produced {observed_kind!r}, expected {expected_kind!r}"
+                    )
+                metrics = confidence_panel_metrics(
+                    correct, confidence, confidence_kind=observed_kind
+                )
+                panel_report: dict[str, object] = {
+                    "sample_count": len(confidence),
+                    "checked_target_count": checked_target_count,
+                    "prediction_consistent_count": prediction_consistent_count,
+                    "confidence_kind": observed_kind,
+                    "confidence_metrics": asdict(metrics),
+                    "effect_metrics": (
+                        json.loads(_canonical_json(asdict(panel_effect_metrics)))
+                        if method == "candidate"
+                        else "not_applicable_no_effect_output"
+                    ),
+                    "scored_input_sha256": _json_sha256(
+                        {
+                            "confidence": [round(value, 8) for value in confidence],
+                            "correct": correct,
+                            "prediction": predictions,
+                            "target": targets,
+                            "tree": tree,
+                            "panel": panel,
+                        }
+                    ),
+                }
+                if panel == "clean_masks":
+                    clean_mask_rows = []
+                    for bundle, value in zip(bundles, confidence):
+                        record_index = record_index_by_key[
+                            bundle.provenance.exam_keys[0]
+                        ]
+                        clean_mask_rows.append(
+                            EvaluationPrediction(
+                                dataset=f"SYNTHETIC_{tree}",
+                                role=Role.PILOT.value,
+                                cohort=f"software-smoke-{tree.lower()}",
+                                method=method,
+                                training_seed=42,
+                                patient_id=f"group-{record_index}",
+                                exam_id=f"sample-{record_index}",
+                                panel="clean_masks",
+                                target=int(bundle.targets.labels[0]),
+                                prediction=int(bundle.features.prediction[0]),
+                                confidence=float(value),
+                                confidence_kind=observed_kind,
+                                mask=bundle.features.observed_views,
+                                realization_id="synthetic-clean-v1",
+                            )
+                        )
+                    clean_mask_panel = evaluate_aurc_panel(clean_mask_rows)
+                    panel_report["aurc_panel"] = {
+                        "cell_count": clean_mask_panel.n_cells,
+                        "exam_count": clean_mask_panel.n_exams,
+                        "mean_aurc": clean_mask_panel.mean_aurc,
+                    }
+                coverage_matrix[method]["scoring"][tree][panel] = panel_report  # type: ignore[index]
+                if tree == "RSNA" and panel == "clean_four_view":
+                    representative_confidence[method] = [round(confidence[0], 8)]
 
     # Timings are deliberately excluded from the scientific reproducibility hash.
     timing_parent = _realized_parent(
@@ -1175,30 +1326,15 @@ def _run_smoke_workspace(
             "+1": effects[1],
         },
         "representative_confidence": {
-            "candidate": _rounded(confidence_bundle_scores(candidate, "candidate", full_example)),
-            "same_input_mlp": _rounded(same_input_confidence),
-            "msp": _rounded(msp_confidence),
-            "ds_logistic": _rounded(ds_confidence),
+            method: values for method, values in representative_confidence.items()
         },
-        "confidence_metrics": asdict(panel_metrics),
-        "clean_mask_panel": {
-            "cell_count": clean_mask_panel.n_cells,
-            "exam_count": clean_mask_panel.n_exams,
-            "mean_aurc": clean_mask_panel.mean_aurc,
-        },
-        "effect_metrics": {
-            "class_order": list(effect_result.class_order),
-            "overall_support": list(effect_result.overall.actual.support),
-            "clean_support": list(effect_result.clean.actual.support),
-            "stressed_support": list(effect_result.stressed.actual.support),
-            "singleton_parent_count": effect_result.overall.singleton_parent_count,
-        },
+        "coverage_matrix": coverage_matrix,
         "learned_state_sha256": {
             "candidate": candidate_fit["model_state_sha256"],
             "same_input_mlp": same_input_fit["model_state_sha256"],
         },
     }
-    methods_exercised = ("candidate", "same_input_mlp", "msp", "ds_logistic")
+    methods_exercised = tuple(coverage_matrix)
     report: dict[str, object] = {
         "schema_version": SMOKE_REPORT_VERSION,
         "mode": "synthetic_software_only",
@@ -1211,7 +1347,7 @@ def _run_smoke_workspace(
             "nonempty_mask_count": len(all_masks),
             "proper_mask_count": len(enumerate_proper_masks()),
             "singleton_mask_count": sum(len(mask) == 1 for mask in all_masks),
-            "fusion_trees_exercised": ["RSNA", "DDSM"],
+            "fusion_trees_exercised": list(panels_by_tree),
             "signed_effect_support": scientific_outputs["signed_effect_support"],
             "stress_cases_exercised": [
                 "gaussian_noise/mild/single/L_CC (confidence-fit-permitted)",
@@ -1225,6 +1361,13 @@ def _run_smoke_workspace(
                 method for method in MANDATORY_METHODS if method not in methods_exercised
             ],
             "scope": "representative controls only; this is not the mandatory-control study",
+            "training_and_scoring_scope": {
+                method: {
+                    "training_scope": coverage_matrix[method]["training_scope"],
+                    "scoring_scope": coverage_matrix[method]["scoring_scope"],
+                }
+                for method in methods_exercised
+            },
         },
         "panels": {
             "exercised": [
@@ -1317,7 +1460,7 @@ def _run_smoke_workspace(
             "tiny injected frozen classifier with synthetic workflow bindings; "
             "no classifier fit or tune selection was performed"
         ),
-        "control_output_kinds": {"msp": msp_kind, "ds_logistic": ds_kind},
+        "control_output_kinds": {"msp": "ranking", "ds_logistic": "probability"},
         "artifact_summary": {
             "artifacts_are_synthetic_private_runtime_files": True,
             "private_paths_or_identifiers_in_report": False,
@@ -1331,7 +1474,19 @@ def _run_smoke_workspace(
             singleton_invalid,
             all(value > 0 for value in effects.values()),
             len(all_masks) == 15,
-            clean_mask_panel.n_cells == 14,
+            all(
+                entry["sample_count"] == entry["checked_target_count"]
+                == entry["prediction_consistent_count"]
+                and entry["confidence_metrics"]["n_exams"]
+                == entry["sample_count"]
+                and (
+                    panel != "clean_masks"
+                    or entry["aurc_panel"]["cell_count"] == 14
+                )
+                for method in methods_exercised
+                for tree in panels_by_tree
+                for panel, entry in coverage_matrix[method]["scoring"][tree].items()
+            ),
         )
     ):
         raise RuntimeError("synthetic smoke integration invariant failed")
