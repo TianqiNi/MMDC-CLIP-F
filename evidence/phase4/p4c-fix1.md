@@ -27,7 +27,7 @@ Implemented the narrow P4C coverage fix. The candidate remains uncommitted at HE
 
 DDSM here means the configured DDSM fusion tree over synthetic inputs—not a DDSM patient dataset or cross-dataset efficacy experiment.
 
-Implementation: [smoke.py](/home/tianqini/research/.ivr-p4c-worktrees/p4c-smoke/src/mmdc_clip_f/research/view_risk/smoke.py:935)  
+Implementation: [smoke.py](/home/tianqini/research/.ivr-p4c-worktrees/p4c-smoke/src/mmdc_clip_f/research/view_risk/smoke.py:935)
 Behavioral regression: [test_view_risk_smoke.py](/home/tianqini/research/.ivr-p4c-worktrees/p4c-smoke/tests/research/test_view_risk_smoke.py:119)
 
 ### RED/GREEN evidence
