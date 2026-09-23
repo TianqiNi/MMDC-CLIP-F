@@ -1,0 +1,14 @@
+{
+  "status": "Resource-audit task accepted; P5A data audit and classifier schedule remain pending",
+  "reviewed_commit": "182d5c08124311b254d5fc9199643cf64f110fde",
+  "reviewer_thread": "01a0cbe9-3ea8-7713-aa31-a1613a5f7a75",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "xhigh",
+  "review": "evidence/phase5/p5a-resources-review.md",
+  "open_findings_above_low": [],
+  "low_findings": "Report links made repository-relative; timing cohort basis explicitly labeled a target in aggregate evidence. Probe code unchanged.",
+  "classifier_training_permitted": false,
+  "patient_data_readiness_verified": false,
+  "real_training_or_benchmark": false,
+  "publication": "pending push and CI"
+}

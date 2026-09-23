@@ -8,7 +8,10 @@ source, tests, CI and dependencies are unchanged by integration. Publication, pa
 `evidence/phase4/p4-publication.json`; the current handoff is
 `evidence/phase4/handoff.json`.
 
-**P5 remains pending.** No real classifier/confidence training, patient benchmark,
+**P5A is in progress.** Its public-model/GPU resource audit passed independent
+review at `182d5c0`; the RSNA data audit is running and the classifier-schedule
+decision is pending. Current continuation: `evidence/phase5/handoff.json`.
+No real classifier/confidence training, patient benchmark,
 pilot result or uncertainty improvement is claimed. RSNA and MINI-DDSM readiness
 remain blocked by the audits detailed in `evidence/phase4/p4-gate-validation.json`.
 Software acceptance does not clear those blockers or unlock original tests.
@@ -97,7 +100,7 @@ not failed or complete.
 | P4A — metrics and paired inference | AURC/tie policy, both AP orientations, risk at coverage, Brier, effects, patient-paired bootstrap and seed summaries; depends on accepted P3. | Hand-computable ranking/tie/sign fixtures; one-class AP handling; all variants retained within patient clusters; paired difference and seed/patient separation. | Accepted task: fresh review PASS at `6d2da0f`; 223 tests at task acceptance; G4 passed at `9984a16`. |
 | P4B — training/evaluation/CLI | Explicit role access, fresh-classifier initialization path, confidence fitting, tune selection, immutable pilot plan and lock enforcement; depends on P4A and P2/P3 artifacts. | Forbidden-role negative tests; deterministic resume/provenance; regenerated targets; fresh public CLIP versus diagnostic checkpoint distinction; no test-selection bypass. | Accepted task: fresh review8 PASS at `94c0e4a`; 261 tests; source integrated at `02c5223`. P4C and G4 are now accepted. |
 | P4C — smoke integration and costs | End-to-end synthetic tiny run plus external-resource preflight; depends on P4B. | Synthetic nonempty masks and corruptions flow through target/head/control/metrics; CLI/config sanity; CPU smoke feasible without downloading weights; latency/memory procedure ready. Smoke outputs labeled non-scientific. | Accepted: fresh review PASS at `4a4ce51`; 269 research tests; G4 PASS at `9984a16`. |
-| P5A — fresh classifier pilot prerequisite | Audit real external resources; fit classifier only on classifier-fit, select on tune, freeze checkpoint; depends on accepted P4. | Public pinned initialization, permitted-role exposure log, actual counts, checkpoint/manifest hashes, verified predictions; original checkpoint results diagnostic only. | Pending; real-resource and patient-isolation audits required before fresh classifier training. |
+| P5A — fresh classifier pilot prerequisite | Audit real external resources; fit classifier only on classifier-fit, select on tune, freeze checkpoint; depends on accepted P4. | Public pinned initialization, permitted-role exposure log, actual counts, checkpoint/manifest hashes, verified predictions; original checkpoint results diagnostic only. | In progress: resource audit accepted at `182d5c0`; RSNA data audit/review and explicit fresh-classifier schedule remain pending before training. |
 | P5B — confidence/control fitting and freeze | Fit candidate and mandatory controls with matched draws/budgets, tune only, freeze evaluation table; depends on P5A. | Actual run/seed completion; candidate/control selections and hashes; no pilot/test exposure; incomplete controls disclosed. | Pending. |
 | P5C — measured pilot and go/no-go | Run frozen non-test pilot; report primary/clean/secondary endpoints, paired intervals, seed spread, cost and limitations; depends on P5B. | Actual measurements against all mandatory controls; apply 10% target/0.005 clean guardrail and validity rules; go/no-go/inconclusive justified without test inspection. | Pending; no measured pilot or success claim. |
 
@@ -482,3 +485,20 @@ dedicated Herdr session are removed; essential evidence is committed. The origin
 checkout and shared environment remain intact. A metadata-only follow-up records
 this publication and cleanup; its checks are visible on the PR. P5 and every
 patient-data scientific benchmark remain pending.
+
+## P5A resource prerequisite — 2026-09-23
+
+Fresh Sol xhigh review accepted `182d5c0` with no findings above Low. The pinned
+public ViT-B/32 weights loaded offline, and synthetic four-view forward/backward
+ran on the RTX 4090. Recorded timings omit decoding, hashing, augmentation,
+transfers, Adam updates, checkpoint writes and tune evaluation; they are not
+end-to-end training estimates. The 3,209-exam basis is still a target.
+
+The user approved extracting only RSNA test patient IDs for a private overlap
+denylist, without using/displaying test labels or opening test images. The data
+audit is in progress; this narrow authorization does not release test outcomes.
+
+Before real fitting, the classifier schedule needs an explicit decision: current
+production fitting inherits confidence settings (20 epochs, batch 6, Adam 1e-4,
+zero weight decay), while the original classifier uses 50 epochs, batch 3,
+Adam 1e-7 and weight decay 1e-5. No schedule change or real fitting is claimed.

@@ -1,0 +1,22 @@
+{
+  "status": "P5A in progress; resource audit independently accepted, RSNA data audit running",
+  "recorded_at_utc": "2026-09-23T16:26:42.200329+00:00",
+  "base_phase4": "9fc8eb758288e196c31f22469d734aa96bb02ee7",
+  "resource_reviewed_commit": "182d5c08124311b254d5fc9199643cf64f110fde",
+  "active_audit_worktree": "/home/tianqini/research/.ivr-p5-worktrees/p5a-audit",
+  "active_audit_thread": "01a0cbdb-a311-7da0-9568-8473f29844d6",
+  "audit_model": "gpt-5.6-sol",
+  "audit_effort": "xhigh",
+  "herdr_session": "mmdc-ivr-p5",
+  "private_artifact_root": "/home/tianqini/research/mmdc_ivr_private/p5a",
+  "pending": [
+    "RSNA data audit and independent review",
+    "Explicit classifier-schedule choice and reviewed implementation",
+    "Fresh classifier fitting and tune selection",
+    "P5B",
+    "P5C",
+    "G5"
+  ],
+  "real_training_or_benchmark": false,
+  "test_outcomes_locked": true
+}

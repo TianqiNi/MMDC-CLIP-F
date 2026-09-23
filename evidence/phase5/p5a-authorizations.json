@@ -1,0 +1,15 @@
+{
+  "rsna_locked_identity_projection": {
+    "approved_by_user": true,
+    "scope": "Extract only patient IDs from original RSNA test CSV into private overlap denylist",
+    "test_labels_used_or_displayed": false,
+    "test_images_opened": false,
+    "patient_identifiers_in_git": false,
+    "protocol_exception": "User approved local identity-only extraction in place of custodian-supplied denylist; no test evaluation unlock"
+  },
+  "fresh_classifier_schedule": {
+    "status": "awaiting explicit user choice",
+    "recommended": "Legacy RSNA ViT-B/32: Adam 1e-7, weight decay 1e-5, batch3, 50epochs, seed42; confidence schedule unchanged",
+    "applied": false
+  }
+}
