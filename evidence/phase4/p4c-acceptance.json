@@ -1,5 +1,5 @@
 {
-  "status": "P4C task and G4 software gate accepted; release publication in progress",
+  "status": "Phase 4 software accepted, published and release CI passed",
   "reviewed_commit": "4a4ce517c0e3a40b83daf603a4fca94e22b9a474",
   "reviewer_thread": "01a0ca4e-1bce-7112-9c91-6dd7154a37e5",
   "review_model": "gpt-5.6-sol",
@@ -12,7 +12,9 @@
   "review2_low": "Trailing Markdown hard-break whitespace removed in evidence only after review; source and tests unchanged",
   "scientific_sha256": "705a196af57bee4d61afa40643e293cc4146a9fbfbfccb857c1ffca187f4700b",
   "real_data_training_or_benchmark": false,
-  "next_action": "Publish accepted Phase 4, pass remote CI, clean completed resources; P5 pending",
+  "next_action": "P5A real-data readiness audits and fresh-classifier pilot prerequisite; no P5 execution occurred in this task",
   "phase4_gate_commit": "9984a16b4c3734b93b358f77877380db7def5f35",
-  "phase4_gate": "PASS"
+  "phase4_gate": "PASS",
+  "publication_record": "evidence/phase4/p4-publication.json",
+  "cleanup_record": "evidence/phase4/p4-cleanup.json"
 }

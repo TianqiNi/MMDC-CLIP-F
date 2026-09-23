@@ -1,5 +1,5 @@
 {
-  "status": "Phase 4 software accepted; publication and CI in progress",
+  "status": "Phase 4 software accepted, published and release CI passed",
   "recorded_at_utc": "2026-09-23T00:13:00.637230+00:00",
   "task_reviewed_commit": "4a4ce517c0e3a40b83daf603a4fca94e22b9a474",
   "gate_reviewed_commit": "9984a16b4c3734b93b358f77877380db7def5f35",
@@ -37,5 +37,7 @@
     "actual_inventory_weights_or_mapping_certified_by_this_gate": false
   },
   "p5_run": false,
-  "scientific_benefit_claimed": false
+  "scientific_benefit_claimed": false,
+  "publication_record": "evidence/phase4/p4-publication.json",
+  "cleanup_record": "evidence/phase4/p4-cleanup.json"
 }

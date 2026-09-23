@@ -1,0 +1,34 @@
+{
+  "completed_at_utc": "2026-09-23T00:17:08.832163+00:00",
+  "worktrees": [
+    {
+      "worktree": "/home/tianqini/research/.ivr-p4c-worktrees/p4c-review1",
+      "workspace": "w2",
+      "essential_evidence_preserved": true,
+      "removed": true
+    },
+    {
+      "worktree": "/home/tianqini/research/.ivr-p4c-worktrees/p4c-review2",
+      "workspace": "w6",
+      "essential_evidence_preserved": true,
+      "removed": true
+    },
+    {
+      "worktree": "/home/tianqini/research/.ivr-p4c-worktrees/p4-gate",
+      "essential_evidence_preserved": true,
+      "removed": true
+    },
+    {
+      "worktree": "/home/tianqini/research/.ivr-p4c-worktrees/p4c-smoke",
+      "essential_evidence_preserved": true,
+      "removed": true
+    }
+  ],
+  "herdr_session_deleted": "mmdc-ivr-p4c",
+  "agents": "All finite exec agents exited; dedicated session stopped and deleted",
+  "deadline_guard": "Already completed; no active agents at cutoff",
+  "shared_environment_preserved": true,
+  "original_checkout_preserved": true,
+  "temporary_scratch_cleanup": "Removed /tmp/mmdc-ivr-p4c-20260922 after retaining essential reports, validation and launch metadata",
+  "temporary_scratch_exists_after_cleanup": false
+}

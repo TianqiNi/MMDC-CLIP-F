@@ -1,6 +1,6 @@
 {
-  "status": "P4C and G4 software accepted; publication/CI/cleanup in progress",
-  "recorded_at_utc": "2026-09-23T00:13:00.637230+00:00",
+  "status": "P1-P4 accepted and published; P4C/G4 complete; P5 next",
+  "recorded_at_utc": "2026-09-23T00:17:08.002792+00:00",
   "latest_reviewed_candidate": "4a4ce517c0e3a40b83daf603a4fca94e22b9a474",
   "phase_gate_candidate": "9984a16b4c3734b93b358f77877380db7def5f35",
   "latest_review": "evidence/phase4/p4c-review2.md",
@@ -8,10 +8,14 @@
   "open_findings": [],
   "local_test_status": "269 research tests independently passed; G4 focused and independent metric/bootstrap checks passed on identical source",
   "pending": [
-    "publication/CI/cleanup",
     "P5"
   ],
   "no_real_data_training_or_pilot": true,
-  "next_action": "Finish Phase 4 publication and cleanup. Then P5A dataset readiness and fresh-classifier pilot prerequisite.",
-  "effective_deadline_utc": "2026-09-22T22:49:31Z"
+  "next_action": "P5A: audit RSNA patient mapping, identity-only locked-test overlap, image content/duplicates, eligible roles, public weights and real training resources; then fit/select fresh classifier. MINI-DDSM needs verified patient mapping before its dependent work.",
+  "integrated_source_commit": "da6544133a0035d9fd2cb7403b74af666cdf4790",
+  "source_integrated_to_remote": true,
+  "publication_record": "evidence/phase4/p4-publication.json",
+  "cleanup_record": "evidence/phase4/p4-cleanup.json",
+  "release_ci": "push and pull_request passed; 269 research tests in remote PR run",
+  "continuation_note": "Implementation and gate completed within September 22 agent work window. User continued afterward; final publication/cleanup occurred September 23 UTC with ordinary usage available. No new agent or research experiment started."
 }

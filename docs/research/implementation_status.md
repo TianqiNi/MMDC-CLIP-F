@@ -4,9 +4,9 @@ Current status: **P1-P4 are accepted as software, including P4C and G4.**
 Fresh P4C review passed at `4a4ce51` with no findings above Low and 269 research
 tests. The Astra medium G4 gate passed at `9984a16`, with 32 focused tests,
 independent metric/bootstrap checks, and the public synthetic smoke. Reviewed
-source, tests, CI and dependencies are unchanged by integration. Publication,
-remote CI and cleanup are recorded in `evidence/phase4/p4-publication.json` when
-completed; the current handoff is `evidence/phase4/handoff.json`.
+source, tests, CI and dependencies are unchanged by integration. Publication, passing remote CI and completed cleanup are recorded in
+`evidence/phase4/p4-publication.json`; the current handoff is
+`evidence/phase4/handoff.json`.
 
 **P5 remains pending.** No real classifier/confidence training, patient benchmark,
 pilot result or uncertainty improvement is claimed. RSNA and MINI-DDSM readiness
@@ -96,7 +96,7 @@ not failed or complete.
 | P3B — fair baselines and ablations | All controls and ablations in protocol section 6, including same-input MLP/four-class and regenerated-target augmentation controls; depends on P3A input/loss contracts. | Input/exposure/capacity audit; score orientation; original four-view MV-ACN equivalence with labeled subset adaptation; auxiliary classifier never replaces frozen predictions; ViLU adaptation documented. | Fresh review accepted `8dc66ca`; 211 integrated tests passed; actual exposure matching remains P4/P5. |
 | P4A — metrics and paired inference | AURC/tie policy, both AP orientations, risk at coverage, Brier, effects, patient-paired bootstrap and seed summaries; depends on accepted P3. | Hand-computable ranking/tie/sign fixtures; one-class AP handling; all variants retained within patient clusters; paired difference and seed/patient separation. | Accepted task: fresh review PASS at `6d2da0f`; 223 tests at task acceptance; G4 passed at `9984a16`. |
 | P4B — training/evaluation/CLI | Explicit role access, fresh-classifier initialization path, confidence fitting, tune selection, immutable pilot plan and lock enforcement; depends on P4A and P2/P3 artifacts. | Forbidden-role negative tests; deterministic resume/provenance; regenerated targets; fresh public CLIP versus diagnostic checkpoint distinction; no test-selection bypass. | Accepted task: fresh review8 PASS at `94c0e4a`; 261 tests; source integrated at `02c5223`. P4C and G4 are now accepted. |
-| P4C — smoke integration and costs | End-to-end synthetic tiny run plus external-resource preflight; depends on P4B. | Synthetic nonempty masks and corruptions flow through target/head/control/metrics; CLI/config sanity; CPU smoke feasible without downloading weights; latency/memory procedure ready. Smoke outputs labeled non-scientific. | Accepted: fresh review PASS at `4a4ce51`; 269 research tests; G4 PASS at `9984a16`. | |
+| P4C — smoke integration and costs | End-to-end synthetic tiny run plus external-resource preflight; depends on P4B. | Synthetic nonempty masks and corruptions flow through target/head/control/metrics; CLI/config sanity; CPU smoke feasible without downloading weights; latency/memory procedure ready. Smoke outputs labeled non-scientific. | Accepted: fresh review PASS at `4a4ce51`; 269 research tests; G4 PASS at `9984a16`. |
 | P5A — fresh classifier pilot prerequisite | Audit real external resources; fit classifier only on classifier-fit, select on tune, freeze checkpoint; depends on accepted P4. | Public pinned initialization, permitted-role exposure log, actual counts, checkpoint/manifest hashes, verified predictions; original checkpoint results diagnostic only. | Pending; real-resource and patient-isolation audits required before fresh classifier training. |
 | P5B — confidence/control fitting and freeze | Fit candidate and mandatory controls with matched draws/budgets, tune only, freeze evaluation table; depends on P5A. | Actual run/seed completion; candidate/control selections and hashes; no pilot/test exposure; incomplete controls disclosed. | Pending. |
 | P5C — measured pilot and go/no-go | Run frozen non-test pilot; report primary/clean/secondary endpoints, paired intervals, seed spread, cost and limitations; depends on P5B. | Actual measurements against all mandatory controls; apply 10% target/0.005 clean guardrail and validity rules; go/no-go/inconclusive justified without test inspection. | Pending; no measured pilot or success claim. |
@@ -117,7 +117,7 @@ Record the exact completed subset and retain the rest as pending.
 | G1: release P2 | P1A and combined P1B scientifically consistent; four-view legacy score/prediction compatibility and target edge cases verified; no source work inferred from documentation. | PASS: Astra medium reviewed `86031e5822680d223bed0175a83cc61280885056`, no actionable findings. | |
 | G2: release P3 | P2 role/grouping, inventory-validation, lock/stress/provenance contracts pass synthetic positive/negative checks, including refusal of absent patient mappings. Record actual inventory evidence or real-data blockers separately; unavailable patient metadata does not block generic P3 software. No fabricated inventory. | PASS: Astra medium accepted `96a4845`; publication and CI precede P3. |
 | G3: release P4 | Head/loss and all matched control interfaces tested; frozen predictions, singleton/mask handling, capacity/input fairness demonstrated. | PASS at `07df30a`; published with passing CI before P4 began. |
-| G4: release P5 | Full synthetic pipeline and metric checks pass; real-data readiness is separately recorded as verified or blocked per dataset. Unknown/unavailable resources do not prevent software acceptance, but block dependent real-data execution. No real-data success inferred from smoke. | PASS at `9984a16`; no actionable findings; per-dataset real-data blockers retained. | |
+| G4: release P5 | Full synthetic pipeline and metric checks pass; real-data readiness is separately recorded as verified or blocked per dataset. Unknown/unavailable resources do not prevent software acceptance, but block dependent real-data execution. No real-data success inferred from smoke. | PASS at `9984a16`; no actionable findings; per-dataset real-data blockers retained. |
 | G5: close pilot phase | P5 has measured outcomes with required controls or a truthful incomplete/blocker report; scientific go/no-go is separate from software acceptance. Full study is already authorized conditional on measured pilot success and time/resources; orchestrator releases tests only after those conditions and real-data readiness are verified. | Pending. |
 
 For each task and gate, the orchestrator must append: owner, immutable candidate
@@ -470,3 +470,15 @@ audits, eligible role counts, public-weight usability and training resources, th
 fit/select a fresh classifier. MINI-DDSM additionally needs verified exam-to-patient
 mapping. These checks are not complete. P5B matched confidence/control fitting and
 P5C frozen measured pilot follow in dependency order; no P5 execution occurred here.
+
+## Phase 4 publication and cleanup — 2026-09-23 UTC
+
+Release `da65441` is pushed and draft PR #1 is updated. Both release checks passed:
+PR run 35801070583 and push run 35801067150. The remote PR run executed all 269
+research tests successfully. Reviewed source/tests/CI/dependencies remain unchanged.
+
+Completed P4C implementation/review/gate worktrees, generated artifacts and the
+dedicated Herdr session are removed; essential evidence is committed. The original
+checkout and shared environment remain intact. A metadata-only follow-up records
+this publication and cleanup; its checks are visible on the PR. P5 and every
+patient-data scientific benchmark remain pending.
