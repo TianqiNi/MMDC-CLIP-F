@@ -1,0 +1,41 @@
+{
+  "status": "Phase 4 software accepted; publication and CI in progress",
+  "recorded_at_utc": "2026-09-23T00:13:00.637230+00:00",
+  "task_reviewed_commit": "4a4ce517c0e3a40b83daf603a4fca94e22b9a474",
+  "gate_reviewed_commit": "9984a16b4c3734b93b358f77877380db7def5f35",
+  "gate": "G4 PASS",
+  "gate_thread": "01a0ca57-504d-7572-9cef-0f0679a69ab1",
+  "gate_model": "gpt-6-astra",
+  "gate_effort": "medium",
+  "open_findings_above_low": [],
+  "research_tests_passed": 269,
+  "integration": "Fast-forward; exact reviewed ancestry retained, no source/test/CI/dependency changes",
+  "real_data_readiness": {
+    "evidence_source": "evidence/p2-inventory.json; historical aggregate metadata evidence, not re-audited in G4",
+    "RSNA-SMBC": {
+      "status": "blocked",
+      "historically_observed_non_test_metadata_rows": 4937,
+      "blockers": [
+        "Identity-only locked-test patient denylist/digest and overlap audit absent.",
+        "Image content validity and cross-record/cross-dataset content duplication unaudited; path presence is insufficient.",
+        "Official patient_id schema exists, but local schema-derived patient-mapping binding is not recorded.",
+        "Audited patient-isolated role manifests, actual eligible role counts/exclusions and fresh public-initialized selected-classifier provenance remain pending.",
+        "Pinned public weight content/loading and usable real-backbone training resources remain unverified."
+      ]
+    },
+    "MINI-DDSM": {
+      "status": "blocked",
+      "historically_observed_non_test_metadata_rows": 1353,
+      "blockers": [
+        "Only examination IDs are available; verified external exam-to-patient mapping absent.",
+        "Identity-only locked-test patient denylist/digest and overlap audit absent.",
+        "Image content validity and cross-record/cross-dataset content duplication unaudited; path presence is insufficient.",
+        "Audited patient-isolated role manifests, actual eligible role counts/exclusions and fresh public-initialized selected-classifier provenance remain pending.",
+        "Pinned public weight content/loading and usable real-backbone training resources remain unverified."
+      ]
+    },
+    "actual_inventory_weights_or_mapping_certified_by_this_gate": false
+  },
+  "p5_run": false,
+  "scientific_benefit_claimed": false
+}

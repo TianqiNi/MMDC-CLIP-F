@@ -1,23 +1,17 @@
 {
-  "status": "P4A and P4B accepted, published and cleaned up; P4C next",
-  "recorded_at_utc": "2026-09-18T19:34:40.939724+00:00",
-  "latest_reviewed_candidate": "94c0e4a70f681392abd6d77ea2034d93507f1d54",
-  "integrated_source_commit": "02c522345303166e0afae996a4c53874c750555f",
-  "source_integrated_to_remote": true,
-  "implementation_thread": "01a09172-4253-74b1-9029-76254f159a8c",
-  "implementation_model": "gpt-5.6-sol",
-  "implementation_effort": "xhigh",
-  "latest_review": "evidence/phase4/p4-training-review8.md",
+  "status": "P4C and G4 software accepted; publication/CI/cleanup in progress",
+  "recorded_at_utc": "2026-09-23T00:13:00.637230+00:00",
+  "latest_reviewed_candidate": "4a4ce517c0e3a40b83daf603a4fca94e22b9a474",
+  "phase_gate_candidate": "9984a16b4c3734b93b358f77877380db7def5f35",
+  "latest_review": "evidence/phase4/p4c-review2.md",
+  "phase_gate": "evidence/phase4/p4-gate.md",
   "open_findings": [],
-  "local_test_status": "261 research tests independently passed; lint and compile passed; integration source/tests/dependencies byte-identical to reviewed candidate.",
-  "effective_deadline_utc": "2026-09-19T00:02:09Z",
+  "local_test_status": "269 research tests independently passed; G4 focused and independent metric/bootstrap checks passed on identical source",
   "pending": [
-    "P4C",
-    "G4",
+    "publication/CI/cleanup",
     "P5"
   ],
   "no_real_data_training_or_pilot": true,
-  "next_action": "P4C smoke integration, cost procedure and CI. Then G4 phase gate; no P5 before Phase 4 acceptance.",
-  "publication_record": "evidence/phase4/p4b-publication.json",
-  "cleanup_record": "evidence/phase4/p4b-cleanup.json"
+  "next_action": "Finish Phase 4 publication and cleanup. Then P5A dataset readiness and fresh-classifier pilot prerequisite.",
+  "effective_deadline_utc": "2026-09-22T22:49:31Z"
 }
