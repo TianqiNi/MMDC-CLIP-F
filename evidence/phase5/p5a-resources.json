@@ -1,0 +1,300 @@
+{
+  "schema_version": "p5a-resources/v1",
+  "status": "compute_ready_but_classifier_schedule_requires_scientific_decision",
+  "audit": {
+    "branch": "research/p5a-resource-check",
+    "commit": "9fc8eb758288e196c31f22469d734aa96bb02ee7",
+    "protocol_sha256": "4231c168d6dc21d0b33e02fe4adb247af6c8031a5c2eb8bace992b12b2eff435",
+    "timestamp_utc": "2026-09-23T01:29:39.858032+00:00"
+  },
+  "scope_guards": {
+    "offline_only": true,
+    "patient_data_accessed": false,
+    "pilot_or_test_accessed": false,
+    "original_finetuned_weights_accessed": false,
+    "real_training_run": false,
+    "optimizer_constructed": false,
+    "optimizer_updates": 0,
+    "public_weight_copy_created": false,
+    "shared_cache_modified_intentionally": false,
+    "production_or_protocol_edited": false
+  },
+  "critical_scientific_decision": {
+    "severity": "important_before_any_real_training",
+    "accepted_protocol": {
+      "fresh_classifier_requirement": "Fine-tune a fresh classifier initialized from pinned public CLIP on classifier-fit only.",
+      "fresh_classifier_schedule_specified": false,
+      "confidence_schedule": {
+        "optimizer": "adam",
+        "learning_rate": 0.0001,
+        "weight_decay": 0.0,
+        "batch_size": 6,
+        "rsna_epochs": 20,
+        "head_seeds": [
+          42,
+          43,
+          44
+        ]
+      },
+      "references": [
+        "docs/research/view_risk_protocol.md:197",
+        "docs/research/view_risk_protocol.md:334"
+      ]
+    },
+    "actual_production_classifier_behavior": {
+      "optimizer": "adam",
+      "learning_rate": 0.0001,
+      "weight_decay": 0.0,
+      "batch_size": 6,
+      "rsna_epochs": 20,
+      "seed": 42,
+      "reason": "fit_classifier_images_with_role_access passes config.optimizer and config.epochs from the confidence-oriented ResearchRunConfig directly to fresh classifier fitting.",
+      "references": [
+        "src/mmdc_clip_f/research/view_risk/training.py:138",
+        "src/mmdc_clip_f/research/view_risk/training.py:242",
+        "src/mmdc_clip_f/research/view_risk/training.py:244",
+        "src/mmdc_clip_f/research/view_risk/production.py:1393",
+        "src/mmdc_clip_f/research/view_risk/production.py:1418"
+      ]
+    },
+    "legacy_rsna_vit_b_32_classifier_schedule": {
+      "optimizer": "adam",
+      "learning_rate": 1e-07,
+      "weight_decay": 1e-05,
+      "batch_size": 3,
+      "epochs": 50,
+      "seed": 42,
+      "amp": false,
+      "randaugment": {
+        "num_ops": 3,
+        "magnitude": 9,
+        "num_magnitude_bins": 31
+      },
+      "reference": "configs/stage1/rsna_vit_b_32_legacy.yaml:29"
+    },
+    "assessment": "The accepted protocol freezes the confidence schedule but does not choose a fresh-classifier schedule. Current production silently applies that confidence schedule to the classifier and materially differs from the only accepted legacy Stage-1 RSNA ViT-B/32 schedule. This is not scientifically authorized merely because the code validates it.",
+    "minimal_proposed_remedy": [
+      "Before real fitting, amend/freeze the accepted protocol with an explicit fresh-classifier optimizer, batch size, epoch budget, seed, augmentation, precision, and checkpoint-selection budget.",
+      "After that decision, make the production classifier path consume a separately named immutable classifier schedule while leaving the confidence schedule unchanged; add focused RED/GREEN tests that classifier and confidence settings cannot be conflated.",
+      "Do not start real fitting or silently select either the legacy or current schedule before that decision."
+    ],
+    "commit_origins": {
+      "protocol": "641b14451fbaf09e2e74b15ddb019263e12eb81d",
+      "production_classifier_reuse": "6eb1135e287afe14c5072d69f57f3005d9db5f97",
+      "frozen_research_optimizer_validation": "02c522345303166e0afae996a4c53874c750555f",
+      "legacy_config": "55ffbe3548a091f15a8b9320903cd1902652b2cb"
+    }
+  },
+  "host_resources": {
+    "gpu": {
+      "name": "NVIDIA GeForce RTX 4090",
+      "driver_version": "595.84",
+      "nvidia_smi_total_mib": 24564,
+      "nvidia_smi_free_before_first_probe_mib": 22383,
+      "nvidia_smi_free_at_bounded_probe_start_mib": 22152,
+      "torch_total_mib": 24060.375,
+      "compute_capability": [
+        8,
+        9
+      ],
+      "post_probe_free_mib": 22559,
+      "post_probe_python_process_present": false
+    },
+    "disk": {
+      "filesystem": "/dev/nvme0n1p2",
+      "available_human": "605G",
+      "use_percent": 67
+    },
+    "software": {
+      "python": "3.11.15",
+      "torch": "2.3.1+cu121",
+      "torch_cuda_build": "12.1",
+      "cudnn": 8902,
+      "transformers": "4.43.4",
+      "tokenizers": "0.19.1",
+      "pillow": "10.4.0"
+    }
+  },
+  "actual_cuda_results": {
+    "torch_cuda_available": true,
+    "device_count": 1,
+    "basic_allocation_forward_backward": {
+      "operation": "float32 2048x2048 matmul, scalar loss, backward",
+      "success": true,
+      "loss_finite": true,
+      "elapsed_seconds": 0.101491,
+      "peak_allocated_mib": 120.126
+    },
+    "configured_batch_forward_backward": {
+      "success": true,
+      "context": "One synchronized float32 synthetic four-view batch after one batch-1 forward/backward warmup; no AMP, optimizer, optimizer state, or update.",
+      "batch_size": 6,
+      "images_per_call": 24,
+      "shape_per_view": [
+        6,
+        3,
+        224,
+        224
+      ],
+      "logits_shape": [
+        6,
+        4
+      ],
+      "logits_and_loss_finite": true,
+      "forward_seconds": 0.01504,
+      "backward_seconds": 0.024462,
+      "forward_backward_seconds": 0.039503,
+      "allocated_start_mib": 607.775,
+      "allocated_after_backward_mib": 1192.667,
+      "peak_allocated_mib": 1754.239,
+      "peak_reserved_mib": 2014.0
+    },
+    "cleanup": {
+      "probe_process_exited": true,
+      "only_reported_compute_process_after_probe": "gnome-remote-desktop-daemon",
+      "note": "The probe left no Python/model process alive."
+    }
+  },
+  "offline_public_clip": {
+    "environment": {
+      "HF_HUB_OFFLINE": "1",
+      "TRANSFORMERS_OFFLINE": "1",
+      "HF_HUB_DISABLE_TELEMETRY": "1"
+    },
+    "api": "mmdc_clip_f.research.view_risk.training.load_pinned_public_clip_classifier",
+    "repo": "openai/clip-vit-base-patch32",
+    "revision": "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268",
+    "cache_snapshot_complete": true,
+    "cache_total_human": "1.2G",
+    "cached_weight_file": {
+      "size_bytes": 605247071,
+      "sha256": "a63082132ba4f97a80bea76823f544493bffa8082296d62d71581a4feff1576f"
+    },
+    "load": {
+      "success": true,
+      "elapsed_seconds_including_loader_content_hash": 0.962305,
+      "parameter_count": 151277313,
+      "parameter_bytes": 605109252,
+      "peak_allocated_mib": 593.33,
+      "production_module_state_sha256": "2669b2c256e5a7fd04dfd9bdd5316d13a429c7369da52ab1097e2a1989e352d7",
+      "production_initialization_sha256": "18ef8e83e247b4391745bc3e45ba6d797498fac3c29762f3e16b1cb9f0d2b463",
+      "provenance_kind": "public_pretrained_fresh"
+    },
+    "tokenization": {
+      "success": true,
+      "shape": [
+        4,
+        11
+      ],
+      "dtype": "torch.int64",
+      "device": "cuda",
+      "token_ids_sha256": "e112b5e8eaa8b651d265f01fe15f5cd17cacc1e9bdfd9d9c5533d299b3203ae7"
+    },
+    "forward": {
+      "success": true,
+      "synthetic_batch_size": 1,
+      "logits_shape": [
+        1,
+        4
+      ],
+      "finite": true,
+      "elapsed_seconds": 0.244498
+    }
+  },
+  "cost_and_io_context": {
+    "actual_model_state_bytes": 605110268,
+    "estimated_adam_two_moment_bytes_after_first_update": 1210218504,
+    "estimated_20_full_state_checkpoint_bytes": 12102205360,
+    "estimated_50_full_state_checkpoint_bytes": 30255513400,
+    "checkpoint_estimate_excludes": [
+      "safetensors metadata",
+      "single public-initialization copy",
+      "resume checkpoint containing model and Adam state",
+      "temporary files during atomic replacement",
+      "selection and evidence artifacts"
+    ],
+    "production_io_implications": [
+      "save_public_initialization_artifact creates one full public-state copy before fitting.",
+      "fit_classifier_images_with_role_access persists one full safetensors model for every epoch.",
+      "The resume .pt contains model plus Adam state and is rewritten/hashed once per epoch.",
+      "When manifest content hashes are present, default_private_image_reader SHA-256 hashes each image before every decode; at 3,209 exams, four views and 20 epochs this can mean 256,720 image-file hashes before tune evaluation.",
+      "role_image_batch_loader reads/decodes/transforms serially in the training process, without DataLoader workers or pinned-memory transfer, so the synthetic GPU timing is not an end-to-end throughput measure."
+    ],
+    "runtime_extrapolation": {
+      "is_extrapolation": true,
+      "basis": "one warmed synchronized synthetic batch at batch size 6",
+      "classifier_fit_exams": 3209,
+      "steps_per_epoch": 535,
+      "seconds_per_epoch": 21.134,
+      "seconds_for_20_epochs": 422.677,
+      "warning": "This is only arithmetic from one GPU-resident synthetic batch. It excludes image IO/decoding, preprocessing/RandAugment, transfers, Adam state/update, checkpoint writes, tune evaluation, and provenance/content hashing; it is not an end-to-end runtime prediction."
+    },
+    "schedule_step_counts": {
+      "current_20_epochs_batch_6": 10700,
+      "legacy_50_epochs_batch_3": 53500,
+      "legacy_to_current_ratio": 5.0
+    }
+  },
+  "decoder_inventory": {
+    "pydicom": "3.0.2",
+    "pylibjpeg": "2.1.0",
+    "pylibjpeg-libjpeg": "2.4.0",
+    "pylibjpeg-openjpeg": "2.5.0",
+    "python-gdcm": "missing",
+    "handlers": {
+      "numpy": true,
+      "gdcm": false,
+      "pillow": true,
+      "jpeg_ls": false,
+      "pylibjpeg": true,
+      "rle": true
+    },
+    "assessment": "The installed pylibjpeg/libjpeg/openjpeg path is available. GDCM and JPEG-LS handlers are unavailable. No patient DICOM was opened, so compatibility with the actual RSNA transfer syntaxes remains unverified rather than assumed. No dependency changes were made."
+  },
+  "failures_and_limits": [
+    "A sandboxed nvidia-smi/PyTorch check could not communicate with the NVIDIA driver; the approved out-of-sandbox check succeeded, identifying sandbox isolation rather than a host CUDA failure.",
+    "The accepted protocol does not specify the fresh-classifier schedule, while production currently reuses the confidence schedule. This is the blocking scientific decision for real classifier fitting.",
+    "No real image IO/decoder throughput, augmentation throughput, optimizer state/update, checkpoint write throughput, or end-to-end epoch runtime was measured by design.",
+    "Actual patient DICOM codec coverage remains unverified because patient data access was forbidden."
+  ],
+  "artifacts": {
+    "diagnostic_script": {
+      "path": "scripts/research/p5a_resource_probe.py",
+      "sha256": "9ebe2d285c2d2f1efcd6ec81607ee9b15bd4cdbcffcf4077454e79cf213835d9",
+      "size_bytes": 13696
+    },
+    "raw_probe_output": {
+      "path": "/tmp/p5a-resource-probe-9fc8eb7.json",
+      "sha256": "69a133c853ad4879f737e6e4020b245ce827764bd4a74b0d26759bbbae0baf38",
+      "size_bytes": 5173
+    },
+    "large_persisted_weights_created": []
+  },
+  "commands": [
+    {
+      "command": "git status --short --branch && git rev-parse HEAD",
+      "result": "branch research/p5a-resource-check at accepted 9fc8eb758288e196c31f22469d734aa96bb02ee7"
+    },
+    {
+      "command": "nvidia-smi --query-gpu=index,name,driver_version,memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu --format=csv,noheader,nounits",
+      "result": "approved host check succeeded; first reading: RTX 4090, driver 595.84, 24564 MiB total, 22383 MiB free"
+    },
+    {
+      "command": "df -h /home/tianqini/research /tmp",
+      "result": "605G available on /dev/nvme0n1p2"
+    },
+    {
+      "command": "HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1 PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python scripts/research/p5a_resource_probe.py --output /tmp/p5a-resource-probe-9fc8eb7.json",
+      "result": "exit 0; offline pinned load/token/forward and CUDA batch-6 forward/backward passed"
+    },
+    {
+      "command": "nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits",
+      "result": "after probe, no Python process; only gnome-remote-desktop-daemon reported"
+    },
+    {
+      "command": "/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check scripts/research/p5a_resource_probe.py && PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m py_compile scripts/research/p5a_resource_probe.py && git diff --check",
+      "result": "all checks passed"
+    }
+  ],
+  "next_action": "Obtain the explicit scientific choice for the fresh RSNA ViT-B/32 classifier schedule, freeze it in the accepted protocol, then authorize a focused production/configuration fix and independent review before any real training."
+}
