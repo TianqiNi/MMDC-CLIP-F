@@ -10,5 +10,23 @@
   "classifier_training_permitted": false,
   "patient_data_readiness_verified": false,
   "real_training_or_benchmark": false,
-  "publication": "pending push and CI"
+  "publication": "Pushed in 2695f0424e386535b33343df9522cf68262151ed; PR updated; push and PR CI passed",
+  "publication_commit": "2695f0424e386535b33343df9522cf68262151ed",
+  "publication_ci": [
+    {
+      "conclusion": "success",
+      "databaseId": 35888798902,
+      "event": "pull_request",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/35888798902"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 35888792692,
+      "event": "push",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/35888792692"
+    }
+  ],
+  "cleanup_record": "evidence/phase5/p5a-resources-cleanup.json"
 }

@@ -1,6 +1,6 @@
 {
   "status": "P5A in progress; resource audit independently accepted, RSNA data audit running",
-  "recorded_at_utc": "2026-09-23T16:26:42.200329+00:00",
+  "recorded_at_utc": "2026-09-23T16:31:16.302193+00:00",
   "base_phase4": "9fc8eb758288e196c31f22469d734aa96bb02ee7",
   "resource_reviewed_commit": "182d5c08124311b254d5fc9199643cf64f110fde",
   "active_audit_worktree": "/home/tianqini/research/.ivr-p5-worktrees/p5a-audit",
@@ -18,5 +18,9 @@
     "G5"
   ],
   "real_training_or_benchmark": false,
-  "test_outcomes_locked": true
+  "test_outcomes_locked": true,
+  "resource_task_publication": "accepted, pushed, CI passed and completed resources cleaned",
+  "resource_publication_commit": "2695f0424e386535b33343df9522cf68262151ed",
+  "active_audit_launch": "p5a-audit-resume1",
+  "current_deadline_utc": "2026-09-23T21:18:49Z"
 }
