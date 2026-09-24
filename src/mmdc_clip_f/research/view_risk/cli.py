@@ -118,6 +118,7 @@ COMMANDS = frozenset(
         "view-risk-select-confidence",
         "view-risk-preflight",
         "view-risk-smoke",
+        "view-risk-audit-rsna",
     }
 )
 
@@ -289,6 +290,28 @@ def add_view_risk_subparsers(subparsers: argparse._SubParsersAction) -> None:
     )
     smoke.add_argument(
         "--repeats", type=int, default=5, help="Cheap smoke timed calls per measured operation"
+    )
+
+    rsna_audit = subparsers.add_parser(
+        "view-risk-audit-rsna",
+        help="Audit RSNA DICOM inventory and persist private role-readiness evidence",
+    )
+    rsna_audit.add_argument("--train-manifest", required=True)
+    rsna_audit.add_argument("--validation-manifest", required=True)
+    rsna_audit.add_argument("--locked-test-manifest", required=True)
+    rsna_audit.add_argument("--image-root", required=True)
+    rsna_audit.add_argument("--prior-inventory", required=True)
+    rsna_audit.add_argument("--private-root", required=True)
+    rsna_audit.add_argument("--run-name", required=True)
+    rsna_audit.add_argument("--public-report", required=True)
+    rsna_audit.add_argument("--image-workers", type=int, default=4)
+    rsna_audit.add_argument(
+        "--resume", action="store_true", help="Resume an exactly bound incomplete private journal"
+    )
+    rsna_audit.add_argument(
+        "--re-audit-changed",
+        action="store_true",
+        help="On resume, explicitly re-audit completed images whose bytes changed",
     )
 
 
@@ -1396,6 +1419,22 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
             device=args.device,
             warmup=args.warmup,
             repeats=args.repeats,
+        )
+    if args.command == "view-risk-audit-rsna":
+        from .rsna_audit import audit_rsna_readiness
+
+        return audit_rsna_readiness(
+            train_manifest=args.train_manifest,
+            validation_manifest=args.validation_manifest,
+            locked_test_manifest=args.locked_test_manifest,
+            image_root=args.image_root,
+            prior_inventory=args.prior_inventory,
+            private_root=args.private_root,
+            public_report=args.public_report,
+            run_name=args.run_name,
+            image_workers=args.image_workers,
+            resume=args.resume,
+            re_audit_changed=args.re_audit_changed,
         )
     if args.command == "view-risk-validate-config":
         config = load_research_run_config(args.config)
