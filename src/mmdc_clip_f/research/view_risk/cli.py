@@ -1442,9 +1442,14 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
             "status": "valid",
             "config_sha256": config.sha256,
             "search_table_sha256": config.search_table.sha256,
+            "classifier_schedule_sha256": config.classifier_schedule.sha256,
             "dataset": config.dataset,
             "backbone": config.backbone,
             "epochs": config.epochs,
+            "confidence_epochs": config.epochs,
+            "classifier_epochs": config.classifier_schedule.epochs,
+            "classifier_seed": config.classifier_schedule.seed,
+            "classifier_optimizer": asdict(config.classifier_schedule.optimizer),
             "method_count": len(config.methods),
             "patient_readiness": "not_assessed",
         }
@@ -1493,9 +1498,10 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
         )
         return {
             "status": "classifier_fit_complete"
-            if fit.result.completed_epoch == config.epochs
+            if fit.result.completed_epoch == config.classifier_schedule.epochs
             else "classifier_fit_partial",
             "fit_artifact_sha256": fit.sha256,
+            "classifier_schedule_sha256": fit.classifier_schedule.sha256,
             "initialization_sha256": fit.initialization.sha256,
             "completed_epoch": fit.result.completed_epoch,
             "update_count": fit.result.update_count,

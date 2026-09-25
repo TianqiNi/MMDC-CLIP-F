@@ -55,7 +55,7 @@ from mmdc_clip_f.model import MultiViewCLIPClassifier
 from mmdc_clip_f.research.view_risk.training import (
     MANDATORY_METHODS,
     ClassifierProvenance,
-    OptimizerConfig,
+    FrozenClassifierSchedule,
     ResearchRunConfig,
     RoleBoundBatch,
     TrainingBinding,
@@ -283,14 +283,16 @@ def test_fresh_classifier_selection_reads_only_tune_and_remains_software_only() 
     model, initialization = initialize_public_classifier(
         "vit_b_32", lambda _public: nn.Linear(1, 1)
     )
+    schedule = FrozenClassifierSchedule()
     binding = TrainingBinding(
         protocol_sha256="1" * 64,
         config_sha256="2" * 64,
-        search_table_sha256="3" * 64,
+        search_table_sha256=None,
         manifest_sha256=fit_manifest.manifest_sha256,
         classifier_checkpoint_sha256=initialization.checkpoint_sha256,
         method="fresh_classifier",
         seed=42,
+        classifier_schedule_sha256=schedule.sha256,
     )
 
     def batches(records, _epoch):
@@ -304,11 +306,11 @@ def test_fresh_classifier_selection_reads_only_tune_and_remains_software_only() 
         model=model,
         classifier=initialization,
         readiness=audit_software_fixture(fit_manifest),
-        optimizer_config=OptimizerConfig(batch_size=6),
-        epochs=1,
+        schedule=schedule,
         binding=binding,
         batch_loader=batches,
         loss_fn=lambda current, payload: (current(payload[0]) - payload[1]).square().mean(),
+        stop_after_epoch=1,
     )
     selected = select_fresh_classifier_on_tune(
         tune_manifest,
