@@ -1,0 +1,37 @@
+{
+  "status": "RSNA data-audit task complete and independently accepted",
+  "reviewed_commit": "3522f64612b428660862c71669accbdba66dd265",
+  "review_thread": "01a0d67b-0c2b-7c62-a596-3c4a273cf6f3",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "xhigh",
+  "verdict": "PASS",
+  "findings": [],
+  "independent_current_bound_files_rehashed": 19752,
+  "source_files_modified": false,
+  "patient_count": 4937,
+  "image_count": 19748,
+  "locked_identity_count": 872,
+  "exclusion_count": 0,
+  "locked_identity_overlap_count": 0,
+  "role_counts": {
+    "classifier_fit": 3209,
+    "confidence_fit": 987,
+    "tune": 370,
+    "pilot": 371
+  },
+  "runtime_seconds": 1636.1608481690055,
+  "private_run": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-audit/p5a-rsna-full-20260925-v1",
+  "test_outcomes_locked": true,
+  "real_training_or_scientific_benchmark": false,
+  "classifier_schedule": "Pending explicit user decision",
+  "recorded_at_utc": "2026-09-25T03:03:30.249047+00:00",
+  "review_launch": {
+    "name": "audit-result-review",
+    "pane": "wC:p1",
+    "cwd": "/home/tianqini/research/.ivr-p5-worktrees/p5a-audit-result-review",
+    "model": "gpt-5.6-sol",
+    "effort": "xhigh",
+    "resume": null,
+    "deadline": "2026-09-25T07:07:04Z"
+  }
+}
