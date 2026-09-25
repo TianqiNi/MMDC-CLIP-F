@@ -1,13 +1,13 @@
 ## REQUEST CHANGES — `69f9ee8984449d4c59e780cd31115c74579ff2c1`
 
-1. **High: interruption after image scanning can permanently strand the completed journal.**  
+1. **High: interruption after image scanning can permanently strand the completed journal.**
    [rsna_audit.py:1343](/home/tianqini/research/MMDC-CLIP-IVR/src/mmdc_clip_f/research/view_risk/rsna_audit.py:1343) refuses resume when any final readiness artifact already exists, although those artifacts are written sequentially starting at line 1350.
 
    Reproduction: interrupt `save_readiness_audit` after the role manifest and binding are written. The run is left `(manifest=True, binding=True, readiness=False)`; `--resume` then raises `FileExistsError: refusing to clobber incomplete final readiness artifacts`, with no public report. This can waste the completed 19,748-image scan.
 
    Fix by making finalization recoverable: verify and reuse consistent existing artifacts, finish missing ones, or use adapter-owned staging plus safe cleanup. Add interruption tests after each final artifact boundary.
 
-2. **Medium: a blocked audit exits successfully.**  
+2. **Medium: a blocked audit exits successfully.**
    [cli.py:106](/home/tianqini/research/MMDC-CLIP-IVR/src/mmdc_clip_f/cli.py:106) prints every research result and returns `0` at line 109. An actual CLI probe produced `status="blocked"` with a count-mismatch blocker and no role/readiness artifacts, but exit code `0`.
 
    This can make automation treat duplicate, overlap, invalid, or incomplete data as accepted. Return a nonzero audit exit code when status is not `ready`, while retaining the sanitized report.
