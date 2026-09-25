@@ -106,6 +106,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     result = run_view_risk_command(args)
     if result is not None:
         _json_print(result)
+        if args.command == "view-risk-audit-rsna" and result.get("status") != "ready":
+            return 2
         return 0
     raise RuntimeError(f"Command handler is unavailable: {args.command}")
 

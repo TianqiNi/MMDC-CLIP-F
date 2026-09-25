@@ -1,0 +1,27 @@
+{
+  "status": "Code accepted; full RSNA data audit pending",
+  "reviewed_commit": "a58108ef78ef2694dc3fdc2a7ae110840eee98fe",
+  "review_thread": "01a0d658-fa51-7cc3-b360-4ea969c2ce7a",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "xhigh",
+  "verdict": "PASS",
+  "actionable_findings": [],
+  "independent_checks": {
+    "adapter_tests": 23,
+    "research_tests": 292,
+    "negative_probes": 5,
+    "blocked_cli_exit": 2,
+    "ruff": "passed",
+    "compile": "passed",
+    "cli_help": "passed",
+    "diff_check": "passed"
+  },
+  "prior_findings": "Both High/Medium findings from review of 69f9ee8 resolved",
+  "source_integration": "src and tests byte-identical to independently accepted candidate; no integration code changes",
+  "actual_data_readiness": "pending full scan",
+  "real_training_or_benchmark": false,
+  "classifier_schedule": "awaiting explicit user choice",
+  "original_test_outcomes": "locked",
+  "mini_ddsm": "blocked; not audited",
+  "recorded_at_utc": "2026-09-25T02:23:05.567683+00:00"
+}

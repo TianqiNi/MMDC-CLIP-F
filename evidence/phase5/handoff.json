@@ -1,6 +1,6 @@
 {
-  "status": "P5A in progress; resource audit independently accepted, RSNA data audit running",
-  "recorded_at_utc": "2026-09-23T16:31:16.302193+00:00",
+  "status": "P5A in progress; resource audit and resumable RSNA audit code accepted",
+  "recorded_at_utc": "2026-09-25T02:23:05.567683+00:00",
   "base_phase4": "9fc8eb758288e196c31f22469d734aa96bb02ee7",
   "resource_reviewed_commit": "182d5c08124311b254d5fc9199643cf64f110fde",
   "active_audit_worktree": "/home/tianqini/research/.ivr-p5-worktrees/p5a-audit",
@@ -21,6 +21,13 @@
   "test_outcomes_locked": true,
   "resource_task_publication": "accepted, pushed, CI passed and completed resources cleaned",
   "resource_publication_commit": "2695f0424e386535b33343df9522cf68262151ed",
-  "active_audit_launch": "p5a-audit-resume1",
-  "current_deadline_utc": "2026-09-23T21:18:49Z"
+  "active_audit_launch": null,
+  "current_deadline_utc": "2026-09-25T07:07:04Z",
+  "audit_state": "Fresh review PASS on a58108ef78ef2694dc3fdc2a7ae110840eee98fe; full real audit pending launch",
+  "last_private_run": "p5a-rsna-20260923T1630Z",
+  "private_run_status": "Initial identity/mapping artifacts only; no public final report or running scan",
+  "next_audit_action": "Finish and review resumable adapter, then root-owned full audit in separate Herdr shell with durable output and progress; no classifier training without explicit schedule choice",
+  "last_review": "evidence/phase5/p5a-rsna-review2.md",
+  "full_real_audit_complete": false,
+  "audit_reviewed_commit": "a58108ef78ef2694dc3fdc2a7ae110840eee98fe"
 }
