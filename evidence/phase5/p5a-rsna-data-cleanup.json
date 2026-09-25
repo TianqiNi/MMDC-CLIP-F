@@ -23,6 +23,10 @@
     "Shared Python environment",
     "Unrelated user files and sessions"
   ],
-  "orchestration_scratch": "To be removed after publishing final evidence",
-  "incidental_helper": "The extra unscoped helper server created during command discovery was immediately stopped by exact process match; unrelated sessions preserved"
+  "orchestration_scratch": "Removed /tmp/mmdc-ivr-p5-orchestration after preserving exact audit command, review evidence, launch provenance and required validation",
+  "incidental_helper": "The extra unscoped helper server created during command discovery was immediately stopped by exact process match; unrelated sessions preserved",
+  "named_session_deleted": true,
+  "cleanup_completed_at_utc": "2026-09-25T03:05:39.459301+00:00",
+  "task_owned_processes_remaining": 0,
+  "empty_worktree_parent_removed": true
 }

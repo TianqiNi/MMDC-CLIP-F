@@ -1,6 +1,6 @@
 {
   "status": "P5A data and resource prerequisites accepted; classifier schedule decision pending",
-  "recorded_at_utc": "2026-09-25T03:03:30.249047+00:00",
+  "recorded_at_utc": "2026-09-25T03:05:39.459404+00:00",
   "base_phase4": "9fc8eb758288e196c31f22469d734aa96bb02ee7",
   "resource_reviewed_commit": "182d5c08124311b254d5fc9199643cf64f110fde",
   "active_audit_worktree": "/home/tianqini/research/MMDC-CLIP-IVR",
@@ -32,5 +32,8 @@
   "audit_publication_commit": "cc9060479056239f31e2c36eb4abf970c7d048c1",
   "audit_code_task_cleanup": "complete",
   "audit_result_reviewed_commit": "3522f64612b428660862c71669accbdba66dd265",
-  "audit_data_task_cleanup": "complete except publication scratch cleanup"
+  "audit_data_task_cleanup": "complete; named session and all task-owned orchestration scratch removed",
+  "audit_result_publication_commit": "2bc46850aab12b4136a54deaecb626d7a5c31364",
+  "audit_result_publication": "pushed; both release CI checks passed; cleanup complete",
+  "next_task": "Separate the classifier schedule from confidence-head settings after explicit user selection, then independently review before any fresh classifier fit"
 }

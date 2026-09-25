@@ -1,0 +1,32 @@
+{
+  "cwd": "/home/tianqini/research/MMDC-CLIP-IVR",
+  "source_commit": "cc9060479056239f31e2c36eb4abf970c7d048c1",
+  "argv": [
+    "env",
+    "PYTHONDONTWRITEBYTECODE=1",
+    "PYTHONPATH=src",
+    "/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python",
+    "-m",
+    "mmdc_clip_f.cli",
+    "view-risk-audit-rsna",
+    "--train-manifest",
+    "/home/tianqini/research/MMDC-CLIP_original/MMDC-CLIP/RSNA/RSNA_train.csv",
+    "--validation-manifest",
+    "/home/tianqini/research/MMDC-CLIP_original/MMDC-CLIP/RSNA/RSNA_val.csv",
+    "--locked-test-manifest",
+    "/home/tianqini/research/MMDC-CLIP_original/MMDC-CLIP/RSNA/RSNA_test.csv",
+    "--image-root",
+    "/home/tianqini/research/MMDC-CLIP_original/MMDC-CLIP/RSNA/train_images",
+    "--prior-inventory",
+    "/home/tianqini/research/MMDC-CLIP-IVR/evidence/p2-inventory.json",
+    "--private-root",
+    "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-audit",
+    "--run-name",
+    "p5a-rsna-full-20260925-v1",
+    "--public-report",
+    "/home/tianqini/research/MMDC-CLIP-IVR/evidence/phase5/p5a-rsna-audit.json",
+    "--image-workers",
+    "4"
+  ],
+  "resume_policy": "Same bound inputs and explicit --resume; never automatically permit changed image bytes"
+}
