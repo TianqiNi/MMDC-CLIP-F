@@ -1,0 +1,27 @@
+{
+  "base_commit": "69f9ee8984449d4c59e780cd31115c74579ff2c1",
+  "implementation_thread": "01a0cbdb-a311-7da0-9568-8473f29844d6",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "xhigh",
+  "findings_addressed": [
+    "High: finalization interruption recovery",
+    "Medium: blocked audit CLI exit status"
+  ],
+  "red": {
+    "failed": 10,
+    "deselected": 13
+  },
+  "green": {
+    "new_regressions": 10,
+    "adapter_tests": 23,
+    "research_tests": 292,
+    "warnings": "one benign NVML warning",
+    "ruff": "passed",
+    "compile": "passed",
+    "cli_help": "passed",
+    "diff_check": "passed"
+  },
+  "full_real_audit_complete": false,
+  "training_performed": false,
+  "independent_review": "pending"
+}

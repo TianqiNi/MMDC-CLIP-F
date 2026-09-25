@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 import mmdc_clip_f.research.view_risk.rsna_audit as rsna_audit_module
+from mmdc_clip_f.cli import main
 from mmdc_clip_f.research.view_risk.roles import (
     ManifestBinding,
     NON_TEST_ROLES,
@@ -527,3 +528,147 @@ def test_resume_rejects_corrupt_journal_but_discards_incomplete_final_append(
     )
     assert result["status"] == "ready"
     assert result["observations"]["resume"]["discarded_incomplete_final_append_count"] == 1
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    (
+        "role_manifest",
+        "role_manifest_binding",
+        "readiness",
+        "private_run_manifest",
+        "public_report",
+        "public_progress",
+    ),
+)
+def test_resume_recovers_every_finalization_write_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, boundary: str
+) -> None:
+    paths = _fixture(tmp_path / "fixture")
+    private_root = tmp_path / "private"
+    public_report = tmp_path / "public.json"
+    armed = True
+
+    def interrupt_after_write(name: str) -> None:
+        if armed and name == boundary:
+            raise AuditInterrupted(f"interrupted after {name}")
+
+    monkeypatch.setattr(
+        rsna_audit_module, "_finalization_checkpoint", interrupt_after_write, raising=False
+    )
+    with pytest.raises(AuditInterrupted, match=f"after {boundary}"):
+        _audit_fixture(
+            paths,
+            private_root=private_root,
+            public_report=public_report,
+            run_name="run",
+        )
+
+    armed = False
+    result = _audit_fixture(
+        paths,
+        private_root=private_root,
+        public_report=public_report,
+        run_name="run",
+        resume=True,
+    )
+    run_dir = private_root / "run"
+    assert result["status"] == "ready"
+    assert (run_dir / "role-manifest.json").is_file()
+    assert (run_dir / "role-manifest-binding.json").is_file()
+    assert (run_dir / "readiness.json").is_file()
+    assert (run_dir / "run-manifest.json").is_file()
+    assert json.loads(public_report.read_text(encoding="utf-8"))["status"] == "ready"
+    progress = json.loads((tmp_path / "public-progress.json").read_text(encoding="utf-8"))
+    assert progress["status"] == "finalized"
+    assert progress["readiness_promoted"] is True
+
+
+@pytest.mark.parametrize(
+    ("boundary", "relative_path"),
+    (
+        ("role_manifest", "role-manifest.json"),
+        ("private_run_manifest", "run-manifest.json"),
+        ("public_report", None),
+    ),
+)
+def test_resume_refuses_changed_finalization_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    boundary: str,
+    relative_path: str | None,
+) -> None:
+    paths = _fixture(tmp_path / "fixture")
+    private_root = tmp_path / "private"
+    public_report = tmp_path / "public.json"
+
+    def interrupt_after_write(name: str) -> None:
+        if name == boundary:
+            raise AuditInterrupted(f"interrupted after {name}")
+
+    monkeypatch.setattr(
+        rsna_audit_module, "_finalization_checkpoint", interrupt_after_write, raising=False
+    )
+    with pytest.raises(AuditInterrupted):
+        _audit_fixture(
+            paths,
+            private_root=private_root,
+            public_report=public_report,
+            run_name="run",
+        )
+    target = private_root / "run" / relative_path if relative_path else public_report
+    document = json.loads(target.read_text(encoding="utf-8"))
+    if boundary == "role_manifest":
+        document["manifest_sha256"] = "0" * 64
+    else:
+        document["status"] = "blocked"
+    target.write_text(json.dumps(document), encoding="utf-8")
+    monkeypatch.setattr(rsna_audit_module, "_finalization_checkpoint", lambda _name: None)
+
+    with pytest.raises(ValueError, match="inconsistent|integrity"):
+        _audit_fixture(
+            paths,
+            private_root=private_root,
+            public_report=public_report,
+            run_name="run",
+            resume=True,
+        )
+
+
+def test_blocked_rsna_cli_returns_nonzero_and_emits_sanitized_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    paths = _fixture(tmp_path / "fixture")
+    public_report = tmp_path / "public.json"
+
+    exit_code = main(
+        [
+            "view-risk-audit-rsna",
+            "--train-manifest",
+            str(paths["train"]),
+            "--validation-manifest",
+            str(paths["validation"]),
+            "--locked-test-manifest",
+            str(paths["test"]),
+            "--image-root",
+            str(paths["images"]),
+            "--prior-inventory",
+            str(paths["prior"]),
+            "--private-root",
+            str(tmp_path / "private"),
+            "--run-name",
+            "blocked-cli",
+            "--public-report",
+            str(public_report),
+            "--image-workers",
+            "1",
+        ]
+    )
+    output = capsys.readouterr().out
+    emitted = json.loads(output)
+
+    assert exit_code == 2
+    assert emitted["status"] == "blocked"
+    assert json.loads(public_report.read_text(encoding="utf-8")) == emitted
+    assert "development-0" not in output
+    assert "OUTCOME-MUST-NOT-BE-READ" not in output

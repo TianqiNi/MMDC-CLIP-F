@@ -26,6 +26,7 @@ from .cache import _require_external_or_ignored_destination
 from .inputs import CANONICAL_VIEWS
 from .production import default_private_image_reader
 from .roles import (
+    ManifestBinding,
     NON_TEST_ROLES,
     LockedPatientIdentityDenylist,
     PatientMappingDeclaration,
@@ -33,11 +34,16 @@ from .roles import (
     Role,
     ViewReference,
     assign_patient_roles,
+    load_private_manifest,
     patient_identity_digest,
     save_private_manifest,
     validate_inventory,
 )
-from .training import audit_real_data_readiness, save_readiness_audit
+from .training import (
+    audit_real_data_readiness,
+    load_verified_readiness_audit,
+    save_readiness_audit,
+)
 
 
 PUBLIC_SCHEMA_VERSION = "view-risk-p5a-rsna-audit/v1"
@@ -125,6 +131,62 @@ def _read_json_object(path: Path, *, description: str) -> dict[str, object]:
     if not isinstance(value, dict):
         raise ValueError(f"{description} is unreadable or corrupt")
     return value
+
+
+def _private_run_invariant(value: Mapping[str, object]) -> dict[str, object]:
+    invariant = dict(value)
+    runtime_seconds = invariant.pop("runtime_seconds", None)
+    if (
+        isinstance(runtime_seconds, bool)
+        or not isinstance(runtime_seconds, (int, float))
+        or runtime_seconds < 0
+    ):
+        raise ValueError("private run manifest has invalid runtime telemetry")
+    configuration = invariant.get("configuration")
+    if not isinstance(configuration, Mapping):
+        raise ValueError("private run manifest has invalid configuration")
+    stable_configuration = dict(configuration)
+    if not isinstance(stable_configuration.pop("resumed", None), bool):
+        raise ValueError("private run manifest has invalid resume telemetry")
+    invariant["configuration"] = stable_configuration
+    return invariant
+
+
+def _public_report_invariant(value: Mapping[str, object]) -> dict[str, object]:
+    invariant = dict(value)
+    runtime_seconds = invariant.pop("runtime_seconds", None)
+    if (
+        isinstance(runtime_seconds, bool)
+        or not isinstance(runtime_seconds, (int, float))
+        or runtime_seconds < 0
+    ):
+        raise ValueError("public audit report has invalid runtime telemetry")
+    observations = invariant.get("observations")
+    if not isinstance(observations, Mapping):
+        raise ValueError("public audit report has invalid observations")
+    stable_observations = dict(observations)
+    resume_observations = stable_observations.pop("resume", None)
+    resume_keys = {
+        "reused_image_count",
+        "changed_image_count",
+        "reaudited_image_count",
+        "discarded_incomplete_final_append_count",
+    }
+    if (
+        not isinstance(resume_observations, Mapping)
+        or set(resume_observations) != resume_keys
+        or any(
+            isinstance(count, bool) or not isinstance(count, int) or count < 0
+            for count in resume_observations.values()
+        )
+    ):
+        raise ValueError("public audit report has invalid resume telemetry")
+    invariant["observations"] = stable_observations
+    return invariant
+
+
+def _finalization_checkpoint(_name: str) -> None:
+    """Test seam immediately after each durable finalization boundary."""
 
 
 def _ensure_private_document(
@@ -993,7 +1055,7 @@ def audit_rsna_readiness(
     report_path = Path(public_report).expanduser().resolve()
     if report_path.suffix.lower() != ".json":
         raise ValueError("public report path must end in .json")
-    if report_path.exists():
+    if report_path.exists() and not resume:
         raise FileExistsError("refusing to clobber existing public audit report")
     progress_report_path = _progress_path(report_path)
     run_dir = private_base / run_component
@@ -1277,6 +1339,9 @@ def audit_rsna_readiness(
             artifact_hashes["decoded_pixel_collection"] = image_scan.pixel_collection_sha256
 
     readiness = None
+    role_manifest_path = run_dir / "role-manifest.json"
+    binding_path = run_dir / "role-manifest-binding.json"
+    readiness_path = run_dir / "readiness.json"
     if not blockers and image_scan is not None and mapping is not None and mapping_path is not None:
         try:
             assignment = assign_patient_roles(
@@ -1337,39 +1402,81 @@ def audit_rsna_readiness(
                         audits["real_readiness_api"] = "failed"
                     else:
                         audits["real_readiness_api"] = "passed"
-                        role_manifest_path = run_dir / "role-manifest.json"
-                        binding_path = run_dir / "role-manifest-binding.json"
-                        readiness_path = run_dir / "readiness.json"
-                        if any(
-                            path.exists()
-                            for path in (role_manifest_path, binding_path, readiness_path)
-                        ):
-                            raise FileExistsError(
-                                "refusing to clobber incomplete final readiness artifacts"
-                            )
-                        binding = save_private_manifest(
-                            assignment.manifest, role_manifest_path, private_root=private_base
+                        expected_binding = ManifestBinding(
+                            schema_version=assignment.manifest.schema_version,
+                            dataset_namespace=assignment.manifest.dataset_namespace,
+                            source_hashes=assignment.manifest.source_hashes,
+                            manifest_sha256=assignment.manifest.manifest_sha256,
                         )
+                        expected_binding_document = {
+                            "schema_version": expected_binding.schema_version,
+                            "dataset_namespace": expected_binding.dataset_namespace,
+                            "source_hashes": dict(expected_binding.source_hashes),
+                            "manifest_sha256": expected_binding.manifest_sha256,
+                        }
+                        if not role_manifest_path.exists() and (
+                            binding_path.exists() or readiness_path.exists()
+                        ):
+                            raise ValueError(
+                                "existing final readiness artifacts are inconsistently ordered"
+                            )
+                        if role_manifest_path.exists():
+                            load_private_manifest(
+                                role_manifest_path,
+                                expected=expected_binding,
+                                private_root=private_base,
+                            )
+                        else:
+                            binding = save_private_manifest(
+                                assignment.manifest,
+                                role_manifest_path,
+                                private_root=private_base,
+                            )
+                            if binding != expected_binding:
+                                raise ValueError("saved role manifest binding is inconsistent")
                         artifacts["role_manifest"] = role_manifest_path
                         artifact_hashes["role_manifest_file"] = sha256_file(role_manifest_path)
-                        artifact_hashes["role_manifest_payload"] = binding.manifest_sha256
-                        _write_json_exclusive(
-                            binding_path,
-                            {
-                                "schema_version": binding.schema_version,
-                                "dataset_namespace": binding.dataset_namespace,
-                                "source_hashes": dict(binding.source_hashes),
-                                "manifest_sha256": binding.manifest_sha256,
-                            },
-                            private=True,
+                        artifact_hashes["role_manifest_payload"] = (
+                            expected_binding.manifest_sha256
                         )
+                        _finalization_checkpoint("role_manifest")
+                        if not binding_path.exists() and readiness_path.exists():
+                            raise ValueError(
+                                "existing final readiness artifacts are inconsistently ordered"
+                            )
+                        if binding_path.exists():
+                            existing_binding = _read_json_object(
+                                binding_path, description="role manifest binding"
+                            )
+                            if existing_binding != expected_binding_document:
+                                raise ValueError(
+                                    "existing role manifest binding is inconsistent"
+                                )
+                        else:
+                            _write_json_exclusive(
+                                binding_path, expected_binding_document, private=True
+                            )
                         artifacts["role_manifest_binding"] = binding_path
                         artifact_hashes["role_manifest_binding"] = sha256_file(binding_path)
-                        save_readiness_audit(candidate_readiness, readiness_path)
+                        _finalization_checkpoint("role_manifest_binding")
+                        if readiness_path.exists():
+                            existing_readiness = load_verified_readiness_audit(readiness_path)
+                            if existing_readiness.sha256 != candidate_readiness.sha256:
+                                raise ValueError(
+                                    "existing readiness artifact is inconsistent"
+                                )
+                        else:
+                            save_readiness_audit(candidate_readiness, readiness_path)
                         artifacts["readiness"] = readiness_path
                         artifact_hashes["readiness_file"] = sha256_file(readiness_path)
                         artifact_hashes["readiness_payload"] = candidate_readiness.sha256
+                        _finalization_checkpoint("readiness")
                         readiness = candidate_readiness
+
+    if readiness is None and any(
+        path.exists() for path in (role_manifest_path, binding_path, readiness_path)
+    ):
+        raise ValueError("existing final readiness artifacts conflict with a blocked audit")
 
     status = "ready" if readiness is not None and not blockers else "blocked"
     elapsed = time.monotonic() - started
@@ -1407,7 +1514,17 @@ def audit_rsna_readiness(
         "blockers": blockers,
         "runtime_seconds": elapsed,
     }
-    _write_json_exclusive(private_run_path, private_run, private=True)
+    if report_path.exists() and not private_run_path.exists():
+        raise ValueError("existing public audit report has no private run manifest")
+    if private_run_path.exists():
+        existing_private_run = _read_json_object(
+            private_run_path, description="private run manifest"
+        )
+        if _private_run_invariant(existing_private_run) != _private_run_invariant(private_run):
+            raise ValueError("existing private run manifest is inconsistent")
+    else:
+        _write_json_exclusive(private_run_path, private_run, private=True)
+    _finalization_checkpoint("private_run_manifest")
     artifact_hashes["private_run_manifest"] = sha256_file(private_run_path)
 
     report: dict[str, object] = {
@@ -1452,7 +1569,14 @@ def audit_rsna_readiness(
             "MINI-DDSM patient mapping remains blocked and was not audited.",
         ],
     }
-    _write_json_exclusive(report_path, report, private=False)
+    if report_path.exists():
+        existing_report = _read_json_object(report_path, description="public audit report")
+        if _public_report_invariant(existing_report) != _public_report_invariant(report):
+            raise ValueError("existing public audit report is inconsistent")
+        report = existing_report
+    else:
+        _write_json_exclusive(report_path, report, private=False)
+    _finalization_checkpoint("public_report")
     if journal_header_sha256 is not None and progress_report_path.exists():
         progress = _read_json_object(progress_report_path, description="public audit progress")
         progress.update(
@@ -1468,4 +1592,5 @@ def audit_rsna_readiness(
             resume=True,
             journal_header_sha256=journal_header_sha256,
         )
+        _finalization_checkpoint("public_progress")
     return report
