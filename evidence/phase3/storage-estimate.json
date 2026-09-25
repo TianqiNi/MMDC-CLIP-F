@@ -1,0 +1,32 @@
+{
+  "kind": "arithmetic feasibility estimate, not a measured benchmark",
+  "exam_count_assumption": 4937,
+  "exam_count_status": "protocol non-test total, not a claim of audited eligible roles",
+  "dtype": "float32",
+  "views": 4,
+  "rows": [
+    {
+      "backbone": "vit_b_32",
+      "hidden_width": 768,
+      "tokens_including_cls": 50,
+      "original_mvacn_parameters": 2471425,
+      "hidden_bytes_per_exam": 614400,
+      "hidden_gib_one_realization": 2.824974060058594
+    },
+    {
+      "backbone": "vit_l_14_336",
+      "hidden_width": 1024,
+      "tokens_including_cls": 577,
+      "original_mvacn_parameters": 4340993,
+      "hidden_bytes_per_exam": 9453568,
+      "hidden_gib_one_realization": 43.46693420410156
+    }
+  ],
+  "excluded": [
+    "projected/text embeddings",
+    "scores/targets/metadata",
+    "stressed realizations",
+    "disk overhead"
+  ],
+  "integration_requirement": "Use bounded or streamed parent artifacts. Reuse parent features for omitted children; do not materialize duplicated child hidden tensors for all masks."
+}

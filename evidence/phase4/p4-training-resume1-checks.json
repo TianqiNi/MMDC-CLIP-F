@@ -1,0 +1,77 @@
+[
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_cache.py::test_role_bound_confidence_fit_uses_exact_schedule_and_verified_fresh_encoder tests/research/test_view_risk_cache.py::test_confidence_fit_rejects_diagnostic_classifier_before_cache_reader tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_training.py'",
+    "exit_code": 0,
+    "output": "....................                                                     [100%]\n20 passed in 1.13s\n"
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py::test_role_bound_confidence_fit_uses_exact_schedule_and_verified_fresh_encoder tests/research/test_view_risk_cache.py::test_confidence_fit_rejects_diagnostic_classifier_before_cache_reader'",
+    "exit_code": 0,
+    "output": "....................                                                     [100%]\n20 passed in 1.00s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py::test_defaults_are_frozen_complete_and_unknown_configuration_is_rejected tests/research/test_view_risk_evaluation.py::test_reference_guardrail_ties_and_no_eligible_selection'",
+    "exit_code": 1,
+    "output": "F.                                                                       [100%]\n=================================== FAILURES ===================================\n___ test_defaults_are_frozen_complete_and_unknown_configuration_is_rejected ____\n\n    def test_defaults_are_frozen_complete_and_unknown_configuration_is_rejected() -> None:\n        rsna = ResearchRunConfig.default(\"RSNA\", \"vit_b_32\")\n        ddsm = ResearchRunConfig.default(\"DDSM\", \"vit_l_14_336\")\n    \n        assert rsna.optimizer == OptimizerConfig(\"adam\", 1e-4, 0.0, 6)\n        assert rsna.epochs == 20\n        assert ddsm.epochs == 50\n        assert rsna.seeds == (42, 43, 44)\n        assert rsna.stress_seed == 4242\n        assert tuple(rsna.methods) == MANDATORY_METHODS\n        assert rsna.search_table.checkpoint_epochs == tuple(range(1, 21))\n        assert ddsm.search_table.checkpoint_epochs == tuple(range(1, 51))\n    \n        with pytest.raises(ValueError, match=\"unknown\"):\n            ResearchRunConfig.from_dict({\"dataset\": \"RSNA\", \"backbone\": \"vit_b_32\", \"oops\": 1})\n        with pytest.raises(ValueError, match=\"mandatory\"):\n            ResearchRunConfig.from_dict(\n                {\"dataset\": \"RSNA\", \"backbone\": \"vit_b_32\", \"methods\": [\"candidate\"]}\n            )\n        with pytest.raises(ValueError, match=\"optimizer\"):\n            ResearchRunConfig.from_dict(\n                {\n                    \"dataset\": \"RSNA\",\n                    \"backbone\": \"vit_b_32\",\n                    \"optimizer\": {\"name\": \"sgd\"},\n                }\n            )\n        with pytest.raises(ValueError, match=\"learning_rate\"):\n            ResearchRunConfig.from_dict(\n                {\n                    \"dataset\": \"RSNA\",\n                    \"backbone\": \"vit_b_32\",\n                    \"optimizer\": {\"learning_rate\": True},\n                }\n            )\n>       with pytest.raises(ValueError, match=\"20 epochs\"):\nE       Failed: DID NOT RAISE <class 'ValueError'>\n\ntests/research/test_view_risk_training.py:119: Failed\n=========================== short test summary info ============================\nFAILED tests/research/test_view_risk_training.py::test_defaults_are_frozen_complete_and_unknown_configuration_is_rejected\n1 failed, 1 passed in 0.62s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_training.py::test_defaults_are_frozen_complete_and_unknown_configuration_is_rejected tests/research/test_view_risk_evaluation.py::test_reference_guardrail_ties_and_no_eligible_selection'",
+    "exit_code": 0,
+    "output": "..                                                                       [100%]\n2 passed in 0.61s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m py_compile src/mmdc_clip_f/cli.py src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py'",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src tests/research'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research'",
+    "exit_code": 0,
+    "output": "........................................................................ [ 29%]\n........................................................................ [ 59%]\n........................................................................ [ 88%]\n............................                                             [100%]\n244 passed in 2.18s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'git diff --check'",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_training.py tests/research/test_view_risk_cache.py::test_role_bound_confidence_fit_uses_exact_schedule_and_verified_fresh_encoder tests/research/test_view_risk_cache.py::test_confidence_fit_rejects_diagnostic_classifier_before_cache_reader'",
+    "exit_code": 0,
+    "output": "....................                                                     [100%]\n20 passed in 1.12s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m mmdc_clip_f.cli --help'",
+    "exit_code": 0,
+    "output": "usage: mmdc-clip-f [-h] [--version]\n                   {validate-data,train-classifier,build-tcp,train-confidence,view-risk-validate-config,view-risk-select,view-risk-freeze-pilot,view-risk-evaluate,view-risk-train-confidence}\n                   ...\n\nReproducible core workflows for MMDC-CLIP-F\n\npositional arguments:\n  {validate-data,train-classifier,build-tcp,train-confidence,view-risk-validate-config,view-risk-select,view-risk-freeze-pilot,view-risk-evaluate,view-risk-train-confidence}\n    validate-data       Validate manifests, files, and split isolation\n    train-classifier    Train the four-view Stage-1 classifier\n    build-tcp           Build strict TCP artifacts from a verified Stage-1 run\n    train-confidence    Train the head-only MV-ACN confidence model\n    view-risk-validate-config\n                        Validate and hash a strict P4B JSON/YAML run\n                        configuration\n    view-risk-select    Select a checkpoint from aggregate tune-only AURCs\n    view-risk-freeze-pilot\n                        Exclusively freeze a complete immutable pilot plan\n    view-risk-evaluate  Role-authorize and aggregate one frozen pilot panel\n                        via P4A\n    view-risk-train-confidence\n                        Fit one frozen-table learned method from role-bound\n                        streamed caches\n\noptions:\n  -h, --help            show this help message and exit\n  --version             show program's version number and exit\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m py_compile src/mmdc_clip_f/cli.py src/mmdc_clip_f/research/view_risk/training.py src/mmdc_clip_f/research/view_risk/evaluation.py src/mmdc_clip_f/research/view_risk/cli.py tests/research/test_view_risk_training.py tests/research/test_view_risk_evaluation.py tests/research/test_view_risk_cache.py'",
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "command": "/bin/bash -lc '/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src tests/research'",
+    "exit_code": 0,
+    "output": "All checks passed!\n"
+  },
+  {
+    "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research'",
+    "exit_code": 0,
+    "output": "........................................................................ [ 29%]\n........................................................................ [ 59%]\n........................................................................ [ 88%]\n............................                                             [100%]\n244 passed in 2.18s\n"
+  },
+  {
+    "command": "/bin/bash -lc 'git diff --check'",
+    "exit_code": 0,
+    "output": ""
+  }
+]

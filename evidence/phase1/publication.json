@@ -1,0 +1,14 @@
+{
+  "phase_commit": "641b144",
+  "branch": "research/intervention-supervised-confidence",
+  "origin": "https://github.com/TianqiNi/MMDC-CLIP-F.git",
+  "pr": "https://github.com/TianqiNi/MMDC-CLIP-F/pull/1",
+  "gate_candidate": "86031e5822680d223bed0175a83cc61280885056",
+  "gate": "pass; no actionable findings",
+  "task_commits": [
+    "ecb80e9bad005342575c526ceca99113a8044823",
+    "6067abbe7da13f79c1831e21b26020ee5e560123"
+  ],
+  "validation": "40 tests passed; lint, compile, CLI help passed",
+  "research_results": "not measured"
+}

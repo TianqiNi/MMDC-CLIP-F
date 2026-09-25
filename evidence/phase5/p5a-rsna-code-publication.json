@@ -1,0 +1,39 @@
+{
+  "status": "Accepted code and cleanup metadata pushed; all four publication checks passed",
+  "checked_at_utc": "2026-09-25T02:32:03.321744+00:00",
+  "runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 36086246332,
+      "event": "pull_request",
+      "headSha": "ccd11e341c418187f5ac3a37697fb8c3b6939c55",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/36086246332"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 36086240991,
+      "event": "push",
+      "headSha": "ccd11e341c418187f5ac3a37697fb8c3b6939c55",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/36086240991"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 36086039202,
+      "event": "pull_request",
+      "headSha": "cc9060479056239f31e2c36eb4abf970c7d048c1",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/36086039202"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 36086035840,
+      "event": "push",
+      "headSha": "cc9060479056239f31e2c36eb4abf970c7d048c1",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/36086035840"
+    }
+  ],
+  "real_data_readiness": "not established by CI; separate audit in progress"
+}

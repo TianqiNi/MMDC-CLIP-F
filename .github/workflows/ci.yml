@@ -21,17 +21,22 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install package and linter
+      - name: Install package, bounded test runner, and linter
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .
-          python -m pip install "ruff>=0.5,<0.9"
+          python -m pip install "pytest>=8,<9" "ruff>=0.5,<0.9"
 
       - name: Compile Python sources
         run: python -m compileall -q src
 
       - name: Lint
-        run: ruff check src
+        run: ruff check src tests/research
 
       - name: Check command-line interface
         run: mmdc-clip-f --help
+
+      - name: Research tests including the public no-download CPU smoke path
+        run: |
+          mkdir -p .cache
+          python -m pytest -q --basetemp=.cache/pytest-ci tests/research

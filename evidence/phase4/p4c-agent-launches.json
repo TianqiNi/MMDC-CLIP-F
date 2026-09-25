@@ -1,0 +1,37 @@
+{
+  "transport": "Herdr dedicated session mmdc-ivr-p4c",
+  "records": [
+    {
+      "name": "fix-resume",
+      "pane": "w4:p1",
+      "cwd": "/home/tianqini/research/.ivr-p4c-worktrees/p4c-smoke",
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh",
+      "resume": "01a0c46c-b87c-7223-bc17-891b547c6aa1",
+      "deadline": "2026-09-22T22:49:31Z",
+      "duplicate_resume_rejected": "w5:p1: existing active writer; original agent continued"
+    },
+    {
+      "name": "g4",
+      "pane": "w7:p1",
+      "cwd": "/home/tianqini/research/.ivr-p4c-worktrees/p4-gate",
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "resume": null,
+      "deadline": "2026-09-22T22:49:31Z"
+    },
+    {
+      "name": "review2",
+      "pane": "w6:p1",
+      "cwd": "/home/tianqini/research/.ivr-p4c-worktrees/p4c-review2",
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh",
+      "resume": null,
+      "deadline": "2026-09-22T22:49:31Z"
+    }
+  ],
+  "review2_thread": "01a0ca4e-1bce-7112-9c91-6dd7154a37e5",
+  "g4_thread": "01a0ca57-504d-7572-9cef-0f0679a69ab1",
+  "all_agents_exited": true,
+  "approval_bypass_used": false
+}

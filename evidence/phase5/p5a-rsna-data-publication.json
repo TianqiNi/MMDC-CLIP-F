@@ -1,0 +1,25 @@
+{
+  "status": "Accepted RSNA audit pushed; release CI passed",
+  "publication_commit": "2bc46850aab12b4136a54deaecb626d7a5c31364",
+  "reviewed_evidence_commit": "3522f64612b428660862c71669accbdba66dd265",
+  "runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 36088799422,
+      "event": "pull_request",
+      "headSha": "2bc46850aab12b4136a54deaecb626d7a5c31364",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/36088799422"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 36088796594,
+      "event": "push",
+      "headSha": "2bc46850aab12b4136a54deaecb626d7a5c31364",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/36088796594"
+    }
+  ],
+  "checked_at_utc": "2026-09-25T03:07:02.919459+00:00",
+  "classification_or_uncertainty_benchmark": false
+}

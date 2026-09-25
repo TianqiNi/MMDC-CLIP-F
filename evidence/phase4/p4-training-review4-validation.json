@@ -1,0 +1,47 @@
+{
+  "reviewed_commit": "2711fbf0a73365633090eedeaa6133004c140071",
+  "decision": "NOT ACCEPTED",
+  "launch": {
+    "name": "p4-training-review4",
+    "model": "gpt-5.6-sol",
+    "effort": "xhigh",
+    "cwd": "/home/tianqini/research/.ivr-p4-worktrees/p4-training-review4",
+    "pane": "wD:p1",
+    "deadline": "2026-09-17T04:28:28Z",
+    "resume": null,
+    "ref": "2711fbf0a73365633090eedeaa6133004c140071"
+  },
+  "thread_id": "01a0ac8f-a32c-75f1-bc2e-4f8daae7b021",
+  "checks": [
+    {
+      "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_production.py::test_role_bound_image_fit_and_tune_selection_are_connected --basetemp=/tmp/p4b-review4-probe'",
+      "exit_code": 0,
+      "output_tail": ".                                                                        [100%]\n1 passed in 11.56s\n"
+    },
+    {
+      "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research'",
+      "exit_code": 0,
+      "output_tail": "........................................................................ [ 27%]\n........................................................................ [ 55%]\n........................................................................ [ 83%]\n..........................................                               [100%]\n258 passed in 11.41s\n"
+    },
+    {
+      "command": "/bin/bash -lc 'git diff --check 8562a4b0b6fe5c3baf0e463c9ab213e00aae1dcd 2711fbf0a73365633090eedeaa6133004c140071 && git status --short'",
+      "exit_code": 2,
+      "output_tail": "evidence/phase4/p4-training-review1.md:3: trailing whitespace.\n+Reviewed commit: **`ed093038b9a5f7e297a8f55c3df821c7c72350be`**  \nevidence/phase4/p4-training-review1.md:4: trailing whitespace.\n+Accepted base: `8562a4b0b6fe5c3baf0e463c9ab213e00aae1dcd`  \n"
+    },
+    {
+      "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/ruff check src tests/research'",
+      "exit_code": 0,
+      "output_tail": "All checks passed!\n"
+    },
+    {
+      "command": "/bin/bash -lc 'git diff --check fcdb2532eaaf9906644cfcff3dafe8f3087d6df0 2711fbf0a73365633090eedeaa6133004c140071'",
+      "exit_code": 0,
+      "output_tail": ""
+    },
+    {
+      "command": "/bin/bash -lc 'PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_production.py::test_self_hashed_status_cannot_forge_real_readiness tests/research/test_view_risk_evaluation.py::test_plan_reload_cannot_promote_self_hashed_synthetic_classifier tests/research/test_view_risk_evaluation.py::test_one_plan_rejects_two_conflicting_authoritative_registrations tests/research/test_view_risk_evaluation.py::test_learned_selection_replays_budget_guardrail_and_checkpoint_bytes tests/research/test_view_risk_production.py::test_role_bound_image_fit_and_tune_selection_are_connected'",
+      "exit_code": 0,
+      "output_tail": ".....                                                                    [100%]\n5 passed in 10.76s\n"
+    }
+  ]
+}

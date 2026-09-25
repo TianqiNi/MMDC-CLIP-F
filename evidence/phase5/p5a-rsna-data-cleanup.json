@@ -1,0 +1,32 @@
+{
+  "status": "Completed audit and review resources cleaned",
+  "recorded_at_utc": "2026-09-25T03:03:30.249047+00:00",
+  "removed_worktrees": [
+    "p5a-audit-result-review"
+  ],
+  "closed_workspaces": [
+    "wB",
+    "wC"
+  ],
+  "stopped_session": "mmdc-ivr-p5",
+  "stopped_deadline_guards": 1,
+  "removed_superseded_private_scratch": [
+    "p5a-resume-probe-20260924T180913Z",
+    "p5a-rsna-20260923T1630Z",
+    "logs/p5a-rsna-full-20260925-v1"
+  ],
+  "preserved_required_private_run": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-audit/p5a-rsna-full-20260925-v1",
+  "preserved_private_files": 7,
+  "private_retention_reason": "Required immutable inputs to later authorized classifier/confidence fitting; patient records must remain outside Git",
+  "preserved_other_resources": [
+    "Original checkout",
+    "Shared Python environment",
+    "Unrelated user files and sessions"
+  ],
+  "orchestration_scratch": "Removed /tmp/mmdc-ivr-p5-orchestration after preserving exact audit command, review evidence, launch provenance and required validation",
+  "incidental_helper": "The extra unscoped helper server created during command discovery was immediately stopped by exact process match; unrelated sessions preserved",
+  "named_session_deleted": true,
+  "cleanup_completed_at_utc": "2026-09-25T03:05:39.459301+00:00",
+  "task_owned_processes_remaining": 0,
+  "empty_worktree_parent_removed": true
+}

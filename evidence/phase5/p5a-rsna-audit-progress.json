@@ -1,0 +1,24 @@
+{
+  "completed_image_count": 19748,
+  "dataset": "RSNA-SMBC",
+  "expected_image_count": 19748,
+  "final_audit_status": "ready",
+  "journal_header_sha256": "c1f272d78a0095407b30c57373b1b615c552d18bee73b931afd9ac2d3a7301f2",
+  "pending_image_count": 0,
+  "readiness_promoted": true,
+  "resume": {
+    "changed_image_count": 0,
+    "discarded_incomplete_final_append_count": 0,
+    "reaudited_image_count": 0,
+    "reused_image_count": 0
+  },
+  "schema_version": "view-risk-p5a-rsna-progress/v1",
+  "status": "finalized",
+  "status_counts": {
+    "decode_failure": 0,
+    "missing": 0,
+    "passed": 19748,
+    "unreadable": 0
+  },
+  "test_evaluation_unlocked": false
+}

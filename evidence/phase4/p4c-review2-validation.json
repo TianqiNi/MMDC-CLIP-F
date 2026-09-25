@@ -1,0 +1,148 @@
+{
+  "decision": "PASS",
+  "reviewed_commit": "4a4ce517c0e3a40b83daf603a4fca94e22b9a474",
+  "accepted_base": "1a4a0f927f167d9f46cef1ee8dc0bf8073a4e418",
+  "review_scope": "P4C synthetic software smoke, the accepted review1 Medium coverage fix, resource preflight, cost reporting, CLI/CI integration, output-path cleanup, and non-promotability",
+  "findings": {
+    "critical": [],
+    "high": [],
+    "medium": [],
+    "low": [
+      {
+        "title": "Committed fix evidence contains trailing whitespace",
+        "location": "evidence/phase4/p4c-fix1.md:30",
+        "reproduction": "git diff --check 1a4a0f927f167d9f46cef1ee8dc0bf8073a4e418 4a4ce517c0e3a40b83daf603a4fca94e22b9a474",
+        "observed": "exit 2: trailing whitespace on the Implementation link line",
+        "impact": "Evidence hygiene only; source behavior, tests, and scientific outputs are unaffected. It does make the committed evidence statement that git diff --check passed no longer literally true for the final commit.",
+        "suggested_fix": "Remove the two Markdown hard-break spaces in a later evidence-only cleanup if desired."
+      }
+    ]
+  },
+  "review1_medium_fix": {
+    "status": "verified",
+    "behavioral_test": "tests/research/test_view_risk_smoke.py::test_smoke_scores_each_tree_method_and_panel_through_accepted_metrics",
+    "fusion_trees": [
+      "RSNA",
+      "DDSM"
+    ],
+    "nonempty_masks_per_tree": 15,
+    "unique_checked_inputs": 72,
+    "checked_inputs_per_tree": 36,
+    "panels_per_tree": {
+      "clean_four_view": 2,
+      "clean_masks": 28,
+      "permitted_single": 2,
+      "held_out_single": 2,
+      "common_mode": 2
+    },
+    "methods": [
+      "candidate",
+      "same_input_mlp",
+      "msp",
+      "ds_logistic"
+    ],
+    "method_tree_panel_confidence_metric_cells": 40,
+    "scored_samples_across_method_cells": 288,
+    "clean_mask_aurc_cells": 8,
+    "candidate_effect_metric_cells": 10,
+    "actual_count_reconciliation": true,
+    "checked_targets_regenerated": true,
+    "classifier_predictions_fixed": true,
+    "reported_metric_outputs_equal_observed_p4a_outputs": true,
+    "signed_effect_support": {
+      "-1": 32,
+      "0": 96,
+      "+1": 32
+    },
+    "training_scoring_disclosure": "Candidate, same-input MLP, and DS are fit only on the RSNA synthetic fusion configuration; scoring across both synthetic fusion trees is explicitly disclosed. MSP is an unfitted raw scalar artifact."
+  },
+  "checks": [
+    {
+      "name": "immutable checkout and ancestry",
+      "result": "passed",
+      "details": "HEAD and requested review commit are 4a4ce517c0e3a40b83daf603a4fca94e22b9a474; merge-base with the accepted base is 1a4a0f927f167d9f46cef1ee8dc0bf8073a4e418."
+    },
+    {
+      "name": "focused behavioral coverage regression",
+      "command": "PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research/test_view_risk_smoke.py::test_smoke_scores_each_tree_method_and_panel_through_accepted_metrics --basetemp=.cache/p4c-review2-focused",
+      "result": "1 passed, 1 unavailable-NVML warning, 2.42s",
+      "note": "The first setup attempt did not reach the test because the .cache parent was absent; after creating the required ignored parent, the exact command passed."
+    },
+    {
+      "name": "full research suite",
+      "command": "PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q tests/research --basetemp=.cache/p4c-review2-full",
+      "result": "269 passed, 1 unavailable-NVML warning, 25.62s"
+    },
+    {
+      "name": "ruff",
+      "command": "/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m ruff check src tests/research",
+      "result": "passed"
+    },
+    {
+      "name": "compile",
+      "command": "PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m compileall -q src tests/research",
+      "result": "passed"
+    },
+    {
+      "name": "CLI help",
+      "result": "package CLI and view-risk-smoke help passed; both view-risk-preflight and view-risk-smoke are registered"
+    },
+    {
+      "name": "CPU resource preflight",
+      "command": "PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m mmdc_clip_f.cli view-risk-preflight --device cpu",
+      "result": "passed",
+      "details": "CPU and dependencies available; CUDA unavailable; cached pinned public resources available but not content-audited; private data, patient mapping, and real patient readiness unavailable/not audited; no network/download/install or locked-outcome access reported."
+    },
+    {
+      "name": "public retained CPU smoke",
+      "command": "PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m mmdc_clip_f.cli view-risk-smoke --output-dir .cache/p4c-review2-smoke --device cpu --warmup 2 --repeats 5",
+      "result": "exit 0 in 2.7s with one unavailable-NVML warning",
+      "report_sha256": "8c40c50d79fcaa8a819d062698bd639d7ee34a33536ddb20b50b54f70f040148",
+      "scientific_sha256": "705a196af57bee4d61afa40643e293cc4146a9fbfbfccb857c1ffca187f4700b",
+      "scientific_outputs_match_committed_report": true
+    },
+    {
+      "name": "committed smoke evidence hash",
+      "command": "sha256sum evidence/phase4/p4c-synthetic-smoke-report.json",
+      "result": "34d2dec34aa243e03c85f99e4c370e77dbaf77f3ee511eafeaf93fa0bbd38d4a"
+    },
+    {
+      "name": "base-to-candidate whitespace check",
+      "command": "git diff --check 1a4a0f927f167d9f46cef1ee8dc0bf8073a4e418 4a4ce517c0e3a40b83daf603a4fca94e22b9a474",
+      "result": "failed with one evidence-only trailing-whitespace line; recorded as Low"
+    }
+  ],
+  "measured_tiny_cpu_costs": {
+    "context": "batch 1, float32, input [1,3,224,224], CPU, 2 warmups and 5 timed calls; injected tiny model only",
+    "median_ms": {
+      "encoder_feature_validation": 3.378502,
+      "cache_io_reload": 2.382343,
+      "candidate_head_inference": 3.158611,
+      "scalar_control_inference": 1.272342,
+      "ds_control_inference": 1.267532,
+      "synthetic_end_to_end": 14.265907
+    },
+    "trainable_parameters": {
+      "candidate": 433436,
+      "same_input_mlp": 433651
+    },
+    "generated_cache_bytes": 34406,
+    "memory_semantics": "CPU process-lifetime high-water RSS, not an operation-specific tensor peak"
+  },
+  "guard_and_scope_results": {
+    "bounded_output_and_cleanup": "passed through the full research suite, including existing-output refusal, unignored-worktree refusal, controlled-failure cleanup, automatic-temporary cleanup, and late-destination no-clobber behavior",
+    "production_path_guard_bypassed": false,
+    "network_or_download_attempted": false,
+    "real_or_private_data_opened": false,
+    "locked_outcomes_opened": false,
+    "production_configuration_weakened": false,
+    "real_patient_readiness_promoted": false,
+    "ci": "bounded pytest>=8,<9, research tests including the public smoke path, Ruff over source and research tests, compile and CLI checks, 30-minute timeout"
+  },
+  "remaining_scientific_limitations": [
+    "This is deterministic synthetic software smoke evidence, not an efficacy or clinical-validity result.",
+    "The synthetic candidate, same-input MLP, and DS fits use the RSNA fusion configuration; DDSM coverage is explicitly cross-tree synthetic scoring, not DDSM patient training or a cross-dataset efficacy experiment.",
+    "No real patient data, patient mapping, locked outcomes, real CLIP backbone run, accelerator-memory benchmark, or actual training-resource inventory was audited.",
+    "Complete mandatory controls and ablations, full stress panels, multi-seed and multi-dataset studies, paired patient bootstrap, empirical benefit, pilot go/no-go, P5, and G4 remain outside P4C and unmeasured."
+  ]
+}

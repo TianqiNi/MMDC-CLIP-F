@@ -1,0 +1,14 @@
+{
+  "status": "Completed; final independent artifact verification pending",
+  "recorded_at_utc": "2026-09-25T02:52:18.789872+00:00",
+  "source_commit": "cc9060479056239f31e2c36eb4abf970c7d048c1",
+  "code_reviewed_commit": "a58108ef78ef2694dc3fdc2a7ae110840eee98fe",
+  "run_name": "p5a-rsna-full-20260925-v1",
+  "exit_code": 0,
+  "runtime_seconds": 1636.1608481690055,
+  "public_report_sha256": "5278534c2355bd89435d5d7be2a950a02143cac823ad9bad1dd8212988b2c3ee",
+  "progress_sha256": "7c572878f7ee0e1fc6352943ff30caa0de776f65894d0997475154bb1b619056",
+  "private_artifacts": "External private root retained; no patient records committed",
+  "actual_training_or_scientific_benchmark": false,
+  "original_test_outcomes": "locked"
+}

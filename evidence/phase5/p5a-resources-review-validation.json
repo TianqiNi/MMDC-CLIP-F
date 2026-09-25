@@ -1,0 +1,63 @@
+{
+  "schema_version": "p5a-resources-review-validation/v1",
+  "reviewer": "Fresh independent P5A resource-audit reviewer",
+  "reviewed_commit": "182d5c08124311b254d5fc9199643cf64f110fde",
+  "evidence_base_commit": "9fc8eb758288e196c31f22469d734aa96bb02ee7",
+  "verdict": "PASS",
+  "training_authorized": false,
+  "findings": {
+    "critical": [],
+    "high": [],
+    "medium": [],
+    "low": [
+      {
+        "id": "P5A-REVIEW-L1",
+        "summary": "The Markdown report links use an author-worktree absolute path rather than repository-relative paths.",
+        "impact": "The links are not portable to this detached review worktree; the committed artifacts themselves remain identifiable and valid."
+      },
+      {
+        "id": "P5A-REVIEW-L2",
+        "summary": "The 3,209-exam timing basis is the protocol target, not a patient-audited attained cohort count.",
+        "impact": "The runtime arithmetic is valid for the stated target but should not be read as an observed real-data workload."
+      }
+    ]
+  },
+  "resource_evidence_assessment": {
+    "pinned_public_clip_load": "supported",
+    "offline_probe_operation": "supported",
+    "cuda_allocation_forward_backward": "supported",
+    "configured_batch_6_feasibility_without_optimizer_step": "supported",
+    "memory_reporting": "supported_and_bounded",
+    "timing_semantics": "honestly_labeled_gpu_only_extrapolation",
+    "storage_estimates": "arithmetically_consistent_and_labeled_estimates",
+    "cleanup": "supported_by_recorded_post_probe_process_check",
+    "patient_or_test_access": "none_reported_or_present_in_probe_path",
+    "optimizer_construction_or_update": "none_in_probe",
+    "shared_huggingface_cache": "read_only_review_validation"
+  },
+  "schedule_decision": {
+    "status": "pending_user_scientific_decision",
+    "production_behavior": "The fresh-classifier path currently receives the confidence-oriented ResearchRunConfig optimizer and epoch budget: Adam, learning rate 1e-4, weight decay 0, batch size 6, 20 RSNA epochs, seed 42.",
+    "legacy_behavior": "The accepted legacy RSNA ViT-B/32 classifier configuration uses Adam, learning rate 1e-7, weight decay 1e-5, batch size 3, 50 epochs, seed 42, no AMP, and RandAugment 3/9/31.",
+    "decision_boundary": "The implementation discrepancy is concrete; choosing legacy reproduction or a newly justified classifier schedule is not a reviewer implementation decision. No real training should start until the choice is protocol-frozen."
+  },
+  "validation": [
+    "Confirmed HEAD equals the reviewed commit and its parent equals the evidence base commit.",
+    "Confirmed the target commit adds only the probe, aggregate JSON, and Markdown report; production and configuration are unchanged.",
+    "Confirmed the raw probe output SHA-256 and size match the aggregate evidence.",
+    "Confirmed the diagnostic script SHA-256 and size match the aggregate evidence.",
+    "Confirmed cached pinned public weight SHA-256 a63082132ba4f97a80bea76823f544493bffa8082296d62d71581a4feff1576f.",
+    "Confirmed protocol SHA-256 4231c168d6dc21d0b33e02fe4adb247af6c8031a5c2eb8bace992b12b2eff435.",
+    "Cross-checked raw and aggregate load identity, token identity, batch metrics, state bytes, checkpoint arithmetic, step count, and scope guards.",
+    "Independently confirmed installed pydicom and decoder-handler inventory in the shared venv.",
+    "Traced confidence schedule, production classifier reuse, legacy classifier schedule, and their recorded commit origins."
+  ],
+  "scientific_limits": [
+    "No patient, pilot, or original-test data was accessed.",
+    "No original fine-tuned checkpoint was accessed.",
+    "No optimizer was constructed and no optimizer update was executed by the probe or review.",
+    "No real image decoding, augmentation, transfer, optimizer-step, checkpoint-write, tune-selection, or end-to-end epoch timing was measured.",
+    "Actual patient DICOM transfer-syntax compatibility and attained cohort size remain unverified by design.",
+    "Public CLIP pretraining-corpus medical independence is not established."
+  ]
+}

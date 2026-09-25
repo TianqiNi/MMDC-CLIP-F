@@ -1,0 +1,235 @@
+{
+  "schema_version": "view-risk-p4-gate-validation/v1",
+  "gate": "G4",
+  "decision": "PASS",
+  "reviewed_commit": "9984a16b4c3734b93b358f77877380db7def5f35",
+  "reviewer": {
+    "role": "fresh independent Phase 4 gate reviewer",
+    "model": "gpt-6-astra",
+    "reasoning_effort": "medium",
+    "nested_agents_used": false
+  },
+  "completed_at_utc": "2026-09-22T18:23:30.562074+00:00",
+  "scope": "Whole Phase 4 software readiness; synthetic end-to-end integration, metrics, preserved scientific contracts, CLI/CI, and separate per-dataset real-data blockers. No P5 execution required for G4.",
+  "findings": {
+    "critical": [],
+    "high": [],
+    "medium": [],
+    "low": []
+  },
+  "source_verification": {
+    "head_equals_requested_candidate": true,
+    "initial_worktree_clean": true,
+    "source_tests_ci_dependencies_identical_to_p4c_reviewed_commit": "4a4ce517c0e3a40b83daf603a4fca94e22b9a474",
+    "git_tree_objects": {
+      "src": "0629bd5c92c611e012634f370dbcf8674ba35e04",
+      "tests": "1ec11c247c8b5cb88fcb8e3479314559e4cd2f40",
+      ".github": "f93da515cd9301cea24f7de5be523ff498e1d49a"
+    },
+    "p4a_metrics_and_metric_tests_unchanged_from": "6d2da0fa50682be9be43901950cd25d3283667c6",
+    "p4b_training_production_evaluation_unchanged_from": "94c0e4a70f681392abd6d77ea2034d93507f1d54",
+    "p4c_delta_from_accepted_p4b": "New smoke module and tests, additive CLI registration, bounded CI pytest installation and research-suite execution; no production dependency changes or existing test weakening.",
+    "p4c_review2_low": "Evidence-only trailing whitespace is fixed; base-to-gate diff --check passed."
+  },
+  "evidence_read": [
+    "docs/research/implementation_status.md",
+    "docs/research/view_risk_protocol.md",
+    "evidence/p2-inventory.json",
+    "evidence/phase4/p4b-acceptance.json",
+    "evidence/phase4/p4-training-review8.md",
+    "evidence/phase4/p4c-acceptance-criteria.md",
+    "evidence/phase4/p4c-implementation.md",
+    "evidence/phase4/p4c-fix1.md",
+    "evidence/phase4/p4c-review2.md",
+    "evidence/phase4/p4c-review2-validation.json",
+    "evidence/phase4/p4c-acceptance.json",
+    "evidence/phase4/p4c-synthetic-smoke-report.json"
+  ],
+  "prior_full_validation": {
+    "source": "evidence/phase4/p4c-review2-validation.json",
+    "commit": "4a4ce517c0e3a40b83daf603a4fca94e22b9a474",
+    "research_tests_passed": 269,
+    "duration_seconds": 25.62,
+    "ruff": "passed",
+    "compile": "passed",
+    "rerun_by_gate": false,
+    "reason": "Reviewed source/tests/CI are identical; focused checks and independent oracles passed without new failures requiring broader testing."
+  },
+  "actual_gate_checks": [
+    {
+      "name": "focused scientific and integration regressions",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m pytest -q -p no:cacheprovider --basetemp=.cache/p4-gate/pytest tests/research/test_view_risk_smoke.py tests/research/test_view_risk_metrics.py tests/research/test_view_risk_training.py::test_public_research_config_rejects_non_protocol_optimizer tests/research/test_view_risk_training.py::test_role_is_rejected_before_training_reader_hook tests/research/test_view_risk_training.py::test_cached_target_adapter_regenerates_current_targets_and_rejects_changed_parent tests/research/test_view_risk_training.py::test_optimizer_updates_resume_exactly_and_preserves_frozen_module tests/research/test_view_risk_training.py::test_injected_classifier_is_explicitly_synthetic_and_not_pilot_eligible tests/research/test_view_risk_training.py::test_real_readiness_rejects_unverified_empty_locked_evidence_before_paths tests/research/test_view_risk_production.py::test_self_hashed_status_cannot_forge_real_readiness tests/research/test_view_risk_evaluation.py::test_missing_selection_diagnostic_classifier_and_locked_outcomes_are_refused tests/research/test_view_risk_evaluation.py::test_plan_reload_cannot_promote_self_hashed_synthetic_classifier tests/research/test_view_risk_evaluation.py::test_one_plan_rejects_two_conflicting_authoritative_registrations",
+      "result": "PASS",
+      "passed": 32,
+      "duration_seconds": 6.67,
+      "warnings": [
+        "Unavailable NVML; no test failure"
+      ]
+    },
+    {
+      "name": "independent exhaustive metric oracle",
+      "execution": "Shared venv, PYTHONPATH=src, Python stdin; no test/source file added",
+      "result": "PASS",
+      "cases": 1364,
+      "sample_sizes": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "inputs": "Every binary correctness vector and every confidence vector over {0.2,0.8}.",
+      "oracle": "Enumerate all permutations within exact ties and average literal prefix risks; compare AURC and ceil-based 80/90 coverage. Compare both grouped AP orientations with sklearn, Brier with direct squared error, and one-class AP/raw-ranking Brier unavailability.",
+      "absolute_tolerance": 1e-14
+    },
+    {
+      "name": "independent patient-paired bootstrap oracle",
+      "execution": "Shared venv, PYTHONPATH=src, Python stdin; synthetic only",
+      "result": "PASS",
+      "patients": 3,
+      "exams": 6,
+      "patient_exam_counts": [
+        1,
+        2,
+        3
+      ],
+      "clean_mask_cells": 14,
+      "training_seeds": [
+        42,
+        43,
+        44
+      ],
+      "resamples": 2000,
+      "random_seed": 2026,
+      "oracle": "Literal sampled-patient row expansion carries all exams/masks/methods/seeds together. Direct sorted prefix-risk macro means reproduce each paired seed point/percentile interval, same-draw seed-mean interval, and separate sample SD. No undefined replicates.",
+      "absolute_tolerance": 1e-14
+    },
+    {
+      "name": "public CPU smoke",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src /home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python -m mmdc_clip_f.cli view-risk-smoke --device cpu --output-dir .cache/p4-gate/cli-smoke --warmup 2 --repeats 5",
+      "result": "PASS; exit 0",
+      "report_sha256": "c3ee0c9e5f3f1d4a851b9b60dedbde6d5e6d6d89f5669bdbf11e26eefdabd74c",
+      "scientific_sha256": "705a196af57bee4d61afa40643e293cc4146a9fbfbfccb857c1ffca187f4700b",
+      "scientific_outputs_equal_committed_report": true,
+      "confidence_metric_cells": 40,
+      "method_level_scores": 288,
+      "target_checked_inputs": 72,
+      "inputs_per_tree": 36
+    },
+    {
+      "name": "source identity and whitespace",
+      "result": "PASS",
+      "commands": [
+        "git rev-parse HEAD",
+        "git diff --exit-code 4a4ce517c0e3a40b83daf603a4fca94e22b9a474 HEAD -- src tests .github pyproject.toml",
+        "git diff --check 1a4a0f927f167d9f46cef1ee8dc0bf8073a4e418 HEAD"
+      ]
+    },
+    {
+      "name": "CLI/CI inspection",
+      "result": "PASS",
+      "details": "Additive smoke/preflight dispatch; existing production commands and frozen public config preserved. CI retains compile/lint/help, lints research tests, installs pytest>=8,<9, runs full research suite including public CPU smoke, and retains 30-minute timeout. Remote CI was not run by this gate."
+    }
+  ],
+  "scientific_invariants": {
+    "status": "preserved",
+    "details": [
+      "Signed repairs/damages/unchanged targets regenerated from actual realized parents; all 15 masks in both trees, including invalid singleton removal slots.",
+      "Frozen classifier predictions retained across candidate and controls; no labels added to inference features.",
+      "Accepted head/loss and control definitions unchanged; raw-logit auxiliary loss and deterministic reported-effect constraints retained.",
+      "Role separation, locked-test refusal, source/checkpoint/manifest/cache bindings, deterministic resume, and one authoritative prediction registry remain enforced.",
+      "Public optimizer, epoch budgets, seeds, mandatory method table and tune selection contracts remain unchanged. Smoke reports one-epoch partial RSNA fitting and DDSM synthetic cross-tree scoring explicitly.",
+      "Synthetic artifacts and readiness cannot qualify real patient readiness or scientific pilot success."
+    ]
+  },
+  "current_resource_preflight": {
+    "cpu": "available",
+    "cuda": "unavailable",
+    "pinned_public_resources": {
+      "vit_b_32": {
+        "configuration_present": true,
+        "pinned_revision": "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268",
+        "status": "available_not_content_audited",
+        "tokenizer_present": true,
+        "weights_present": true
+      },
+      "vit_l_14_336": {
+        "configuration_present": true,
+        "pinned_revision": "ce19dc912ca5cd21c8a653c79e251e808ccabcd1",
+        "status": "available_not_content_audited",
+        "tokenizer_present": true,
+        "weights_present": true
+      }
+    },
+    "interpretation": "File presence only; no weight content audit/loading, patient inventory audit, or readiness inference."
+  },
+  "real_data_readiness": {
+    "evidence_source": "evidence/p2-inventory.json; historical aggregate metadata evidence, not re-audited in G4",
+    "RSNA-SMBC": {
+      "status": "blocked",
+      "historically_observed_non_test_metadata_rows": 4937,
+      "blockers": [
+        "Identity-only locked-test patient denylist/digest and overlap audit absent.",
+        "Image content validity and cross-record/cross-dataset content duplication unaudited; path presence is insufficient.",
+        "Official patient_id schema exists, but local schema-derived patient-mapping binding is not recorded.",
+        "Audited patient-isolated role manifests, actual eligible role counts/exclusions and fresh public-initialized selected-classifier provenance remain pending.",
+        "Pinned public weight content/loading and usable real-backbone training resources remain unverified."
+      ]
+    },
+    "MINI-DDSM": {
+      "status": "blocked",
+      "historically_observed_non_test_metadata_rows": 1353,
+      "blockers": [
+        "Only examination IDs are available; verified external exam-to-patient mapping absent.",
+        "Identity-only locked-test patient denylist/digest and overlap audit absent.",
+        "Image content validity and cross-record/cross-dataset content duplication unaudited; path presence is insufficient.",
+        "Audited patient-isolated role manifests, actual eligible role counts/exclusions and fresh public-initialized selected-classifier provenance remain pending.",
+        "Pinned public weight content/loading and usable real-backbone training resources remain unverified."
+      ]
+    },
+    "actual_inventory_weights_or_mapping_certified_by_this_gate": false
+  },
+  "cost_scope": {
+    "mode": "tiny_injected_synthetic_measurement",
+    "warmups": 2,
+    "timed_calls": 5,
+    "device": "cpu",
+    "batch_size": 1,
+    "input_shape": [
+      1,
+      3,
+      224,
+      224
+    ],
+    "dtype": "float32",
+    "median_ms": {
+      "encoder_feature_validation": 3.358598,
+      "cache_io_reload": 2.364741,
+      "candidate_head_inference": 4.06256,
+      "scalar_control_inference": 1.297412,
+      "ds_control_inference": 1.263311,
+      "synthetic_end_to_end": 14.249565
+    },
+    "memory_semantics": "CPU process-lifetime high-water RSS, not operation-specific tensor peak.",
+    "real_backbone_cost_experiment": "not run; later procedure specifies 20 warmups and 100 timed calls, device synchronization and actual hardware context"
+  },
+  "publication_disposition": {
+    "phase4_can_be_published_as_software_only_accepted": true,
+    "publication_performed_by_reviewer": false,
+    "orchestrator_next_step": "Finalize Phase 4 evidence/status, integration/publication and release CI; pending-publication wording is expected until that step.",
+    "real_data_execution_authorized_by_this_gate": false,
+    "test_unlock_authorized": false,
+    "p5_execution_required_for_g4": false,
+    "scientific_success_claim": false
+  },
+  "limitations": [
+    "Representative synthetic methods/panels only; no all-method efficacy experiment.",
+    "No actual CLIP backbone run, patient study, deployment cost or accelerator-memory measurement.",
+    "No P5, patient data, locked outcomes, downloads, commits, pushes or source edits."
+  ],
+  "cleanup": {
+    "own_probe_artifacts_removed": true,
+    "temporary_root": ".cache/p4-gate",
+    "only_deliverable": "evidence/phase4/p4-gate-validation.json"
+  }
+}

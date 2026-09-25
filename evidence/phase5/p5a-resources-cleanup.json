@@ -1,0 +1,50 @@
+{
+  "completed_at_utc": "2026-09-23T16:28:09.805165+00:00",
+  "worktrees_removed": [
+    "/home/tianqini/research/.ivr-p5-worktrees/p5a-resources",
+    "/home/tianqini/research/.ivr-p5-worktrees/p5a-resource-review"
+  ],
+  "herdr_workspaces_closed": [
+    "w2",
+    "w3",
+    "w5"
+  ],
+  "completed_task_scratch_removed": [
+    "p5a-resources",
+    "resource-review",
+    "resource-review-resume1"
+  ],
+  "launches": [
+    {
+      "name": "p5a-resources",
+      "pane": "w2:p1",
+      "cwd": "/home/tianqini/research/.ivr-p5-worktrees/p5a-resources",
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh",
+      "resume": null,
+      "deadline": "2026-09-23T06:20:04Z"
+    },
+    {
+      "name": "resource-review",
+      "pane": "w3:p1",
+      "cwd": "/home/tianqini/research/.ivr-p5-worktrees/p5a-resource-review",
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh",
+      "resume": null,
+      "deadline": "2026-09-23T06:20:04Z"
+    },
+    {
+      "name": "resource-review-resume1",
+      "pane": "w5:p1",
+      "cwd": "/home/tianqini/research/.ivr-p5-worktrees/p5a-resource-review",
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh",
+      "resume": "01a0cbe9-3ea8-7713-aa31-a1613a5f7a75",
+      "deadline": "2026-09-23T21:18:49Z"
+    }
+  ],
+  "probe_logs_and_generated_cache": "Removed with completed worktrees; sanitized measurements and review evidence retained in Git",
+  "private_audit_resources_preserved": true,
+  "original_checkout_and_shared_environment_preserved": true,
+  "ongoing_data_audit_preserved": true
+}

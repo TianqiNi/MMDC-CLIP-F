@@ -1,0 +1,197 @@
+{
+  "aggregate_artifact_hashes": {
+    "decoded_pixel_collection": "aec18d1e30b9219adfa8e612c8c37f659d6287c19402dd373f8ae2b4ace32395",
+    "dicom_byte_collection": "a979d28abc431344e1af0eb96b6f651e0a212b862a961eeffdd0343d2d9e03a0",
+    "image_audit_journal": "1ff0579d506648d83a7a2c954cd1796a304f8a88fa0e8d4c52f78b7e418ee0aa",
+    "image_audit_journal_header": "c1f272d78a0095407b30c57373b1b615c552d18bee73b931afd9ac2d3a7301f2",
+    "locked_test_identity_denylist": "782dbc3e6523dfa3fc363d9337a3461414c85a12eb4f86f01fad8360dd061798",
+    "patient_mapping_binding": "2f8697e71e2bbada854c23fa756488a2d3dc9a291e9eaa29ed47a2a26db2130f",
+    "private_run_manifest": "e6a9ac3482f0f77750c437f9f70f9300e7adcf278ccde4ecd4c17aa8d9fa588e",
+    "readiness_file": "0e2dc42f265614e1fc154e9bf54596a756774a9030fbe3e492a5e3df3ae51025",
+    "readiness_payload": "151cefdc3426216e6852570585d1eb58ec5b84219cf7f6da87e7d412effa9adc",
+    "role_manifest_binding": "f339fc272725992ec6f25f3b8eb00dfcc9d8ff53cc9ddf8d6e6ac58db20b4354",
+    "role_manifest_file": "01f23ecda8733ffb7e2e0b767d546503c5cc7fa389bc699abf345895b42a4ac4",
+    "role_manifest_payload": "9c768e38d2c930fbe2e654e7a4a57ca8fb997d8b7329f224daa276f81a6eee34"
+  },
+  "audits": {
+    "duplicate_decoded_pixels": "passed",
+    "duplicate_file_bytes": "passed",
+    "inventory_validation": "passed",
+    "locked_test_identity_projection": "performed",
+    "locked_test_images": "not_performed_by_design",
+    "locked_test_outcomes": "not_performed_by_design",
+    "official_patient_schema": "passed",
+    "production_dicom_decode": "performed",
+    "production_dicom_file_bytes": "performed",
+    "real_readiness_api": "passed",
+    "role_assignment": "passed",
+    "source_hash_binding": "passed"
+  },
+  "blockers": [],
+  "configuration": {
+    "assignment_seed": 42,
+    "cached_png_substitution_used": false,
+    "canonical_views": [
+      "L_CC",
+      "L_MLO",
+      "R_CC",
+      "R_MLO"
+    ],
+    "image_audit_workers": 4,
+    "patient_grouping_mandatory": true,
+    "primary_image_source": "original production DICOM",
+    "requested_exam_counts": {
+      "classifier_fit": 3209,
+      "confidence_fit": 987,
+      "pilot": 371,
+      "tune": 370
+    }
+  },
+  "data_readiness": "verified",
+  "dataset": "RSNA-SMBC",
+  "limitations": [
+    "Locked test outcomes and images were not accessed.",
+    "The audit does not load public model weights or establish compute readiness.",
+    "The audit reports no scientific performance and does not unlock test evaluation.",
+    "MINI-DDSM patient mapping remains blocked and was not audited."
+  ],
+  "missing_prerequisites": [],
+  "observations": {
+    "assignment": {
+      "actual_exam_counts": {
+        "classifier_fit": 3209,
+        "confidence_fit": 987,
+        "pilot": 371,
+        "tune": 370
+      },
+      "actual_patient_counts": {
+        "classifier_fit": 3209,
+        "confidence_fit": 987,
+        "pilot": 371,
+        "tune": 370
+      },
+      "class_exam_counts": {
+        "classifier_fit": {
+          "0": 310,
+          "1": 1383,
+          "2": 1352,
+          "3": 164
+        },
+        "confidence_fit": {
+          "0": 95,
+          "1": 425,
+          "2": 416,
+          "3": 51
+        },
+        "pilot": {
+          "0": 36,
+          "1": 160,
+          "2": 156,
+          "3": 19
+        },
+        "tune": {
+          "0": 36,
+          "1": 159,
+          "2": 156,
+          "3": 19
+        }
+      },
+      "conflicting_patient_count": 0,
+      "exclusion_counts": {},
+      "max_exams_per_patient": 1,
+      "multi_exam_patient_count": 0,
+      "patient_stratum_counts": {
+        "0": 477,
+        "1": 2127,
+        "2": 2080,
+        "3": 253
+      },
+      "requested_exam_counts": {
+        "classifier_fit": 3209,
+        "confidence_fit": 987,
+        "pilot": 371,
+        "tune": 370
+      },
+      "stratification_rule": "majority density; highest density on ties",
+      "targets_exact": true
+    },
+    "image_audit": {
+      "cached_png_substitution_used": false,
+      "decode_failure_count": 0,
+      "decoded_file_count": 19748,
+      "decoder_semantics": "accepted production reader normalized RGB",
+      "duplicates": {
+        "decoded_pixel_extra_count": 0,
+        "decoded_pixel_group_count": 0,
+        "identical_file_byte_extra_count": 0,
+        "identical_file_byte_group_count": 0
+      },
+      "expected_file_count": 19748,
+      "format": "DICOM",
+      "missing_file_count": 0,
+      "readable_file_count": 19748,
+      "unreadable_file_count": 0
+    },
+    "inventory": {
+      "collision_counts": {
+        "content": 0,
+        "image_id": 0,
+        "image_path": 0
+      },
+      "content_hash_count": 19748,
+      "dataset_count": 1,
+      "exam_count": 4937,
+      "image_count": 19748,
+      "locked_denylist_dataset_count": 1,
+      "locked_identity_count": 872,
+      "patient_count": 4937
+    },
+    "locked_test_isolation": {
+      "duplicate_identity_count": 0,
+      "evaluation_unlocked": false,
+      "identity_count": 872,
+      "identity_field": "patient_id",
+      "images_accessed": false,
+      "outcome_values_consulted": false,
+      "overlap_count": 0
+    },
+    "metadata": {
+      "density_counts": {
+        "0": 477,
+        "1": 2127,
+        "2": 2080,
+        "3": 253
+      },
+      "duplicate_exam_or_patient_count": 0,
+      "eligible_record_count": 4937,
+      "expected_named_view_count": 19748,
+      "invalid_density_count": 0,
+      "malformed_row_count": 0,
+      "missing_patient_id_count": 0,
+      "missing_view_identifier_count": 0,
+      "patient_count": 4937,
+      "repeated_view_identifier_count": 0,
+      "row_count": 4937,
+      "schema_error_count": 0,
+      "unsafe_identifier_count": 0
+    },
+    "resume": {
+      "changed_image_count": 0,
+      "discarded_incomplete_final_append_count": 0,
+      "reaudited_image_count": 0,
+      "reused_image_count": 0
+    }
+  },
+  "prior_inventory_source_hash_match": true,
+  "runtime_seconds": 1636.1608481690055,
+  "schema_version": "view-risk-p5a-rsna-audit/v1",
+  "scientific_performance": "not_assessed",
+  "scope": "RSNA only; no MINI-DDSM or cross-dataset cleanliness claim",
+  "source_manifest_sha256": {
+    "train": "7730215a6751ae0085f5dca4d7c42af12fb86e86d792fe787e48c3f608edc734",
+    "valid": "dd02bb5d2dde3aba59d65dbe1253a40c920e2099030b44957a56339c3bbe8ecd"
+  },
+  "status": "ready",
+  "test_evaluation_unlocked": false,
+  "weight_compute_readiness": "not_assessed"
+}

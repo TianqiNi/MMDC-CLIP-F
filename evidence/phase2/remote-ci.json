@@ -1,0 +1,10 @@
+{
+  "head": "b19fb9c5b411fb63ce165c9eb88eab8cfba6e219",
+  "pr_run": 34546805581,
+  "push_run": 34546802228,
+  "pr_conclusion": "success",
+  "push_conclusion": "success",
+  "pr_duration": "1m40s",
+  "push_duration": "1m50s",
+  "release": "P3 may begin; no source changes after G2"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "rsna-full-20260925",
+  "pane": "wB:p1",
+  "cwd": "/home/tianqini/research/MMDC-CLIP-IVR",
+  "kind": "ordinary root-owned audit shell; no language-model process",
+  "source_commit": "cc9060479056239f31e2c36eb4abf970c7d048c1",
+  "reviewed_commit": "a58108ef78ef2694dc3fdc2a7ae110840eee98fe",
+  "deadline": "2026-09-25T07:07:04Z",
+  "started_at_utc": "2026-09-25T02:24:00.091268+00:00",
+  "run_name": "p5a-rsna-full-20260925-v1"
+}

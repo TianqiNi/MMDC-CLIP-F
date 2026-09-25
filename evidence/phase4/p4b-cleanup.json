@@ -1,0 +1,23 @@
+{
+  "worktrees_removed": [
+    "/home/tianqini/research/.ivr-p4-worktrees/p4-training",
+    "/home/tianqini/research/.ivr-p4-worktrees/p4-training-review3",
+    "/home/tianqini/research/.ivr-p4-worktrees/p4-training-review4",
+    "/home/tianqini/research/.ivr-p4-worktrees/p4-training-review5",
+    "/home/tianqini/research/.ivr-p4-worktrees/p4-training-review6",
+    "/home/tianqini/research/.ivr-p4-worktrees/p4-training-review7",
+    "/home/tianqini/research/.ivr-p4-worktrees/p4-training-review8"
+  ],
+  "herdr_session_deleted": "mmdc-ivr-p4",
+  "deadline_guard_stopped": true,
+  "original_repository_preserved": true,
+  "shared_environment_preserved": true,
+  "temporary_resources_removed": [
+    "/tmp/p4b-evaluation-cell-probe.json",
+    "/tmp/p4b-random-ds-control.json",
+    "/tmp/p4b-review4-probe",
+    "/tmp/mmdc-ivr-p4-orchestration"
+  ],
+  "shared_tmp_git_preserved": true,
+  "completed_at_utc": "2026-09-18T19:34:40.939724+00:00"
+}

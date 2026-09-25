@@ -1,0 +1,10 @@
+{
+  "name": "p4-metrics-review1",
+  "model": "gpt-5.6-sol",
+  "effort": "xhigh",
+  "cwd": "/home/tianqini/research/.ivr-p4-worktrees/p4-metrics-review1",
+  "pane": "w2:p1",
+  "deadline": "2026-09-11T21:44:27Z",
+  "resume": null,
+  "ref": "6d2da0fa50682be9be43901950cd25d3283667c6"
+}

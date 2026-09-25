@@ -1,0 +1,31 @@
+{
+  "status": "Phase 4 accepted, pushed, PR updated and release CI passed",
+  "recorded_at_utc": "2026-09-23T00:17:08.002792+00:00",
+  "implementation_release_commit": "da6544133a0035d9fd2cb7403b74af666cdf4790",
+  "branch": "research/intervention-supervised-confidence",
+  "remote": "origin",
+  "pr": "https://github.com/TianqiNi/MMDC-CLIP-F/pull/1",
+  "source_tests_ci_dependencies_identical_to_gate_commit": "9984a16b4c3734b93b358f77877380db7def5f35",
+  "release_ci": [
+    {
+      "conclusion": "success",
+      "databaseId": 35801070583,
+      "event": "pull_request",
+      "headSha": "da6544133a0035d9fd2cb7403b74af666cdf4790",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/35801070583"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 35801067150,
+      "event": "push",
+      "headSha": "da6544133a0035d9fd2cb7403b74af666cdf4790",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/35801067150"
+    }
+  ],
+  "remote_research_tests": "269 passed in 39.17s (PR run)",
+  "metadata_followup": "This record is committed in a following metadata-only commit; its CI is available on the PR, not recursively copied into itself.",
+  "p5_status": "pending; no real-data benchmark run",
+  "cleanup_record": "evidence/phase4/p4-cleanup.json"
+}
