@@ -521,3 +521,13 @@ with 3,209 patients and 1,070 optimizer updates in 89.4 minutes. The checkpoint
 and resume state passed independent review at `1adc51e07977c953e48e64fb66700e9db9a453fe`: all 398 model tensors match resume, floating states are finite, and 397 tensors changed from initialization. Continuation resumes the same schedule.
 No classifier performance or uncertainty benchmark has been evaluated.
 P5A fitting/selection, P5B confidence fitting, P5C pilot and G5 remain unfinished.
+
+## P5A resumed real training — 2026-09-28
+
+Epochs 2 and 3 completed in 146.5 minutes, reaching 3,210 cumulative updates
+over the unchanged 3,209-patient classifier-fit role. Fresh Sol xhigh review
+accepted exact result commit `3b48478c608387c70f29fef557635c5f72893028` with no
+findings: artifact reload, all three checkpoints, unchanged epoch-1 bytes,
+finite model/Adam state, exact latest model/resume equality and saved RNG
+state passed. The next continuation targets epoch 4 of the same fixed 50.
+No classifier accuracy or uncertainty benchmark has been evaluated.
