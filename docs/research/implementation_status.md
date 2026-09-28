@@ -518,6 +518,6 @@ and agent workspaces are cleaned; essential evidence is under `evidence/phase5/`
 Single-role workflow inputs have been exported without changing the audited
 assignments; independent review passed on `39e7a1e7575560243e08ffc91c49a126f3841f2f`. The first real invocation completed epoch 1 of the fixed 50-epoch schedule,
 with 3,209 patients and 1,070 optimizer updates in 89.4 minutes. The checkpoint
-and resume state are saved; independent artifact review precedes continuation.
+and resume state passed independent review at `1adc51e07977c953e48e64fb66700e9db9a453fe`: all 398 model tensors match resume, floating states are finite, and 397 tensors changed from initialization. Continuation resumes the same schedule.
 No classifier performance or uncertainty benchmark has been evaluated.
 P5A fitting/selection, P5B confidence fitting, P5C pilot and G5 remain unfinished.
