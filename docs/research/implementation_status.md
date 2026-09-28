@@ -516,7 +516,8 @@ tests and configuration to the accepted candidate. Completed schedule worktrees
 and agent workspaces are cleaned; essential evidence is under `evidence/phase5/`.
 
 Single-role workflow inputs have been exported without changing the audited
-assignments; independent review passed on `39e7a1e7575560243e08ffc91c49a126f3841f2f`. The first real invocation will
+assignments; independent review passed on `39e7a1e7575560243e08ffc91c49a126f3841f2f`. The first real invocation has started and will
 stop after epoch 1 of the fixed 50-epoch schedule to retain resume state and measure
-end-to-end runtime. No actual classifier training or scientific benchmark has run.
+end-to-end runtime. Actual classifier fitting is running; no completed epoch or scientific benchmark
+is claimed yet.
 P5A fitting/selection, P5B confidence fitting, P5C pilot and G5 remain unfinished.

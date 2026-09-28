@@ -1,6 +1,6 @@
 {
-  "status": "P5A schedule and role-input prerequisites accepted; first classifier epoch ready to start",
-  "recorded_at_utc": "2026-09-28T15:09:14.577996+00:00",
+  "status": "P5A actual fresh classifier epoch 1 of 50 launched",
+  "recorded_at_utc": "2026-09-28T15:11:00.109465+00:00",
   "base_phase4": "9fc8eb758288e196c31f22469d734aa96bb02ee7",
   "resource_reviewed_commit": "182d5c08124311b254d5fc9199643cf64f110fde",
   "active_audit_worktree": "/home/tianqini/research/MMDC-CLIP-IVR",
@@ -16,7 +16,7 @@
     "P5C",
     "G5"
   ],
-  "real_training_or_benchmark": false,
+  "real_training_or_benchmark": "classifier fit command launched; epoch completion not yet established; no benchmark",
   "test_outcomes_locked": true,
   "resource_task_publication": "accepted, pushed, CI passed and completed resources cleaned",
   "resource_publication_commit": "2695f0424e386535b33343df9522cf68262151ed",
@@ -35,7 +35,7 @@
   "audit_data_task_cleanup": "complete; named session and all task-owned orchestration scratch removed",
   "audit_result_publication_commit": "2bc46850aab12b4136a54deaecb626d7a5c31364",
   "audit_result_publication": "pushed; both release CI checks passed; cleanup complete",
-  "next_task": "Run first classifier epoch with original settings, retain resume state, measure runtime",
+  "next_task": "Await epoch 1 completion; verify checkpoint and resume state; continue fixed schedule within cutoff",
   "active_schedule_worktree": null,
   "active_schedule_launch": null,
   "active_schedule_thread": null,
@@ -49,5 +49,10 @@
   "schedule_candidate_commit": "dce28edb077608c3312adbe9f08d1f07221c7005",
   "schedule_reviewed_commit": "b3767d90762f9804a95c6c08f387a33c061fc404",
   "schedule_integration_commit": "ff419277fa86f02337797a0550b90f4a1fc8b03d",
-  "workflow_input_reviewed_commit": "39e7a1e7575560243e08ffc91c49a126f3841f2f"
+  "workflow_input_reviewed_commit": "39e7a1e7575560243e08ffc91c49a126f3841f2f",
+  "active_classifier_launch": ".cache/p5a-orchestration/tasks/classifier-epoch-001/launch.json",
+  "active_classifier_pane": "w9:p1",
+  "active_classifier_run": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-classifier-original-20260928-v1",
+  "classifier_source_commit": "56ddbc890937a11e841f3b3f54d1d09670ee8097",
+  "classifier_completed_epoch": null
 }

@@ -1,0 +1,23 @@
+{
+  "publication_commit": "56ddbc890937a11e841f3b3f54d1d09670ee8097",
+  "status": "pushed; both CI runs passed; PR updated",
+  "checked_at_utc": "2026-09-28T15:12:53.327265+00:00",
+  "runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 36441424334,
+      "event": "pull_request",
+      "headSha": "56ddbc890937a11e841f3b3f54d1d09670ee8097",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/36441424334"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 36441417830,
+      "event": "push",
+      "headSha": "56ddbc890937a11e841f3b3f54d1d09670ee8097",
+      "status": "completed",
+      "url": "https://github.com/TianqiNi/MMDC-CLIP-F/actions/runs/36441417830"
+    }
+  ]
+}
