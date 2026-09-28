@@ -82,9 +82,10 @@ from .roles import (
 from .targets import InterventionTargets, build_intervention_targets
 
 
-RUN_CONFIG_VERSION = "view-risk-run-config/v1"
+RUN_CONFIG_VERSION = "view-risk-run-config/v2"
 SEARCH_TABLE_VERSION = "view-risk-search-table/v1"
 TRAINING_SCHEDULE_VERSION = "view-risk-training-schedule/v1"
+CLASSIFIER_SCHEDULE_VERSION = "view-risk-classifier-schedule/v1"
 RESUME_VERSION = "view-risk-resume/v1"
 METRIC_VERSION = "view-risk-p4a-metrics/v1"
 DEFAULT_PROTOCOL_SHA256 = "4231c168d6dc21d0b33e02fe4adb247af6c8031a5c2eb8bace992b12b2eff435"
@@ -166,6 +167,124 @@ class OptimizerConfig:
 
 
 @dataclass(frozen=True)
+class FrozenClassifierSchedule:
+    """The approved Stage-1 fit and tune-checkpoint schedule."""
+
+    optimizer: OptimizerConfig = field(
+        default_factory=lambda: OptimizerConfig(
+            name="adam", learning_rate=1e-7, weight_decay=1e-5, batch_size=3
+        )
+    )
+    epochs: int = 50
+    seed: int = 42
+    checkpoint_epochs: tuple[int, ...] = tuple(range(1, 51))
+    amp: bool = False
+    augmentation_name: str = "randaugment"
+    randaugment_num_ops: int = 3
+    randaugment_magnitude: int = 9
+    randaugment_num_magnitude_bins: int = 31
+    version: str = CLASSIFIER_SCHEDULE_VERSION
+
+    def __post_init__(self) -> None:
+        approved_optimizer = OptimizerConfig(
+            name="adam", learning_rate=1e-7, weight_decay=1e-5, batch_size=3
+        )
+        integer_values = (
+            self.epochs,
+            self.seed,
+            self.randaugment_num_ops,
+            self.randaugment_magnitude,
+            self.randaugment_num_magnitude_bins,
+        )
+        if any(isinstance(value, bool) or not isinstance(value, int) for value in integer_values):
+            raise ValueError("classifier schedule counts and seed must be integers")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int)
+            for value in self.checkpoint_epochs
+        ):
+            raise ValueError("classifier checkpoint epochs must be integers")
+        if self.version != CLASSIFIER_SCHEDULE_VERSION:
+            raise ValueError("unsupported classifier schedule version")
+        if self.optimizer != approved_optimizer:
+            raise ValueError("classifier optimizer must match the approved frozen schedule")
+        if self.epochs != 50 or self.seed != 42:
+            raise ValueError("classifier epochs and seed must match the approved frozen schedule")
+        if tuple(self.checkpoint_epochs) != tuple(range(1, 51)):
+            raise ValueError("classifier checkpoint budget must contain every epoch 1 through 50")
+        if not isinstance(self.amp, bool) or self.amp:
+            raise ValueError("classifier AMP must remain disabled")
+        if (
+            self.augmentation_name != "randaugment"
+            or self.randaugment_num_ops != 3
+            or self.randaugment_magnitude != 9
+            or self.randaugment_num_magnitude_bins != 31
+        ):
+            raise ValueError("classifier RandAugment must match the approved 3/9/31 schedule")
+        object.__setattr__(self, "checkpoint_epochs", tuple(self.checkpoint_epochs))
+
+    @property
+    def augmentation(self) -> dict[str, object]:
+        return {
+            "name": self.augmentation_name,
+            "num_ops": self.randaugment_num_ops,
+            "magnitude": self.randaugment_magnitude,
+            "num_magnitude_bins": self.randaugment_num_magnitude_bins,
+        }
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "version": self.version,
+            "optimizer": asdict(self.optimizer),
+            "epochs": self.epochs,
+            "seed": self.seed,
+            "checkpoint_epochs": list(self.checkpoint_epochs),
+            "amp": self.amp,
+            "augmentation": self.augmentation,
+        }
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, object]) -> "FrozenClassifierSchedule":
+        expected = {
+            "version",
+            "optimizer",
+            "epochs",
+            "seed",
+            "checkpoint_epochs",
+            "amp",
+            "augmentation",
+        }
+        if not isinstance(value, Mapping) or set(value) != expected:
+            raise ValueError("classifier schedule has an invalid schema")
+        optimizer = value["optimizer"]
+        augmentation = value["augmentation"]
+        if not isinstance(optimizer, Mapping) or not isinstance(augmentation, Mapping):
+            raise ValueError("classifier schedule optimizer/augmentation is invalid")
+        if set(optimizer) != {field.name for field in fields(OptimizerConfig)} or set(
+            augmentation
+        ) != {"name", "num_ops", "magnitude", "num_magnitude_bins"}:
+            raise ValueError("classifier schedule optimizer/augmentation schema is invalid")
+        try:
+            return cls(
+                optimizer=OptimizerConfig(**optimizer),  # type: ignore[arg-type]
+                epochs=value["epochs"],  # type: ignore[arg-type]
+                seed=value["seed"],  # type: ignore[arg-type]
+                checkpoint_epochs=tuple(value["checkpoint_epochs"]),  # type: ignore[arg-type]
+                amp=value["amp"],  # type: ignore[arg-type]
+                augmentation_name=augmentation["name"],  # type: ignore[arg-type]
+                randaugment_num_ops=augmentation["num_ops"],  # type: ignore[arg-type]
+                randaugment_magnitude=augmentation["magnitude"],  # type: ignore[arg-type]
+                randaugment_num_magnitude_bins=augmentation["num_magnitude_bins"],  # type: ignore[arg-type]
+                version=value["version"],  # type: ignore[arg-type]
+            )
+        except (KeyError, TypeError) as exc:
+            raise ValueError("classifier schedule has an invalid schema") from exc
+
+    @property
+    def sha256(self) -> str:
+        return _sha256_json(self.to_dict())
+
+
+@dataclass(frozen=True)
 class FrozenSearchTable:
     checkpoint_epochs: tuple[int, ...]
     ds_regularizations: tuple[float, ...] = (0.0, 1e-4, 1e-3, 1e-2)
@@ -228,6 +347,7 @@ class ResearchRunConfig:
     metric_version: str
     protocol_sha256: str
     search_table: FrozenSearchTable
+    classifier_schedule: FrozenClassifierSchedule
     schema_version: str = RUN_CONFIG_VERSION
 
     def __post_init__(self) -> None:
@@ -264,6 +384,8 @@ class ResearchRunConfig:
             raise ValueError("protocol_sha256 must be a lowercase SHA-256 digest")
         if self.search_table.checkpoint_epochs != tuple(range(1, expected_epochs + 1)):
             raise ValueError("search table checkpoint budget does not match the dataset")
+        if not isinstance(self.classifier_schedule, FrozenClassifierSchedule):
+            raise TypeError("classifier_schedule must be the frozen classifier schedule")
         object.__setattr__(self, "dataset", dataset)
         object.__setattr__(self, "backbone", spec.name)
 
@@ -288,6 +410,7 @@ class ResearchRunConfig:
             metric_version=METRIC_VERSION,
             protocol_sha256=protocol_sha256,
             search_table=FrozenSearchTable(tuple(range(1, epochs + 1))),
+            classifier_schedule=FrozenClassifierSchedule(),
         )
 
     @classmethod
@@ -306,6 +429,7 @@ class ResearchRunConfig:
             "metric_version",
             "protocol_sha256",
             "search_table",
+            "classifier_schedule",
         }
         unknown = set(value).difference(allowed)
         if unknown:
@@ -349,6 +473,12 @@ class ResearchRunConfig:
                 )
             except (KeyError, TypeError) as exc:
                 raise ValueError("search_table has an invalid schema") from exc
+        classifier_value = value.get("classifier_schedule")
+        classifier_schedule = default.classifier_schedule
+        if classifier_value is not None:
+            if not isinstance(classifier_value, Mapping):
+                raise ValueError("classifier_schedule must be a mapping")
+            classifier_schedule = FrozenClassifierSchedule.from_dict(classifier_value)
         return cls(
             dataset=default.dataset,
             backbone=default.backbone,
@@ -360,6 +490,7 @@ class ResearchRunConfig:
             metric_version=value.get("metric_version", default.metric_version),  # type: ignore[arg-type]
             protocol_sha256=value.get("protocol_sha256", default.protocol_sha256),  # type: ignore[arg-type]
             search_table=search,
+            classifier_schedule=classifier_schedule,
             schema_version=value.get("schema_version", RUN_CONFIG_VERSION),  # type: ignore[arg-type]
         )
 
@@ -376,6 +507,7 @@ class ResearchRunConfig:
             "metric_version": self.metric_version,
             "protocol_sha256": self.protocol_sha256,
             "search_table": self.search_table.to_dict(),
+            "classifier_schedule": self.classifier_schedule.to_dict(),
         }
 
     @property
@@ -1455,18 +1587,18 @@ class RoleBoundBatch:
 class TrainingBinding:
     protocol_sha256: str
     config_sha256: str
-    search_table_sha256: str
+    search_table_sha256: str | None
     manifest_sha256: str
     classifier_checkpoint_sha256: str
     method: str
     seed: int
+    classifier_schedule_sha256: str | None = None
     schedule_version: str = TRAINING_SCHEDULE_VERSION
 
     def __post_init__(self) -> None:
         for name in (
             "protocol_sha256",
             "config_sha256",
-            "search_table_sha256",
             "manifest_sha256",
             "classifier_checkpoint_sha256",
         ):
@@ -1476,6 +1608,20 @@ class TrainingBinding:
             raise ValueError("method binding must be nonempty")
         if isinstance(self.seed, bool) or not isinstance(self.seed, int) or self.seed < 0:
             raise ValueError("training seed must be nonnegative")
+        if self.method == "fresh_classifier":
+            if self.search_table_sha256 is not None or not _is_sha256(
+                self.classifier_schedule_sha256
+            ):
+                raise ValueError(
+                    "fresh classifier binding requires only a classifier schedule SHA-256"
+                )
+        elif (
+            not _is_sha256(self.search_table_sha256)
+            or self.classifier_schedule_sha256 is not None
+        ):
+            raise ValueError(
+                "confidence binding requires only the confidence search-table SHA-256"
+            )
         if self.schedule_version != TRAINING_SCHEDULE_VERSION:
             raise ValueError("unsupported training schedule binding")
 
@@ -1793,8 +1939,7 @@ def fit_fresh_classifier_with_role_access(
     model: nn.Module,
     classifier: ClassifierProvenance,
     readiness: ReadinessAudit,
-    optimizer_config: OptimizerConfig,
-    epochs: int,
+    schedule: FrozenClassifierSchedule,
     binding: TrainingBinding,
     batch_loader: Callable[
         [tuple[PrivateExamRecord, ...], int], Iterable[RoleBoundBatch]
@@ -1821,6 +1966,13 @@ def fit_fresh_classifier_with_role_access(
         raise ValueError("fresh classifier initialization identity is stale")
     if binding.classifier_checkpoint_sha256 != classifier.checkpoint_sha256:
         raise ValueError("classifier training binding disagrees with public initialization")
+    if (
+        not isinstance(schedule, FrozenClassifierSchedule)
+        or binding.classifier_schedule_sha256 != schedule.sha256
+        or binding.search_table_sha256 is not None
+        or binding.seed != schedule.seed
+    ):
+        raise ValueError("classifier training binding disagrees with the frozen schedule")
     if readiness.kind not in ("synthetic_software", "real_data"):
         raise ValueError("classifier fitting requires a recognized readiness audit")
     if manifest.manifest_sha256 not in readiness.manifest_sha256s:
@@ -1830,8 +1982,8 @@ def fit_fresh_classifier_with_role_access(
         operation=Operation.CLASSIFIER_FITTING,
         role=Role.CLASSIFIER_FIT,
         model=model,
-        optimizer_config=optimizer_config,
-        epochs=epochs,
+        optimizer_config=schedule.optimizer,
+        epochs=schedule.epochs,
         binding=binding,
         batch_loader=batch_loader,
         loss_fn=loss_fn,
@@ -2073,6 +2225,7 @@ __all__ = [
     "METRIC_VERSION",
     "ClassifierProvenance",
     "ConfidenceFitBatch",
+    "FrozenClassifierSchedule",
     "FrozenSearchTable",
     "OptimizerConfig",
     "PublicCLIPConfiguration",

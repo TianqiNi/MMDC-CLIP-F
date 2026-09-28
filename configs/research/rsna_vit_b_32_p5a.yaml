@@ -1,0 +1,58 @@
+schema_version: view-risk-run-config/v2
+dataset: RSNA
+backbone: vit_b_32
+optimizer:
+  name: adam
+  learning_rate: 1.0e-4
+  weight_decay: 0.0
+  batch_size: 6
+epochs: 20
+seeds: [42, 43, 44]
+methods:
+  - candidate
+  - msp
+  - temperature_scaled_msp
+  - margin
+  - negative_entropy
+  - energy
+  - ds_logistic
+  - absolute_omission_sensitivity
+  - original_mvacn_tcp
+  - correctness_mvacn
+  - matched_mvacn_tcp
+  - matched_mvacn_correctness
+  - vilu
+  - same_input_mlp
+  - same_input_density
+  - no_effect_supervision
+  - no_intervention_features
+  - no_view_relations
+  - magnitude_effects
+  - corruption_auxiliary
+  - hidden_only
+  - evidence_only
+  - clean_fitting
+stress_seed: 4242
+metric_version: view-risk-p4a-metrics/v1
+protocol_sha256: 4231c168d6dc21d0b33e02fe4adb247af6c8031a5c2eb8bace992b12b2eff435
+search_table:
+  version: view-risk-search-table/v1
+  checkpoint_epochs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+  ds_regularizations: [0.0, 1.0e-4, 1.0e-3, 1.0e-2]
+  architecture_trials_per_method: 1
+classifier_schedule:
+  version: view-risk-classifier-schedule/v1
+  optimizer:
+    name: adam
+    learning_rate: 1.0e-7
+    weight_decay: 1.0e-5
+    batch_size: 3
+  epochs: 50
+  seed: 42
+  checkpoint_epochs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50]
+  amp: false
+  augmentation:
+    name: randaugment
+    num_ops: 3
+    magnitude: 9
+    num_magnitude_bins: 31

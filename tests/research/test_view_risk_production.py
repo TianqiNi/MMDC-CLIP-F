@@ -37,11 +37,13 @@ from mmdc_clip_f.research.view_risk.inference import (
 )
 from mmdc_clip_f.research.view_risk.production import (
     fit_classifier_images_with_role_access,
+    load_classifier_fit_artifact,
     load_confidence_fit_artifact,
     load_public_initialization_artifact,
     load_selected_classifier_artifact,
     load_tensor_checkpoint_state,
     reload_verified_public_classifier,
+    role_image_batch_loader,
     save_classifier_fit_artifact,
     save_confidence_fit_artifact,
     save_public_initialization_artifact,
@@ -64,7 +66,7 @@ from mmdc_clip_f.research.view_risk.roles import (
 )
 from mmdc_clip_f.research.view_risk.training import (
     ClassifierProvenance,
-    OptimizerConfig,
+    FrozenClassifierSchedule,
     ResearchRunConfig,
     RoleBoundBatch,
     TrainingBinding,
@@ -79,6 +81,65 @@ from mmdc_clip_f.research.view_risk.training import (
     save_readiness_audit,
     state_dict_sha256,
 )
+
+
+def test_classifier_image_batches_use_the_frozen_schedule_augmentation_and_batch_size(
+    monkeypatch,
+) -> None:
+    manifest = RoleManifest(
+        dataset_namespace="RSNA-SMBC",
+        source_hashes={"fixture": "a" * 64},
+        patient_mapping=PatientMappingDeclaration(
+            "RSNA-SMBC", "b" * 64, "verified synthetic grouping", "test fixture"
+        ),
+        records=tuple(
+            PrivateExamRecord(
+                dataset_namespace="RSNA-SMBC",
+                exam_key=f"exam-{index}",
+                patient_key=f"patient-{index}",
+                density=index,
+                source_manifest="fixture",
+                views={
+                    view: ViewReference(
+                        f"image-{index}-{view}", f"unused/{index}/{view}.png"
+                    )
+                    for view in ("L_CC", "L_MLO", "R_CC", "R_MLO")
+                },
+                role=Role.CLASSIFIER_FIT,
+            )
+            for index in range(4)
+        ),
+    )
+    schedule = FrozenClassifierSchedule()
+    observed = {}
+
+    def transforms(image_size, augmentation):
+        observed.update(image_size=image_size, augmentation=dict(augmentation))
+
+        def convert(_image):
+            return torch.zeros(3, image_size, image_size)
+
+        return convert, convert
+
+    monkeypatch.setattr(
+        "mmdc_clip_f.research.view_risk.production.build_transforms", transforms
+    )
+    batches = tuple(
+        role_image_batch_loader(
+            manifest.records,
+            image_root="unused",
+            image_size=8,
+            optimizer=schedule.optimizer,
+            augmentation=schedule.augmentation,
+            epoch=1,
+            seed=schedule.seed,
+            training=True,
+            image_reader=lambda *_args: Image.new("RGB", (8, 8)),
+        )
+    )
+
+    assert [len(batch.exam_keys) for batch in batches] == [3, 1]
+    assert observed == {"image_size": 8, "augmentation": schedule.augmentation}
 
 
 def _software_fixture(tmp_path, *, namespace="RSNA-SMBC"):
@@ -249,11 +310,12 @@ def test_production_classifier_artifacts_rederive_identity_from_current_bytes(
     binding = TrainingBinding(
         protocol_sha256=config.protocol_sha256,
         config_sha256=config.sha256,
-        search_table_sha256=config.search_table.sha256,
+        search_table_sha256=None,
         manifest_sha256=fit_manifest.manifest_sha256,
         classifier_checkpoint_sha256=initialization.checkpoint_sha256,
         method="fresh_classifier",
-        seed=42,
+        seed=config.classifier_schedule.seed,
+        classifier_schedule_sha256=config.classifier_schedule.sha256,
     )
 
     def batches(records, _epoch):
@@ -271,8 +333,7 @@ def test_production_classifier_artifacts_rederive_identity_from_current_bytes(
         model=model,
         classifier=initialization,
         readiness=readiness,
-        optimizer_config=OptimizerConfig(),
-        epochs=config.epochs,
+        schedule=config.classifier_schedule,
         binding=binding,
         batch_loader=batches,
         loss_fn=lambda current, _payload: sum(
@@ -280,6 +341,20 @@ def test_production_classifier_artifacts_rederive_identity_from_current_bytes(
         ),
         epoch_callback=save_epoch,
     )
+    mismatched_seed_binding = replace(binding, seed=43)
+    mismatched_seed_result = replace(fitted, seed=43)
+    with pytest.raises(ValueError, match="seed"):
+        save_classifier_fit_artifact(
+            tmp_path / "classifier-fit-mismatched-seed.json",
+            config=config,
+            initialization=initialization_artifact,
+            readiness_artifact_path=readiness_path,
+            manifest=fit_manifest,
+            manifest_path=fit_manifest_path,
+            binding=mismatched_seed_binding,
+            result=mismatched_seed_result,
+            checkpoint_paths=checkpoint_paths,
+        )
     with pytest.raises(ValueError, match="final checkpoint state"):
         save_classifier_fit_artifact(
             tmp_path / "classifier-fit-forged-final.json",
@@ -303,6 +378,51 @@ def test_production_classifier_artifacts_rederive_identity_from_current_bytes(
         result=fitted,
         checkpoint_paths=checkpoint_paths,
     )
+    changed_schedule_document = json.loads(
+        fit_artifact.source_path.read_text(encoding="utf-8")
+    )
+    changed_schedule_payload = changed_schedule_document["artifact"]
+    changed_schedule_payload["classifier_schedule"]["optimizer"]["batch_size"] = 6
+    changed_schedule_payload["classifier_schedule_sha256"] = hashlib.sha256(
+        json.dumps(
+            changed_schedule_payload["classifier_schedule"],
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode()
+    ).hexdigest()
+    changed_schedule_document["artifact_sha256"] = hashlib.sha256(
+        json.dumps(
+            changed_schedule_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode()
+    ).hexdigest()
+    changed_schedule_path = tmp_path / "self-rehashed-changed-classifier-schedule.json"
+    changed_schedule_path.write_text(
+        json.dumps(changed_schedule_document), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="schedule"):
+        load_classifier_fit_artifact(changed_schedule_path)
+    changed_seed_document = json.loads(
+        fit_artifact.source_path.read_text(encoding="utf-8")
+    )
+    changed_seed_payload = changed_seed_document["artifact"]
+    changed_seed_payload["binding"]["seed"] = 43
+    changed_seed_payload["result"]["seed"] = 43
+    changed_seed_document["artifact_sha256"] = hashlib.sha256(
+        json.dumps(
+            changed_seed_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode()
+    ).hexdigest()
+    changed_seed_path = tmp_path / "self-rehashed-changed-classifier-seed.json"
+    changed_seed_path.write_text(json.dumps(changed_seed_document), encoding="utf-8")
+    with pytest.raises(ValueError, match="seed"):
+        load_classifier_fit_artifact(changed_seed_path)
     unaudited_tune = RoleManifest(
         dataset_namespace=tune_manifest.dataset_namespace,
         source_hashes={"source": "1" * 64},
@@ -313,7 +433,7 @@ def test_production_classifier_artifacts_rederive_identity_from_current_bytes(
     unaudited_tune_path.write_bytes(b"unaudited tune manifest fixture\n")
     checkpoints = tuple(
         ClassifierTuneCheckpoint(epoch, sha256_file(checkpoint_paths[epoch]), 0.25)
-        for epoch in config.search_table.checkpoint_epochs
+        for epoch in config.classifier_schedule.checkpoint_epochs
     )
     selected = select_fresh_classifier_on_tune(
         tune_manifest,
@@ -358,12 +478,56 @@ def test_production_classifier_artifacts_rederive_identity_from_current_bytes(
         checkpoint_paths=checkpoint_paths,
         selected=selected,
     )
+    mismatched_fit_artifact = replace(
+        fit_artifact,
+        binding=mismatched_seed_binding,
+        result=mismatched_seed_result,
+    )
+    with monkeypatch.context() as selected_patch:
+        selected_patch.setattr(
+            "mmdc_clip_f.research.view_risk.production.load_classifier_fit_artifact",
+            lambda *_args, **_kwargs: mismatched_fit_artifact,
+        )
+        with pytest.raises(ValueError, match="seed"):
+            save_selected_classifier_artifact(
+                tmp_path / "selected-classifier-mismatched-seed.json",
+                config=config,
+                initialization=initialization_artifact,
+                readiness_artifact_path=readiness_path,
+                fit_artifact_path=fit_artifact.source_path,
+                fit_binding=mismatched_seed_binding,
+                fit_result=mismatched_seed_result,
+                tune_manifest=tune_manifest,
+                tune_manifest_path=tune_manifest_path,
+                tune_checkpoints=checkpoints,
+                checkpoint_paths=checkpoint_paths,
+                selected=selected,
+            )
     reloaded = load_selected_classifier_artifact(
         artifact.source_path, expected_config=config
     )
     assert reloaded.classifier == selected
     assert reloaded.classifier.workflow_complete is True
     assert reloaded.classifier.pilot_eligible is False
+
+    mismatched_schedule_document = json.loads(
+        artifact.source_path.read_text(encoding="utf-8")
+    )
+    mismatched_schedule_document["artifact"]["classifier_schedule_sha256"] = "f" * 64
+    mismatched_schedule_document["artifact_sha256"] = hashlib.sha256(
+        json.dumps(
+            mismatched_schedule_document["artifact"],
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode()
+    ).hexdigest()
+    mismatched_schedule_path = tmp_path / "self-rehashed-mismatched-schedule.json"
+    mismatched_schedule_path.write_text(
+        json.dumps(mismatched_schedule_document), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="schedule"):
+        load_selected_classifier_artifact(mismatched_schedule_path)
 
     forged_document = json.loads(artifact.source_path.read_text(encoding="utf-8"))
     forged_payload = forged_document["artifact"]
@@ -549,6 +713,18 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
         encoding="utf-8",
     )
     parser = build_parser()
+    validation = run_view_risk_command(
+        parser.parse_args(["view-risk-validate-config", "--config", str(config_path)])
+    )
+    assert validation["confidence_epochs"] == 20
+    assert validation["classifier_epochs"] == 50
+    assert validation["classifier_seed"] == 42
+    assert validation["classifier_optimizer"] == {
+        "name": "adam",
+        "learning_rate": 1e-7,
+        "weight_decay": 1e-5,
+        "batch_size": 3,
+    }
     fit_result = run_view_risk_command(
         parser.parse_args(
             [
@@ -568,6 +744,15 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
     )
     assert fit_result["status"] == "classifier_fit_complete"
     assert fit_result["patient_readiness"] == "not_verified"
+    fit_artifact = load_classifier_fit_artifact(
+        tmp_path / "workflow-fit.json", expected_config=config
+    )
+    assert fit_result["classifier_schedule_sha256"] == config.classifier_schedule.sha256
+    assert fit_artifact.classifier_schedule == config.classifier_schedule
+    assert fit_artifact.result.completed_epoch == 50
+    assert tuple(epoch for epoch, _path in fit_artifact.checkpoint_paths) == tuple(
+        range(1, 51)
+    )
     selected_result = run_view_risk_command(
         parser.parse_args(
             [
@@ -589,6 +774,7 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
     assert selected.classifier.workflow_complete is True
     assert selected.classifier.pilot_eligible is False
     assert selected.selected_checkpoint_path.exists()
+    assert selected.classifier_schedule == config.classifier_schedule
     with pytest.raises(PermissionError, match="readiness"):
         freeze_pilot_plan(
             tmp_path / "must-not-promote-software-plan.json",

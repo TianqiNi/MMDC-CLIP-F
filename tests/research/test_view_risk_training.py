@@ -4,6 +4,7 @@ from dataclasses import replace
 import random
 import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -27,6 +28,7 @@ from mmdc_clip_f.research.view_risk.roles import (
 from mmdc_clip_f.research.view_risk.training import (
     MANDATORY_METHODS,
     ClassifierProvenance,
+    FrozenClassifierSchedule,
     OptimizerConfig,
     ResearchRunConfig,
     RoleBoundBatch,
@@ -98,6 +100,26 @@ def test_defaults_are_frozen_complete_and_unknown_configuration_is_rejected() ->
     assert tuple(rsna.methods) == MANDATORY_METHODS
     assert rsna.search_table.checkpoint_epochs == tuple(range(1, 21))
     assert ddsm.search_table.checkpoint_epochs == tuple(range(1, 51))
+
+    classifier = rsna.classifier_schedule
+    assert classifier == FrozenClassifierSchedule()
+    assert classifier.optimizer == OptimizerConfig("adam", 1e-7, 1e-5, 3)
+    assert classifier.epochs == 50
+    assert classifier.seed == 42
+    assert classifier.checkpoint_epochs == tuple(range(1, 51))
+    assert classifier.amp is False
+    assert classifier.augmentation == {
+        "name": "randaugment",
+        "num_ops": 3,
+        "magnitude": 9,
+        "num_magnitude_bins": 31,
+    }
+    assert ResearchRunConfig.from_dict(rsna.to_dict()) == rsna
+    legacy = rsna.to_dict()
+    legacy["schema_version"] = "view-risk-run-config/v1"
+    legacy.pop("classifier_schedule")
+    with pytest.raises(ValueError, match="version"):
+        ResearchRunConfig.from_dict(legacy)
 
     with pytest.raises(ValueError, match="unknown"):
         ResearchRunConfig.from_dict({"dataset": "RSNA", "backbone": "vit_b_32", "oops": 1})
@@ -612,26 +634,68 @@ def test_real_readiness_rejects_unverified_empty_locked_evidence_before_paths() 
         )
 
 
-def test_fresh_classifier_fits_only_classifier_role_and_reports_software_readiness() -> None:
+def test_fresh_classifier_uses_its_bound_optimizer_and_refuses_changed_schedule(
+    tmp_path, monkeypatch
+) -> None:
     manifest = _manifest(Role.CLASSIFIER_FIT, 2)
     model, provenance = initialize_public_classifier(
         "vit_b_32", lambda _public: _TinyDropout()
     )
-    binding = replace(
-        _binding(manifest, method="fresh_classifier"),
+    schedule = FrozenClassifierSchedule()
+    binding = TrainingBinding(
+        protocol_sha256="1" * 64,
+        config_sha256="2" * 64,
+        search_table_sha256=None,
+        manifest_sha256=manifest.manifest_sha256,
         classifier_checkpoint_sha256=provenance.checkpoint_sha256,
+        method="fresh_classifier",
+        seed=schedule.seed,
+        classifier_schedule_sha256=schedule.sha256,
     )
+    initial_state = {
+        name: value.detach().clone() for name, value in model.state_dict().items()
+    }
+    adam_arguments = {}
+    adam = torch.optim.Adam
+
+    def observed_adam(parameters, **kwargs):
+        adam_arguments.update(kwargs)
+        return adam(parameters, **kwargs)
+
+    monkeypatch.setattr(torch.optim, "Adam", observed_adam)
+    checkpoint_directory = Path(".cache") / "classifier-schedule-tests" / tmp_path.name
+    checkpoint_directory.mkdir(parents=True, exist_ok=True)
+    checkpoint = checkpoint_directory / "classifier-resume.pt"
     result = fit_fresh_classifier_with_role_access(
         manifest=manifest,
         model=model,
         classifier=provenance,
         readiness=audit_software_fixture(manifest),
-        optimizer_config=OptimizerConfig(batch_size=2),
-        epochs=1,
+        schedule=schedule,
         binding=binding,
         batch_loader=_tiny_batches,
         loss_fn=_tiny_loss,
+        checkpoint_path=checkpoint,
+        stop_after_epoch=1,
     )
     assert result.actual_exposure_verified is True
     assert result.exposed_record_count == 2
     assert result.software_only is True
+    assert adam_arguments == {"lr": 1e-7, "weight_decay": 1e-5}
+
+    with pytest.raises(ValueError, match="binding"):
+        resumed = _TinyDropout()
+        resumed.load_state_dict(initial_state)
+        fit_fresh_classifier_with_role_access(
+            manifest=manifest,
+            model=resumed,
+            classifier=provenance,
+            readiness=audit_software_fixture(manifest),
+            schedule=schedule,
+            binding=replace(binding, classifier_schedule_sha256="f" * 64),
+            batch_loader=_tiny_batches,
+            loss_fn=_tiny_loss,
+            checkpoint_path=checkpoint,
+            resume=True,
+            stop_after_epoch=2,
+        )

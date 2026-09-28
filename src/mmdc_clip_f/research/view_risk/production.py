@@ -27,6 +27,7 @@ from .inputs import CANONICAL_VIEWS
 from .roles import Operation, PrivateExamRecord, Role, RoleManifest, run_with_role_access
 from .training import (
     ClassifierProvenance,
+    FrozenClassifierSchedule,
     LEARNED_TORCH_METHODS,
     OptimizerConfig,
     ReadinessAudit,
@@ -49,8 +50,8 @@ from .features import (
 
 
 PUBLIC_INITIALIZATION_VERSION = "view-risk-public-initialization/v1"
-SELECTED_CLASSIFIER_VERSION = "view-risk-selected-classifier/v2"
-CLASSIFIER_FIT_VERSION = "view-risk-classifier-fit/v1"
+SELECTED_CLASSIFIER_VERSION = "view-risk-selected-classifier/v3"
+CLASSIFIER_FIT_VERSION = "view-risk-classifier-fit/v2"
 CONFIDENCE_FIT_VERSION = "view-risk-confidence-fit/v3"
 
 
@@ -332,6 +333,7 @@ class SelectedClassifierArtifact:
     sha256: str
     source_path: Path
     config_sha256: str
+    classifier_schedule: FrozenClassifierSchedule
 
 
 @dataclass(frozen=True)
@@ -344,6 +346,7 @@ class ClassifierFitArtifact:
     sha256: str
     source_path: Path
     config: ResearchRunConfig
+    classifier_schedule: FrozenClassifierSchedule
 
 
 @dataclass(frozen=True)
@@ -735,12 +738,15 @@ def save_classifier_fit_artifact(
         raise ValueError("classifier fit artifact must be JSON in an existing directory")
     current_initialization = load_public_initialization_artifact(initialization.source_path)
     _require_initialization_config(config, current_initialization)
+    schedule = config.classifier_schedule
     readiness_path = Path(readiness_artifact_path).resolve()
     readiness = load_verified_readiness_audit(
         readiness_path, require_patient_ready=False
     )
     role_path = Path(manifest_path).resolve()
     _require_external_or_ignored_destination(role_path)
+    if binding.seed != schedule.seed or result.seed != schedule.seed:
+        raise ValueError("classifier fit seed disagrees with the frozen schedule")
     if (
         {record.role for record in manifest.records} != {Role.CLASSIFIER_FIT}
         or manifest.manifest_sha256 != binding.manifest_sha256
@@ -748,14 +754,16 @@ def save_classifier_fit_artifact(
         or manifest.manifest_sha256 not in readiness.manifest_sha256s
         or binding.config_sha256 != config.sha256
         or binding.protocol_sha256 != config.protocol_sha256
-        or binding.search_table_sha256 != config.search_table.sha256
+        or binding.search_table_sha256 is not None
+        or binding.classifier_schedule_sha256 != schedule.sha256
         or binding.classifier_checkpoint_sha256
         != current_initialization.classifier.checkpoint_sha256
         or binding.method != "fresh_classifier"
         or result.method != "fresh_classifier"
         or result.seed != binding.seed
         or result.completed_epoch < 1
-        or result.completed_epoch > config.epochs
+        or result.completed_epoch > schedule.epochs
+        or result.selection_trial_budget != schedule.epochs
         or result.update_count < result.completed_epoch
         or not result.actual_exposure_verified
         or result.software_only != (not readiness.patient_ready)
@@ -784,6 +792,8 @@ def save_classifier_fit_artifact(
         "schema_version": CLASSIFIER_FIT_VERSION,
         "config": config.to_dict(),
         "config_sha256": config.sha256,
+        "classifier_schedule": schedule.to_dict(),
+        "classifier_schedule_sha256": schedule.sha256,
         "initialization_path": str(current_initialization.source_path),
         "initialization_file_sha256": sha256_file(current_initialization.source_path),
         "readiness_path": str(readiness_path),
@@ -806,6 +816,7 @@ def save_classifier_fit_artifact(
         digest,
         target,
         config,
+        schedule,
     )
 
 
@@ -825,7 +836,8 @@ def load_classifier_fit_artifact(
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
         raise ValueError("classifier fit artifact is unavailable or invalid") from exc
     expected = {
-        "schema_version", "config", "config_sha256", "initialization_path",
+        "schema_version", "config", "config_sha256", "classifier_schedule",
+        "classifier_schedule_sha256", "initialization_path",
         "initialization_file_sha256", "readiness_path", "readiness_file_sha256",
         "manifest_path", "manifest_file_sha256", "manifest_sha256", "binding",
         "result", "checkpoints",
@@ -841,6 +853,15 @@ def load_classifier_fit_artifact(
         expected_config is not None and config != expected_config
     ):
         raise ValueError("classifier fit configuration changed")
+    try:
+        schedule = FrozenClassifierSchedule.from_dict(payload["classifier_schedule"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("classifier fit schedule is invalid") from exc
+    if (
+        schedule != config.classifier_schedule
+        or schedule.sha256 != payload["classifier_schedule_sha256"]
+    ):
+        raise ValueError("classifier fit schedule binding changed")
     initialization_path = Path(str(payload["initialization_path"])).resolve()
     readiness_path = Path(str(payload["readiness_path"])).resolve()
     manifest_path = Path(str(payload["manifest_path"])).resolve()
@@ -861,10 +882,13 @@ def load_classifier_fit_artifact(
         result = TrainingResult(**payload["result"])
     except (KeyError, TypeError) as exc:
         raise ValueError("classifier fit binding/result is invalid") from exc
+    if binding.seed != schedule.seed or result.seed != schedule.seed:
+        raise ValueError("classifier fit seed disagrees with the frozen schedule")
     if (
         binding.config_sha256 != config.sha256
         or binding.protocol_sha256 != config.protocol_sha256
-        or binding.search_table_sha256 != config.search_table.sha256
+        or binding.search_table_sha256 is not None
+        or binding.classifier_schedule_sha256 != schedule.sha256
         or binding.manifest_sha256 != payload["manifest_sha256"]
         or result.manifest_sha256 != payload["manifest_sha256"]
         or payload["manifest_sha256"] not in readiness.manifest_sha256s
@@ -875,7 +899,8 @@ def load_classifier_fit_artifact(
         or not result.actual_exposure_verified
         or result.software_only != (not readiness.patient_ready)
         or result.completed_epoch < 1
-        or result.completed_epoch > config.epochs
+        or result.completed_epoch > schedule.epochs
+        or result.selection_trial_budget != schedule.epochs
         or result.update_count < result.completed_epoch
     ):
         raise ValueError("classifier fit workflow cannot reproduce its bindings")
@@ -899,7 +924,15 @@ def load_classifier_fit_artifact(
     if raw_checkpoints[-1]["state_sha256"] != result.model_state_sha256:
         raise ValueError("classifier final checkpoint state disagrees with training result")
     return ClassifierFitArtifact(
-        initialization, readiness, binding, result, tuple(paths), digest, source, config
+        initialization,
+        readiness,
+        binding,
+        result,
+        tuple(paths),
+        digest,
+        source,
+        config,
+        schedule,
     )
 
 
@@ -949,6 +982,7 @@ def save_selected_classifier_artifact(
         raise ValueError("selected classifier artifact must be JSON in an existing directory")
     current_initialization = load_public_initialization_artifact(initialization.source_path)
     _require_initialization_config(config, current_initialization)
+    schedule = config.classifier_schedule
     readiness_path = Path(readiness_artifact_path).resolve()
     readiness = load_verified_readiness_audit(
         readiness_path, require_patient_ready=False
@@ -956,6 +990,8 @@ def save_selected_classifier_artifact(
     if tune_manifest.manifest_sha256 not in readiness.manifest_sha256s:
         raise ValueError("tune manifest is absent from the readiness audit")
     fit_artifact = load_classifier_fit_artifact(fit_artifact_path, expected_config=config)
+    if fit_binding.seed != schedule.seed or fit_result.seed != schedule.seed:
+        raise ValueError("selected classifier fit seed disagrees with the frozen schedule")
     tune_role_path = Path(tune_manifest_path).resolve()
     _require_external_or_ignored_destination(tune_role_path)
     checkpoints = tuple(tune_checkpoints)
@@ -963,7 +999,7 @@ def save_selected_classifier_artifact(
         raise ValueError("classifier tune evidence is missing or invalid")
     if len({item.epoch for item in checkpoints}) != len(checkpoints):
         raise ValueError("classifier tune evidence contains duplicate epochs")
-    if tuple(sorted(item.epoch for item in checkpoints)) != config.search_table.checkpoint_epochs:
+    if tuple(sorted(item.epoch for item in checkpoints)) != schedule.checkpoint_epochs:
         raise ValueError("classifier tune evidence does not cover the frozen epoch budget")
     if set(checkpoint_paths) != {item.epoch for item in checkpoints}:
         raise ValueError("classifier checkpoint path table is incomplete")
@@ -1008,7 +1044,8 @@ def save_selected_classifier_artifact(
         raise ValueError("selected classifier provenance disagrees with fit/tune evidence")
     if (
         fit_binding.config_sha256 != config.sha256
-        or fit_binding.search_table_sha256 != config.search_table.sha256
+        or fit_binding.search_table_sha256 is not None
+        or fit_binding.classifier_schedule_sha256 != schedule.sha256
         or fit_binding.protocol_sha256 != config.protocol_sha256
         or fit_binding.manifest_sha256 != fit_result.manifest_sha256
         or fit_binding.classifier_checkpoint_sha256
@@ -1018,7 +1055,8 @@ def save_selected_classifier_artifact(
         or not fit_result.actual_exposure_verified
         or fit_result.software_only != (not readiness.patient_ready)
         or fit_result.update_count < 1
-        or fit_result.completed_epoch != config.epochs
+        or fit_result.completed_epoch != schedule.epochs
+        or fit_result.selection_trial_budget != schedule.epochs
         or fit_artifact.binding != fit_binding
         or fit_artifact.result != fit_result
         or fit_artifact.initialization.sha256 != current_initialization.sha256
@@ -1028,6 +1066,8 @@ def save_selected_classifier_artifact(
     payload = {
         "schema_version": SELECTED_CLASSIFIER_VERSION,
         "config_sha256": config.sha256,
+        "classifier_schedule": schedule.to_dict(),
+        "classifier_schedule_sha256": schedule.sha256,
         "classifier": selected.to_dict(),
         "encoder_identity": encoder_identity.to_dict(),
         "initialization_path": str(current_initialization.source_path),
@@ -1059,6 +1099,7 @@ def save_selected_classifier_artifact(
         digest,
         target,
         config.sha256,
+        schedule,
     )
 
 
@@ -1087,6 +1128,8 @@ def load_selected_classifier_artifact(
     expected = {
         "schema_version",
         "config_sha256",
+        "classifier_schedule",
+        "classifier_schedule_sha256",
         "classifier",
         "encoder_identity",
         "initialization_path",
@@ -1115,6 +1158,14 @@ def load_selected_classifier_artifact(
         expected_config_sha256 = expected_config.sha256
     if expected_config_sha256 is not None and payload["config_sha256"] != expected_config_sha256:
         raise ValueError("selected classifier configuration binding is stale")
+    try:
+        schedule = FrozenClassifierSchedule.from_dict(payload["classifier_schedule"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError("selected classifier schedule is invalid") from exc
+    if schedule.sha256 != payload["classifier_schedule_sha256"] or (
+        expected_config is not None and schedule != expected_config.classifier_schedule
+    ):
+        raise ValueError("selected classifier schedule binding is stale")
     initialization_path = Path(str(payload["initialization_path"])).resolve()
     readiness_path = Path(str(payload["readiness_path"])).resolve()
     if sha256_file(initialization_path) != payload["initialization_file_sha256"]:
@@ -1144,6 +1195,7 @@ def load_selected_classifier_artifact(
     if (
         fit_artifact.sha256 != payload["fit_artifact_sha256"]
         or fit_artifact.config.sha256 != payload["config_sha256"]
+        or fit_artifact.classifier_schedule != schedule
     ):
         raise ValueError("classifier fit evidence identity changed")
     persisted_config = fit_artifact.config
@@ -1171,7 +1223,7 @@ def load_selected_classifier_artifact(
     if not checkpoints or len({item.epoch for item in checkpoints}) != len(checkpoints):
         raise ValueError("selected classifier tune history is incomplete")
     if tuple(sorted(item.epoch for item in checkpoints)) != (
-        persisted_config.search_table.checkpoint_epochs
+        schedule.checkpoint_epochs
     ):
         raise ValueError("selected classifier tune budget is incomplete")
     for item, record in zip(checkpoints, records):
@@ -1215,9 +1267,11 @@ def load_selected_classifier_artifact(
         raise ValueError("selected classifier history cannot reproduce its provenance")
     if (
         binding.protocol_sha256 != persisted_config.protocol_sha256
-        or binding.search_table_sha256 != persisted_config.search_table.sha256
-        or binding.seed not in persisted_config.seeds
-        or fit_result.completed_epoch != persisted_config.epochs
+        or binding.search_table_sha256 is not None
+        or binding.classifier_schedule_sha256 != schedule.sha256
+        or binding.seed != schedule.seed
+        or fit_result.completed_epoch != schedule.epochs
+        or fit_result.selection_trial_budget != schedule.epochs
     ):
         raise ValueError("selected classifier training binding disagrees with configuration")
     selected_path = Path(str(payload["selected_checkpoint_path"])).resolve()
@@ -1235,6 +1289,7 @@ def load_selected_classifier_artifact(
         digest,
         source,
         str(payload["config_sha256"]),
+        schedule,
     )
 
 
@@ -1276,6 +1331,7 @@ def role_image_batch_loader(
     image_root: str | Path,
     image_size: int,
     optimizer: OptimizerConfig,
+    augmentation: Mapping[str, object] | str | None,
     epoch: int,
     seed: int,
     training: bool,
@@ -1284,7 +1340,7 @@ def role_image_batch_loader(
     """Yield bounded four-view batches without opening any unselected role."""
 
     transform, eval_transform = build_transforms(
-        image_size, {"name": "randaugment"} if training else None
+        image_size, augmentation if training else None
     )
     selected_transform = transform if training else eval_transform
     generator = torch.Generator().manual_seed(seed + epoch * 1_000_003)
@@ -1348,6 +1404,7 @@ def fit_classifier_images_with_role_access(
     """Fit the fresh classifier on classifier_fit images and persist each epoch."""
 
     _require_config_dataset_namespace(config, manifest.dataset_namespace)
+    schedule = config.classifier_schedule
     current_initialization = load_public_initialization_artifact(initialization.source_path)
     _require_initialization_config(config, current_initialization)
     readiness = load_verified_readiness_audit(
@@ -1369,7 +1426,7 @@ def fit_classifier_images_with_role_access(
     if not directory.is_dir():
         raise ValueError("classifier checkpoint directory must already exist")
     checkpoint_paths: dict[int, Path] = {}
-    for epoch in range(1, (stop_after_epoch or config.epochs) + 1):
+    for epoch in range(1, (stop_after_epoch or schedule.epochs) + 1):
         candidate = directory / f"classifier-epoch-{epoch}.safetensors"
         _require_external_or_ignored_destination(candidate)
         if candidate.exists():
@@ -1378,11 +1435,12 @@ def fit_classifier_images_with_role_access(
     binding = TrainingBinding(
         protocol_sha256=config.protocol_sha256,
         config_sha256=config.sha256,
-        search_table_sha256=config.search_table.sha256,
+        search_table_sha256=None,
         manifest_sha256=manifest.manifest_sha256,
         classifier_checkpoint_sha256=current_initialization.classifier.checkpoint_sha256,
         method="fresh_classifier",
-        seed=config.seeds[0],
+        seed=schedule.seed,
+        classifier_schedule_sha256=schedule.sha256,
     )
 
     def batches(records: tuple[PrivateExamRecord, ...], epoch: int) -> Iterable[RoleBoundBatch]:
@@ -1390,7 +1448,8 @@ def fit_classifier_images_with_role_access(
             records,
             image_root=image_root,
             image_size=current_initialization.classifier.image_size,
-            optimizer=config.optimizer,
+            optimizer=schedule.optimizer,
+            augmentation=schedule.augmentation,
             epoch=epoch,
             seed=binding.seed,
             training=True,
@@ -1415,8 +1474,7 @@ def fit_classifier_images_with_role_access(
         model=model,
         classifier=current_initialization.classifier,
         readiness=readiness,
-        optimizer_config=config.optimizer,
-        epochs=config.epochs,
+        schedule=schedule,
         binding=binding,
         batch_loader=batches,
         loss_fn=loss,
@@ -1454,7 +1512,8 @@ def evaluate_classifier_checkpoints_with_role_access(
 
     from .evaluation import ClassifierTuneCheckpoint
 
-    if set(checkpoint_paths) != set(config.search_table.checkpoint_epochs):
+    schedule = config.classifier_schedule
+    if set(checkpoint_paths) != set(schedule.checkpoint_epochs):
         raise ValueError("classifier tune evaluation requires the full frozen epoch table")
     try:
         device = next(model.parameters()).device
@@ -1465,7 +1524,7 @@ def evaluate_classifier_checkpoints_with_role_access(
     def authorized(records: tuple[PrivateExamRecord, ...]) -> tuple[ClassifierTuneCheckpoint, ...]:
         expected_keys = {record.exam_key for record in records}
         results = []
-        for epoch in config.search_table.checkpoint_epochs:
+        for epoch in schedule.checkpoint_epochs:
             checkpoint = Path(checkpoint_paths[epoch]).resolve()
             _require_external_or_ignored_destination(checkpoint)
             model.load_state_dict(load_tensor_checkpoint_state(checkpoint), strict=True)
@@ -1478,9 +1537,10 @@ def evaluate_classifier_checkpoints_with_role_access(
                     records,
                     image_root=image_root,
                     image_size=pinned_public_clip_configuration(config.backbone).image_size,
-                    optimizer=config.optimizer,
+                    optimizer=schedule.optimizer,
+                    augmentation=schedule.augmentation,
                     epoch=epoch,
-                    seed=config.seeds[0],
+                    seed=schedule.seed,
                     training=False,
                     image_reader=image_reader,
                 ):
@@ -1530,7 +1590,8 @@ def select_classifier_from_images_with_role_access(
     from .evaluation import select_fresh_classifier_on_tune
 
     fit = load_classifier_fit_artifact(fit_artifact_path, expected_config=config)
-    if fit.result.completed_epoch != config.epochs:
+    schedule = config.classifier_schedule
+    if fit.classifier_schedule != schedule or fit.result.completed_epoch != schedule.epochs:
         raise ValueError("classifier fit has not completed the frozen epoch budget")
     model, input_ids = reload_verified_public_classifier(fit.initialization, device=device)
     checkpoints = evaluate_classifier_checkpoints_with_role_access(
