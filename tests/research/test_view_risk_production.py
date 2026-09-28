@@ -341,6 +341,20 @@ def test_production_classifier_artifacts_rederive_identity_from_current_bytes(
         ),
         epoch_callback=save_epoch,
     )
+    mismatched_seed_binding = replace(binding, seed=43)
+    mismatched_seed_result = replace(fitted, seed=43)
+    with pytest.raises(ValueError, match="seed"):
+        save_classifier_fit_artifact(
+            tmp_path / "classifier-fit-mismatched-seed.json",
+            config=config,
+            initialization=initialization_artifact,
+            readiness_artifact_path=readiness_path,
+            manifest=fit_manifest,
+            manifest_path=fit_manifest_path,
+            binding=mismatched_seed_binding,
+            result=mismatched_seed_result,
+            checkpoint_paths=checkpoint_paths,
+        )
     with pytest.raises(ValueError, match="final checkpoint state"):
         save_classifier_fit_artifact(
             tmp_path / "classifier-fit-forged-final.json",
@@ -391,6 +405,24 @@ def test_production_classifier_artifacts_rederive_identity_from_current_bytes(
     )
     with pytest.raises(ValueError, match="schedule"):
         load_classifier_fit_artifact(changed_schedule_path)
+    changed_seed_document = json.loads(
+        fit_artifact.source_path.read_text(encoding="utf-8")
+    )
+    changed_seed_payload = changed_seed_document["artifact"]
+    changed_seed_payload["binding"]["seed"] = 43
+    changed_seed_payload["result"]["seed"] = 43
+    changed_seed_document["artifact_sha256"] = hashlib.sha256(
+        json.dumps(
+            changed_seed_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode()
+    ).hexdigest()
+    changed_seed_path = tmp_path / "self-rehashed-changed-classifier-seed.json"
+    changed_seed_path.write_text(json.dumps(changed_seed_document), encoding="utf-8")
+    with pytest.raises(ValueError, match="seed"):
+        load_classifier_fit_artifact(changed_seed_path)
     unaudited_tune = RoleManifest(
         dataset_namespace=tune_manifest.dataset_namespace,
         source_hashes={"source": "1" * 64},
@@ -446,6 +478,31 @@ def test_production_classifier_artifacts_rederive_identity_from_current_bytes(
         checkpoint_paths=checkpoint_paths,
         selected=selected,
     )
+    mismatched_fit_artifact = replace(
+        fit_artifact,
+        binding=mismatched_seed_binding,
+        result=mismatched_seed_result,
+    )
+    with monkeypatch.context() as selected_patch:
+        selected_patch.setattr(
+            "mmdc_clip_f.research.view_risk.production.load_classifier_fit_artifact",
+            lambda *_args, **_kwargs: mismatched_fit_artifact,
+        )
+        with pytest.raises(ValueError, match="seed"):
+            save_selected_classifier_artifact(
+                tmp_path / "selected-classifier-mismatched-seed.json",
+                config=config,
+                initialization=initialization_artifact,
+                readiness_artifact_path=readiness_path,
+                fit_artifact_path=fit_artifact.source_path,
+                fit_binding=mismatched_seed_binding,
+                fit_result=mismatched_seed_result,
+                tune_manifest=tune_manifest,
+                tune_manifest_path=tune_manifest_path,
+                tune_checkpoints=checkpoints,
+                checkpoint_paths=checkpoint_paths,
+                selected=selected,
+            )
     reloaded = load_selected_classifier_artifact(
         artifact.source_path, expected_config=config
     )

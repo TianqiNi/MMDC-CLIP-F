@@ -745,6 +745,8 @@ def save_classifier_fit_artifact(
     )
     role_path = Path(manifest_path).resolve()
     _require_external_or_ignored_destination(role_path)
+    if binding.seed != schedule.seed or result.seed != schedule.seed:
+        raise ValueError("classifier fit seed disagrees with the frozen schedule")
     if (
         {record.role for record in manifest.records} != {Role.CLASSIFIER_FIT}
         or manifest.manifest_sha256 != binding.manifest_sha256
@@ -880,6 +882,8 @@ def load_classifier_fit_artifact(
         result = TrainingResult(**payload["result"])
     except (KeyError, TypeError) as exc:
         raise ValueError("classifier fit binding/result is invalid") from exc
+    if binding.seed != schedule.seed or result.seed != schedule.seed:
+        raise ValueError("classifier fit seed disagrees with the frozen schedule")
     if (
         binding.config_sha256 != config.sha256
         or binding.protocol_sha256 != config.protocol_sha256
@@ -986,6 +990,8 @@ def save_selected_classifier_artifact(
     if tune_manifest.manifest_sha256 not in readiness.manifest_sha256s:
         raise ValueError("tune manifest is absent from the readiness audit")
     fit_artifact = load_classifier_fit_artifact(fit_artifact_path, expected_config=config)
+    if fit_binding.seed != schedule.seed or fit_result.seed != schedule.seed:
+        raise ValueError("selected classifier fit seed disagrees with the frozen schedule")
     tune_role_path = Path(tune_manifest_path).resolve()
     _require_external_or_ignored_destination(tune_role_path)
     checkpoints = tuple(tune_checkpoints)
