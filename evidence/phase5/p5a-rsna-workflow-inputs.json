@@ -1,0 +1,152 @@
+{
+  "aggregate_counts": {
+    "dataset_count": 1,
+    "exam_count": 4937,
+    "image_count": 19748,
+    "locked_identity_count": 872,
+    "patient_count": 4937,
+    "role_exam_counts": {
+      "classifier_fit": 3209,
+      "confidence_fit": 987,
+      "pilot": 371,
+      "tune": 370
+    },
+    "role_patient_counts": {
+      "classifier_fit": 3209,
+      "confidence_fit": 987,
+      "pilot": 371,
+      "tune": 370
+    },
+    "verified_file_binding_count": 19752
+  },
+  "api_checks": {
+    "combined_manifest_accepted_load": "passed",
+    "current_byte_readiness_pass_count": 1,
+    "locked_patient_isolation": "passed",
+    "no_omissions_or_duplications": "passed",
+    "no_record_field_changes": "passed",
+    "original_private_artifact_hashes_unchanged": "passed",
+    "pairwise_patient_disjointness": "passed",
+    "private_modes_0700_0600": "passed",
+    "private_run_to_committed_audit_binding": "passed",
+    "readiness_binds_all_four_manifests": "passed",
+    "real_data_readiness_api": "passed",
+    "recombined_manifest_sha256": "passed",
+    "recombined_record_equality": "passed",
+    "single_role_manifest_roundtrips": "passed",
+    "single_role_production_operation_loads": {
+      "classifier_fit": {
+        "operation": "classifier_fitting",
+        "status": "passed"
+      },
+      "confidence_fit": {
+        "operation": "confidence_fitting",
+        "status": "passed"
+      },
+      "pilot": {
+        "operation": "pilot_evaluation",
+        "status": "passed"
+      },
+      "tune": {
+        "operation": "tune_selection",
+        "status": "passed"
+      }
+    }
+  },
+  "implementation_commit": "2976146ef350a7205e49b302cda3400c800f2cdf",
+  "limitations": [
+    "This export preserves the accepted RSNA assignments and does not repartition the cohort.",
+    "Locked test outcomes and images were not accessed.",
+    "No model weights or model outputs were loaded, and no training was performed.",
+    "The export does not unlock test evaluation or make a scientific-performance claim."
+  ],
+  "outputs": {
+    "private_directory": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-workflow-inputs-20260925-v1",
+    "readiness_file_sha256": "d55aa20fd24d06cbbca778a6b9aba480685f9851f9e5a9ccb8500170b75050c7",
+    "readiness_manifest_sha256s": [
+      "0fcbbf16830f308374f42d39e5a30df3680ac6e8a9ff6a26b90bb876a5a2eca4",
+      "9e704119168018cdca73bb89fa3eed5a6b53633a15c8bba2500fb7524b14aa3f",
+      "b252d2a7174fdda937aa08d74b144778cc32f6f03f56483ee0bbbe1b664bc646",
+      "ca7e9cb6bb9cf5ad92b955f23e7c3a1d6fb90eb38d2ae7e08fd977b353bf14b8"
+    ],
+    "readiness_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-workflow-inputs-20260925-v1/readiness.json",
+    "readiness_sha256": "55869f8f2b54aee88b0e44f99de946c77b70e9ed4d153721581c385b2103cca4",
+    "role_manifests": {
+      "classifier_fit": {
+        "allowed_operation": "classifier_fitting",
+        "binding_file_sha256": "5e9fb5ac81b539b0a6b22b09c648261adbbd40f7bd96be9297dd961fc4ed4121",
+        "binding_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-workflow-inputs-20260925-v1/classifier-fit-role-manifest-binding.json",
+        "exam_count": 3209,
+        "image_count": 12836,
+        "manifest_file_sha256": "946d810384b3a44cb799b87b23872f88405953afcea69f45362eaff00295b391",
+        "manifest_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-workflow-inputs-20260925-v1/classifier-fit-role-manifest.json",
+        "manifest_sha256": "b252d2a7174fdda937aa08d74b144778cc32f6f03f56483ee0bbbe1b664bc646",
+        "patient_count": 3209
+      },
+      "confidence_fit": {
+        "allowed_operation": "confidence_fitting",
+        "binding_file_sha256": "cd770c7b40b1f553f8dc445766b40321c18ec87a7e934bf0ba850bcd0c9c7faf",
+        "binding_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-workflow-inputs-20260925-v1/confidence-fit-role-manifest-binding.json",
+        "exam_count": 987,
+        "image_count": 3948,
+        "manifest_file_sha256": "122ae849c11c70c6730d29faddb2dc9003294a4d52a8765b0f7039b190c8f6ad",
+        "manifest_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-workflow-inputs-20260925-v1/confidence-fit-role-manifest.json",
+        "manifest_sha256": "9e704119168018cdca73bb89fa3eed5a6b53633a15c8bba2500fb7524b14aa3f",
+        "patient_count": 987
+      },
+      "pilot": {
+        "allowed_operation": "pilot_evaluation",
+        "binding_file_sha256": "89004b7adfca8edb57cf04f9bd60ea917a700572036c318999b1b1a509ba196e",
+        "binding_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-workflow-inputs-20260925-v1/pilot-role-manifest-binding.json",
+        "exam_count": 371,
+        "image_count": 1484,
+        "manifest_file_sha256": "c610edff0422dfffb148883c90061d1bf3ee7740ef7b1898636e6bddf8838b23",
+        "manifest_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-workflow-inputs-20260925-v1/pilot-role-manifest.json",
+        "manifest_sha256": "0fcbbf16830f308374f42d39e5a30df3680ac6e8a9ff6a26b90bb876a5a2eca4",
+        "patient_count": 371
+      },
+      "tune": {
+        "allowed_operation": "tune_selection",
+        "binding_file_sha256": "891ec832a410e5c7834259b7c56e2248edda0f902086785512da3806fa1772f2",
+        "binding_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-workflow-inputs-20260925-v1/tune-role-manifest-binding.json",
+        "exam_count": 370,
+        "image_count": 1480,
+        "manifest_file_sha256": "f040b2c9f03e0d5fe1a413f3da2c2337c838e933bfcf0eac5c31d1b04eec3b06",
+        "manifest_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-workflow-inputs-20260925-v1/tune-role-manifest.json",
+        "manifest_sha256": "ca7e9cb6bb9cf5ad92b955f23e7c3a1d6fb90eb38d2ae7e08fd977b353bf14b8",
+        "patient_count": 370
+      }
+    }
+  },
+  "privacy": {
+    "locked_test_identity_access": "identity-only denylist reused",
+    "locked_test_images_accessed": false,
+    "locked_test_outcomes_accessed": false,
+    "model_loading_or_training_performed": false,
+    "model_outputs_loaded": false,
+    "public_evidence": "aggregate_only",
+    "record_level_data": "private_only",
+    "source_data_modified": false
+  },
+  "schema_version": "view-risk-p5a-rsna-workflow-inputs/v1",
+  "source_audit": {
+    "committed_evidence_path": "/home/tianqini/research/MMDC-CLIP-IVR/evidence/phase5/p5a-rsna-audit.json",
+    "committed_evidence_sha256": "5278534c2355bd89435d5d7be2a950a02143cac823ad9bad1dd8212988b2c3ee",
+    "image_root": "/home/tianqini/research/MMDC-CLIP_original/MMDC-CLIP/RSNA/train_images",
+    "locked_identity_count": 872,
+    "locked_identity_denylist_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-audit/p5a-rsna-full-20260925-v1/locked-test-identity-denylist.json",
+    "locked_identity_denylist_sha256": "782dbc3e6523dfa3fc363d9337a3461414c85a12eb4f86f01fad8360dd061798",
+    "original_combined_manifest_file_sha256": "01f23ecda8733ffb7e2e0b767d546503c5cc7fa389bc699abf345895b42a4ac4",
+    "original_combined_manifest_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-audit/p5a-rsna-full-20260925-v1/role-manifest.json",
+    "original_combined_manifest_sha256": "9c768e38d2c930fbe2e654e7a4a57ca8fb997d8b7329f224daa276f81a6eee34",
+    "patient_mapping_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-audit/p5a-rsna-full-20260925-v1/patient-mapping-binding.json",
+    "patient_mapping_sha256": "2f8697e71e2bbada854c23fa756488a2d3dc9a291e9eaa29ed47a2a26db2130f",
+    "private_run_manifest_path": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-audit/p5a-rsna-full-20260925-v1/run-manifest.json",
+    "private_run_manifest_sha256": "e6a9ac3482f0f77750c437f9f70f9300e7adcf278ccde4ecd4c17aa8d9fa588e",
+    "source_manifest_sha256s": {
+      "train": "7730215a6751ae0085f5dca4d7c42af12fb86e86d792fe787e48c3f608edc734",
+      "valid": "dd02bb5d2dde3aba59d65dbe1253a40c920e2099030b44957a56339c3bbe8ecd"
+    }
+  },
+  "status": "verified"
+}
