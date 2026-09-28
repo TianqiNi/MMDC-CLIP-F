@@ -1,0 +1,12 @@
+{
+  "status": "accepted",
+  "reviewed_commit": "b3767d90762f9804a95c6c08f387a33c061fc404",
+  "integration_commit": "ff419277fa86f02337797a0550b90f4a1fc8b03d",
+  "source_tests_configs_equal_reviewed_commit": true,
+  "review1": "p5a-classifier-schedule-review1.md",
+  "review2": "p5a-classifier-schedule-review2.md",
+  "remaining_findings": [],
+  "validation": "293 research tests passed before targeted seed fix; fresh reviewer passed affected fit/save/reload and tune-selection regressions after fix; lint and diff checks passed",
+  "real_training_performed": false,
+  "confidence_schedule_changed": false
+}

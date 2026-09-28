@@ -8,8 +8,21 @@
     "protocol_exception": "User approved local identity-only extraction in place of custodian-supplied denylist; no test evaluation unlock"
   },
   "fresh_classifier_schedule": {
-    "status": "awaiting explicit user choice",
-    "recommended": "Legacy RSNA ViT-B/32: Adam 1e-7, weight decay 1e-5, batch3, 50epochs, seed42; confidence schedule unchanged",
-    "applied": false
+    "status": "explicitly approved by user",
+    "user_instruction": "start with the original settings, later we can tune the parameters.",
+    "approved_at_utc": "2026-09-25T15:07:06.853639+00:00",
+    "settings": {
+      "optimizer": "adam",
+      "learning_rate": 1e-07,
+      "weight_decay": 1e-05,
+      "batch_size": 3,
+      "epochs": 50,
+      "seed": 42,
+      "amp": false
+    },
+    "confidence_schedule": "unchanged",
+    "later_tuning": "separate future experiment; no parameter search added now",
+    "applied": true,
+    "reviewed_commit": "b3767d90762f9804a95c6c08f387a33c061fc404"
   }
 }

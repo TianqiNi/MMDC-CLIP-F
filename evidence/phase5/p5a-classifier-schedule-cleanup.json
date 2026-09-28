@@ -1,0 +1,18 @@
+{
+  "status": "complete",
+  "reviewed_commit_retained_in_main_ancestry": "b3767d90762f9804a95c6c08f387a33c061fc404",
+  "removed_completed_workspaces": [
+    "w1",
+    "w2",
+    "w4",
+    "w6",
+    "w8"
+  ],
+  "removed_worktrees": [
+    "classifier-schedule",
+    "classifier-schedule-review1",
+    "classifier-schedule-review2"
+  ],
+  "removed_scratch": "completed schedule fix and review launch directories; essential evidence committed",
+  "preserved": "active input review, private audited inputs, shared environment, original checkout, task Herdr server"
+}

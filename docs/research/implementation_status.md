@@ -495,10 +495,28 @@ transfers, Adam updates, checkpoint writes and tune evaluation; they are not
 end-to-end training estimates. The 3,209-exam basis is still a target.
 
 The user approved extracting only RSNA test patient IDs for a private overlap
-denylist, without using/displaying test labels or opening test images. The data
-audit is in progress; this narrow authorization does not release test outcomes.
+denylist, without using/displaying test labels or opening test images. The full
+RSNA audit is accepted: 4,937 patients and 19,748 original DICOM images, with no
+missing/unreadable/decode-failed images, duplicate content, exclusions or locked
+identity overlap. Roles are 3,209 classifier-fit, 987 confidence-fit, 370 tune and
+371 pilot. This establishes data readiness, not model performance.
 
-Before real fitting, the classifier schedule needs an explicit decision: current
-production fitting inherits confidence settings (20 epochs, batch 6, Adam 1e-4,
-zero weight decay), while the original classifier uses 50 epochs, batch 3,
-Adam 1e-7 and weight decay 1e-5. No schedule change or real fitting is claimed.
+## P5A original classifier schedule — 2026-09-28
+
+The user approved starting with the original settings: Adam 1e-7, weight decay
+1e-5, batch 3, 50 epochs, seed 42, AMP false and RandAugment 3/9/31. Confidence
+training settings remain unchanged. Classifier selection remains tune-only NLL.
+
+Fresh review accepted `b3767d90762f9804a95c6c08f387a33c061fc404` after the original
+implementer fixed a Medium artifact seed-binding gap with a RED/GREEN regression.
+The prior candidate passed 293 research tests; the fresh fix review passed the
+affected honest fit/save/reload, 50-candidate tune selection and contradictory-seed
+checks. Integration `ff419277fa86f02337797a0550b90f4a1fc8b03d` has identical source,
+tests and configuration to the accepted candidate. Completed schedule worktrees
+and agent workspaces are cleaned; essential evidence is under `evidence/phase5/`.
+
+Single-role workflow inputs have been exported without changing the audited
+assignments; independent review passed on `39e7a1e7575560243e08ffc91c49a126f3841f2f`. The first real invocation will
+stop after epoch 1 of the fixed 50-epoch schedule to retain resume state and measure
+end-to-end runtime. No actual classifier training or scientific benchmark has run.
+P5A fitting/selection, P5B confidence fitting, P5C pilot and G5 remain unfinished.
