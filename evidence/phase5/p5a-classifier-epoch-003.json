@@ -1,0 +1,56 @@
+{
+  "status": "epochs 2 and 3 completed; independent artifact review pending",
+  "execution": {
+    "exit_code": 0,
+    "started_at_utc": "2026-09-28T20:50:30.913583+00:00",
+    "ended_at_utc": "2026-09-28T23:16:58.626611+00:00",
+    "elapsed_seconds": 8787.713043186988,
+    "source_commit": "82e5d2dc68b7c384407b817f65148a4da840f544"
+  },
+  "aggregate_result": {
+    "classifier_schedule_sha256": "0b94cef276cf26903a6bafd1a1ee89d5823fd2d9decc5f5f941421a97e72358b",
+    "completed_epoch": 3,
+    "exposed_record_count": 3209,
+    "fit_artifact_sha256": "21b0e61fbca8917b6fd0f2e94afa15b380823a6f81a983681ffd994ba553706a",
+    "initialization_sha256": "c8a3bdc197fb70d50da815390106923446c9eb0204d5e0d1e74e60ff8a77d225",
+    "patient_readiness": "verified",
+    "status": "classifier_fit_partial",
+    "update_count": 3210
+  },
+  "private_run_directory": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-classifier-original-20260928-v1",
+  "artifact_files": {
+    "classifier-fit-epoch-003.json": {
+      "sha256": "04f46b586e26e1a4638a0652cb965e2c524c7cc5283d1f3d8ae6435f0cbeb5a6",
+      "bytes": 4939
+    },
+    "classifier-epoch-1.safetensors": {
+      "sha256": "ef40515717c72673d2b3086a99b97f63016d1664a7d2430f1b38e3c4a231af88",
+      "bytes": 605161020
+    },
+    "classifier-epoch-2.safetensors": {
+      "sha256": "3612cade787fe075bc805f3bcee61574d26ea7a3c7e0aa36a264e26311bfc365",
+      "bytes": 605161020
+    },
+    "classifier-epoch-3.safetensors": {
+      "sha256": "9172ebc0aad8ca34f9a9bc34e7ee8a4068a3a3e0303eb70181987b0ab7d9bd14",
+      "bytes": 605161020
+    },
+    "classifier-resume.json": {
+      "sha256": "2a93a7b2ae4f25eac65f4efb43232f5e80a38317fe7b4ff544432481ed9f4303",
+      "bytes": 745
+    },
+    "classifier-resume.pt": {
+      "sha256": "238d2bf060d167c23af9eb9ec75981eb354ed448a1de35438435a8237c7bfa09",
+      "bytes": 1815874234
+    }
+  },
+  "fixed_schedule_epochs": 50,
+  "completed_epochs": 3,
+  "epochs_completed_this_invocation": 2,
+  "elapsed_minutes": 146.46188405311648,
+  "stderr_bytes": 0,
+  "settings_changed": false,
+  "classification_or_uncertainty_metrics": null,
+  "test_outcomes_locked": true,
+  "resume_hash_scope": "latest resume state at epoch 3; future authorized epochs replace it"
+}
