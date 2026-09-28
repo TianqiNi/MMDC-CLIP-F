@@ -1,0 +1,43 @@
+{
+  "status": "epoch 1 completed; independent artifact review pending",
+  "execution": {
+    "exit_code": 0,
+    "started_at_utc": "2026-09-28T15:10:22.318105+00:00",
+    "ended_at_utc": "2026-09-28T16:39:48.274927+00:00",
+    "elapsed_seconds": 5365.956838163984,
+    "source_commit": "56ddbc890937a11e841f3b3f54d1d09670ee8097"
+  },
+  "aggregate_result": {
+    "classifier_schedule_sha256": "0b94cef276cf26903a6bafd1a1ee89d5823fd2d9decc5f5f941421a97e72358b",
+    "completed_epoch": 1,
+    "exposed_record_count": 3209,
+    "fit_artifact_sha256": "9ac643264a69ebf215231abf916aa059af69564b58ff209bc742d306f509813f",
+    "initialization_sha256": "c8a3bdc197fb70d50da815390106923446c9eb0204d5e0d1e74e60ff8a77d225",
+    "patient_readiness": "verified",
+    "status": "classifier_fit_partial",
+    "update_count": 1070
+  },
+  "private_run_directory": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-classifier-original-20260928-v1",
+  "artifact_files": {
+    "classifier-fit-epoch-001.json": {
+      "sha256": "cbebc2cb9df903ccd7f40840ac673b302f52f9178b696c85d0b10dad84bcb50b",
+      "bytes": 4299
+    },
+    "classifier-epoch-1.safetensors": {
+      "sha256": "ef40515717c72673d2b3086a99b97f63016d1664a7d2430f1b38e3c4a231af88",
+      "bytes": 605161020
+    },
+    "classifier-resume.pt": {
+      "sha256": "9e718e62926970bc3024db156b35ab675010b9747716261808742174b3ad954c",
+      "bytes": 1815874234
+    }
+  },
+  "fixed_schedule_epochs": 50,
+  "completed_epochs": 1,
+  "elapsed_minutes": 89.43261396939972,
+  "simple_linear_50_epoch_hours": 74.52717830783311,
+  "runtime_projection_caveat": "First invocation includes initialization and verification overhead; subsequent epoch durations may differ. This is a rough projection, not a measured full run.",
+  "stderr_bytes": 0,
+  "classification_or_uncertainty_metrics": null,
+  "test_outcomes_locked": true
+}
