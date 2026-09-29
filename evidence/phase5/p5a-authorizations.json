@@ -24,5 +24,17 @@
     "later_tuning": "separate future experiment; no parameter search added now",
     "applied": true,
     "reviewed_commit": "b3767d90762f9804a95c6c08f387a33c061fc404"
+  },
+  "unattended_training": {
+    "approved_by_user": true,
+    "user_instruction": "can you leave it running and monitor it once an hour so it consume less usage",
+    "recorded_at_utc": "2026-09-29T03:49:38.517187+00:00",
+    "training_endpoint": "already approved epoch 50, unchanged original settings",
+    "monitor_interval_hours": 1,
+    "active_polling": "disabled",
+    "obsolete_wall_clock_guard_stopped": [
+      269457
+    ],
+    "usage_limit": "stop model work on actual quota exhaustion; do not redeem reset credits"
   }
 }
