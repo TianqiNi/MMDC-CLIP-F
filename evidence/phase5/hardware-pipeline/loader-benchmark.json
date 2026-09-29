@@ -1,0 +1,38 @@
+{
+  "role": "classifier_fit",
+  "patients": 60,
+  "runs": [
+    {
+      "workers": 0,
+      "total_seconds": 92.47325630200794,
+      "first_batch_seconds": 4.940212481014896,
+      "steady_seconds_per_batch": 4.606840430633287,
+      "batches": 20,
+      "serial_pixels_labels_rng_equal": true
+    },
+    {
+      "workers": 4,
+      "total_seconds": 27.101255899993703,
+      "first_batch_seconds": 2.731650127971079,
+      "steady_seconds_per_batch": 1.260347715370651,
+      "batches": 20,
+      "serial_pixels_labels_rng_equal": true
+    },
+    {
+      "workers": 8,
+      "total_seconds": 15.493561545037664,
+      "first_batch_seconds": 2.248753096035216,
+      "steady_seconds_per_batch": 0.6714316659980748,
+      "batches": 20,
+      "serial_pixels_labels_rng_equal": true
+    },
+    {
+      "workers": 12,
+      "total_seconds": 13.056545252038632,
+      "first_batch_seconds": 2.2020189400063828,
+      "steady_seconds_per_batch": 0.5407370105263238,
+      "batches": 20,
+      "serial_pixels_labels_rng_equal": true
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "base_commit": "c1fdd1d99639443cb0fc59b6f3cb99a880daacdc",
+  "red": "5 new tests failed with missing image_workers argument before implementation",
+  "green": "5 new image pipeline tests passed",
+  "required_research_suite": {
+    "passed": 298,
+    "seconds": 49.35
+  },
+  "production_cli_parallel_revalidation": {
+    "passed": 6,
+    "seconds": 26.99
+  },
+  "ruff": "passed for src, tests/research and benchmark scripts",
+  "compileall": "passed",
+  "diff_check": "passed",
+  "real_image_equivalence": "60 classifier_fit patients, 240 images; serial / 4 / 8 / 12 workers exact pixels, labels and final CPU RNG",
+  "real_cuda_equivalence": "12 Adam updates from epoch 15: exact model, optimizer, CPU and CUDA RNG hashes",
+  "subagents_used": false,
+  "hourly_monitor": "PAUSED at user request",
+  "scientific_results": "No accuracy, tune selection or uncertainty benchmark results"
+}

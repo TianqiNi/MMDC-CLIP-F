@@ -1,0 +1,8 @@
+{
+  "planned_process_replacement": true,
+  "user_approval": "Approve checkpoint restart",
+  "preserved_completed_epochs": 15,
+  "resume_backup_sha256": "c36d44f156f3e7f2882ab304072ff5c4f08b0e088babd7f90f50e492eb310f6c",
+  "old_pid": 274711,
+  "unfinished_epoch_replayed": 16
+}

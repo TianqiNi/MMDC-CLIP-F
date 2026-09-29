@@ -24,6 +24,7 @@ from .cache import (
 )
 from .fusion import DDSM_FUSION_PAIRS, RSNA_FUSION_PAIRS
 from .inputs import CANONICAL_VIEWS
+from .image_pipeline import image_worker_pool, parallel_image_batches
 from .roles import Operation, PrivateExamRecord, Role, RoleManifest, run_with_role_access
 from .training import (
     ClassifierProvenance,
@@ -1336,6 +1337,10 @@ def role_image_batch_loader(
     seed: int,
     training: bool,
     image_reader: Callable[[PrivateExamRecord, str, str | Path], Image.Image] = default_private_image_reader,
+    image_workers: int = 0,
+    prefetch_batches: int = 2,
+    pin_memory: bool = False,
+    _image_pool=None,
 ) -> Iterable[RoleBoundBatch]:
     """Yield bounded four-view batches without opening any unselected role."""
 
@@ -1345,6 +1350,33 @@ def role_image_batch_loader(
     selected_transform = transform if training else eval_transform
     generator = torch.Generator().manual_seed(seed + epoch * 1_000_003)
     order = torch.randperm(len(records), generator=generator).tolist() if training else list(range(len(records)))
+    if image_workers:
+        if image_reader is not default_private_image_reader:
+            raise ValueError("parallel image loading requires the deterministic default reader")
+        if _image_pool is None:
+            with image_worker_pool(image_workers) as pool:
+                yield from role_image_batch_loader(
+                    records, image_root=image_root, image_size=image_size, optimizer=optimizer,
+                    augmentation=augmentation, epoch=epoch, seed=seed, training=training,
+                    image_workers=image_workers, prefetch_batches=prefetch_batches,
+                    pin_memory=pin_memory, _image_pool=pool,
+                )
+            return
+        batches = [tuple(records[index] for index in order[start:start + optimizer.batch_size])
+                   for start in range(0, len(order), optimizer.batch_size)]
+        for batch_records, views in parallel_image_batches(
+            batches, pool=_image_pool, image_root=image_root, image_size=image_size,
+            augmentation=dict(augmentation) if training and isinstance(augmentation, Mapping)
+            else augmentation if training else None, prefetch_batches=prefetch_batches,
+        ):
+            labels = torch.tensor([record.density for record in batch_records], dtype=torch.long)
+            if pin_memory:
+                views = {name: value.pin_memory() for name, value in views.items()}
+                labels = labels.pin_memory()
+            yield RoleBoundBatch(
+                tuple(record.exam_key for record in batch_records), ClassifierImageBatch(views, labels),
+            )
+        return
     for start in range(0, len(order), optimizer.batch_size):
         indexes = order[start : start + optimizer.batch_size]
         batch_records = [records[index] for index in indexes]
@@ -1397,6 +1429,8 @@ def fit_classifier_images_with_role_access(
     resume_checkpoint_path: str | Path,
     resume: bool = False,
     stop_after_epoch: int | None = None,
+    image_workers: int = 0,
+    prefetch_batches: int = 2,
     image_reader: Callable[
         [PrivateExamRecord, str, str | Path], Image.Image
     ] = default_private_image_reader,
@@ -1454,13 +1488,18 @@ def fit_classifier_images_with_role_access(
             seed=binding.seed,
             training=True,
             image_reader=image_reader,
+            image_workers=image_workers,
+            prefetch_batches=prefetch_batches,
+            pin_memory=device.type == "cuda" and image_workers > 0,
+            _image_pool=image_pool,
         )
 
     def loss(current: nn.Module, payload: object) -> Tensor:
         if not isinstance(payload, ClassifierImageBatch):
             raise TypeError("classifier batch adapter returned an invalid payload")
-        views = {name: value.to(device) for name, value in payload.views.items()}
-        labels = payload.labels.to(device)
+        views = {name: value.to(device, non_blocking=image_workers > 0)
+                 for name, value in payload.views.items()}
+        labels = payload.labels.to(device, non_blocking=image_workers > 0)
         return F.cross_entropy(current(views, input_ids), labels)
 
     def save_epoch(epoch: int, current: nn.Module) -> None:
@@ -1469,20 +1508,21 @@ def fit_classifier_images_with_role_access(
             raise FileExistsError("classifier epoch checkpoint already exists")
         checkpoint_paths[epoch] = save_tensor_checkpoint(current, destination)
 
-    result = fit_fresh_classifier_with_role_access(
-        manifest=manifest,
-        model=model,
-        classifier=current_initialization.classifier,
-        readiness=readiness,
-        schedule=schedule,
-        binding=binding,
-        batch_loader=batches,
-        loss_fn=loss,
-        checkpoint_path=resume_checkpoint_path,
-        resume=resume,
-        stop_after_epoch=stop_after_epoch,
-        epoch_callback=save_epoch,
-    )
+    with image_worker_pool(image_workers) as image_pool:
+        result = fit_fresh_classifier_with_role_access(
+            manifest=manifest,
+            model=model,
+            classifier=current_initialization.classifier,
+            readiness=readiness,
+            schedule=schedule,
+            binding=binding,
+            batch_loader=batches,
+            loss_fn=loss,
+            checkpoint_path=resume_checkpoint_path,
+            resume=resume,
+            stop_after_epoch=stop_after_epoch,
+            epoch_callback=save_epoch,
+        )
     return save_classifier_fit_artifact(
         artifact_path,
         config=config,

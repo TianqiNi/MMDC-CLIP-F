@@ -207,6 +207,10 @@ def add_view_risk_subparsers(subparsers: argparse._SubParsersAction) -> None:
     classifier_fit.add_argument("--resume", action="store_true")
     classifier_fit.add_argument("--stop-after-epoch", type=int)
     classifier_fit.add_argument("--device", default="cpu")
+    classifier_fit.add_argument("--image-workers", type=int, default=0,
+                                help="CPU preprocessing processes; 0 preserves serial loading")
+    classifier_fit.add_argument("--prefetch-batches", type=int, default=2,
+                                help="Bounded speculative image batches (1 to 8)")
 
     classifier_select = subparsers.add_parser(
         "view-risk-select-classifier",
@@ -1495,6 +1499,8 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
             resume_checkpoint_path=args.resume_checkpoint,
             resume=args.resume,
             stop_after_epoch=args.stop_after_epoch,
+            image_workers=args.image_workers,
+            prefetch_batches=args.prefetch_batches,
         )
         return {
             "status": "classifier_fit_complete"

@@ -739,6 +739,7 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
                 "--checkpoint-directory", str(tmp_path),
                 "--resume-checkpoint", str(tmp_path / "workflow-resume.pt"),
                 "--output", str(tmp_path / "workflow-fit.json"),
+                "--image-workers", "2",
             ]
         )
     )
