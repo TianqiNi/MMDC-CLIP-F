@@ -1,0 +1,60 @@
+{
+  "status": "epoch 4 completed; independent artifact review pending",
+  "execution": {
+    "exit_code": 0,
+    "started_at_utc": "2026-09-28T23:26:52.073576+00:00",
+    "ended_at_utc": "2026-09-29T00:41:36.907558+00:00",
+    "elapsed_seconds": 4484.833996869973,
+    "source_commit": "e33bc61cc4a1a3b523cb6fe90c940a8ac1c2d4e1"
+  },
+  "aggregate_result": {
+    "classifier_schedule_sha256": "0b94cef276cf26903a6bafd1a1ee89d5823fd2d9decc5f5f941421a97e72358b",
+    "completed_epoch": 4,
+    "exposed_record_count": 3209,
+    "fit_artifact_sha256": "3c49e3885bd65498679a6ebb66c49f6bad59345f105248e3404d21568b7665b6",
+    "initialization_sha256": "c8a3bdc197fb70d50da815390106923446c9eb0204d5e0d1e74e60ff8a77d225",
+    "patient_readiness": "verified",
+    "status": "classifier_fit_partial",
+    "update_count": 4280
+  },
+  "private_run_directory": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-classifier-original-20260928-v1",
+  "artifact_files": {
+    "classifier-fit-epoch-004.json": {
+      "sha256": "22f4c24d9426b0b2df7dc0205b63376d4a92b7ebe71990ccf3ce6bc655a45fed",
+      "bytes": 5259
+    },
+    "classifier-epoch-1.safetensors": {
+      "sha256": "ef40515717c72673d2b3086a99b97f63016d1664a7d2430f1b38e3c4a231af88",
+      "bytes": 605161020
+    },
+    "classifier-epoch-2.safetensors": {
+      "sha256": "3612cade787fe075bc805f3bcee61574d26ea7a3c7e0aa36a264e26311bfc365",
+      "bytes": 605161020
+    },
+    "classifier-epoch-3.safetensors": {
+      "sha256": "9172ebc0aad8ca34f9a9bc34e7ee8a4068a3a3e0303eb70181987b0ab7d9bd14",
+      "bytes": 605161020
+    },
+    "classifier-epoch-4.safetensors": {
+      "sha256": "e825a3f736e3a11f7a839a0d805b62020611fa01c33f8593c43253c5b2d0b8d3",
+      "bytes": 605161020
+    },
+    "classifier-resume.json": {
+      "sha256": "9d432b891ff864db19990ae2085d1254b20e8a13c5c0f8dcb9200b9918c73664",
+      "bytes": 745
+    },
+    "classifier-resume.pt": {
+      "sha256": "e7befa286fd6c1ac7ade7016a1bfe6916c6cbd1a796a40e305993706f4be3389",
+      "bytes": 1815874234
+    }
+  },
+  "fixed_schedule_epochs": 50,
+  "completed_epochs": 4,
+  "epochs_completed_this_invocation": 1,
+  "elapsed_minutes": 74.74723328116622,
+  "stderr_bytes": 0,
+  "settings_changed": false,
+  "classification_or_uncertainty_metrics": null,
+  "test_outcomes_locked": true,
+  "resume_hash_scope": "latest resume state at epoch 4; future authorized epochs replace it"
+}
