@@ -1,0 +1,10 @@
+{
+  "samples": 20,
+  "sample_spacing_seconds": 1,
+  "gpu_utilization_percent_mean": 16.05,
+  "gpu_utilization_percent_min": 6.0,
+  "gpu_utilization_percent_max": 43.0,
+  "gpu_memory_mib_max": 5865.0,
+  "gpu_power_watts_mean": 98.6885,
+  "limitation": "short live window; not a full-epoch throughput measurement; GPU saturation not achieved"
+}

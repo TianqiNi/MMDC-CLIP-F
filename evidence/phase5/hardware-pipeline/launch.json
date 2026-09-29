@@ -1,0 +1,12 @@
+{
+  "pid": 435765,
+  "runner_pid": 435761,
+  "started_at_utc": "2026-09-29T17:26:50.195989+00:00",
+  "source_commit": "02af52c10b65a5bc266da83b31139789463b5d8a",
+  "image_workers": 12,
+  "prefetch_batches": 2,
+  "restart_from_epoch": 15,
+  "target_epoch": 50,
+  "monitoring": "disabled by user",
+  "private_run_directory": "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-classifier-original-20260928-v1"
+}

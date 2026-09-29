@@ -1,15 +1,17 @@
 {
   "automation_id": "monitor-mmdc-classifier-training",
-  "status": "ACTIVE",
+  "status": "PAUSED",
   "interval_hours": 1,
   "kind": "thread heartbeat",
   "user_requested": true,
   "approved_training_endpoint": 50,
   "last_independently_verified_epoch": 4,
-  "active_launch": "/home/tianqini/research/MMDC-CLIP-IVR/.cache/p5a-orchestration/tasks/classifier-through-epoch-050/launch.json",
+  "active_launch": null,
   "active_model_polling": false,
   "old_session_cutoff_guard": "stopped in response to unattended-running request",
   "healthy_progress_actions": "brief read-only check and ignored local snapshot; no tests, dataset scans, weight loads or agents",
-  "completion": "notify and pause monitor; preserve final independent review and tune-only selection as subsequent tasks",
-  "created_at_utc": "2026-09-29T03:52:07.106579+00:00"
+  "completion": "No scheduled action; manually validate final artifacts and perform tune-only selection afterward",
+  "created_at_utc": "2026-09-29T03:52:07.106579+00:00",
+  "disabled_at_utc": "2026-09-29T17:29:12.538973+00:00",
+  "disabled_reason": "User requested cancellation of the scheduled task"
 }

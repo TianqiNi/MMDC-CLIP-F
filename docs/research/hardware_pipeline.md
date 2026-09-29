@@ -51,8 +51,10 @@ hashes were identical. The benchmark never wrote training checkpoints.
 
 This is a throughput result, not an accuracy or uncertainty benchmark. It does
 not guarantee 100% GPU utilization or an 8.5-fold complete-training speedup.
-Worker startup, heterogeneous image sizes, checkpoint serialization and GPU
-compute still take time. Other CPUs/RAM capacities may need fewer workers.
+A 20-second live sample after restart averaged 16.05% GPU utilization (6–43%
+range). GPU saturation was not achieved: unchanged full-resolution CPU
+preprocessing still dominates the roughly 0.05-second GPU update. Worker startup,
+heterogeneous image sizes, checkpoint serialization and GPU compute still take time. Other CPUs/RAM capacities may need fewer workers.
 
 The user explicitly approved a checkpoint restart on 2026-09-29. The original
 epoch-15 optimizer/model/RNG checkpoint and sidecar are retained privately before
