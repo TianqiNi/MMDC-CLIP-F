@@ -531,3 +531,18 @@ findings: artifact reload, all three checkpoints, unchanged epoch-1 bytes,
 finite model/Adam state, exact latest model/resume equality and saved RNG
 state passed. The next continuation targets epoch 4 of the same fixed 50.
 No classifier accuracy or uncertainty benchmark has been evaluated.
+
+## P5A unattended continuation — 2026-09-29 UTC
+
+Epoch 4 completed in 74.7 minutes, reaching 4,280 cumulative updates. Fresh Sol
+xhigh review passed exact `950ec0481ce64b9beb7fa2051fa006725dc01539` with no
+findings, including all four checkpoints and exact finite model/resume state.
+The user requested leaving training running and checking once per hour to
+reduce model usage. The accepted epoch-4 state now continues through the
+already approved epoch 50, saving each epoch. The hourly thread monitor performs
+lightweight checks and reports completion, failure or required attention; it
+does not actively poll, rerun tests, load weights or spawn routine agents.
+The old session wall-clock cutoff is removed for this requested unattended run.
+Final artifact review, tune-only selection and uncertainty benchmarks remain
+pending. The handoff epoch count is the last independently verified checkpoint;
+the live checkpoint directory records subsequent progress.
