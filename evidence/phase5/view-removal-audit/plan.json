@@ -1,0 +1,20 @@
+{
+  "version": "full-parent-removal-support/v1",
+  "role": "confidence_fit",
+  "expected_patients": 987,
+  "expected_exams": 987,
+  "selected_epoch": 38,
+  "selected_artifact_sha256": "71886fe190017f056ca13e68d72d8b903dc5e037720e90b67d70d60e2928337a",
+  "seed": 4242,
+  "parent_masks": ["L_CC,L_MLO,R_CC,R_MLO"],
+  "families": ["gaussian_noise", "gaussian_blur"],
+  "severities": ["mild", "moderate"],
+  "cells": 21,
+  "cell_design": "One clean cell; each family/severity has four single-target cells and one common-mode cell. Existing stress parameters and RSNA fusion are unchanged.",
+  "realization_coupling": "One stable exam/family/severity realization. Reuse each stressed view between its single-target and common-mode parent. Common-mode shares the noise field. Every removal retains exactly the parent's surviving scores.",
+  "summaries": ["repair/damage/unchanged counts", "unique-patient support", "removed-view and density strata", "soft probability changes despite unchanged predictions", "consistently wrong predictions", "within-cell MSP versus score sensitivity, TV and prediction flips"],
+  "probability_tv_descriptive_thresholds": [0.000001, 0.05],
+  "inference": "Descriptive development audit; no learned model, no threshold tuning, no formal generalization test or significance claim. Cell means do not reproduce training-sampler weights. Repeated views/cells are not independent patients.",
+  "decision": "Assess whether repair and damage have meaningful patient-diverse support, how dependent it is on synthetic stress, and whether simple sensitivity already supplies a useful failure-ranking signal. No numerical pass threshold is claimed as validated. Method changes require a separate decision.",
+  "excluded": ["pilot outcomes", "locked test outcomes", "held-out corruption families", "strong severities", "confidence fitting", "proper-mask parent support"]
+}
