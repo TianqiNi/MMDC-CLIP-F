@@ -26,3 +26,13 @@ No model parameters, architecture, sampling weights or training budgets are
 tuned during this screen. The runner saves every epoch before evaluating tune
 and can resume an interrupted unfinished model without discarding completed
 epochs. A failure is reported rather than silently restarted.
+
+The screen is complete. See `results.md`, `aggregate.json`, `summary.json` and
+`artifact-review.json`. All nine runs completed in 19.5 minutes; the promising
+signal was absent, and the full study is pending a separate research decision.
+
+The generic optimizer's `TrainingResult.software_only` flag keeps these
+diagnostic artifacts ineligible for the factory-verified production workflow.
+The completed screen used the real, authorized RSNA patient roles; that flag
+does not mean its patient inputs were synthetic. Miniature fixtures were used
+only for software tests and were discarded during task cleanup.

@@ -10,11 +10,11 @@
   "herdr_session": "mmdc-ivr-p5-schedule",
   "private_artifact_root": "/home/tianqini/research/mmdc_ivr_private/p5a",
   "pending": [
-    "P5B: authorized bounded signed/error-only/unsigned development screen; mandatory baseline suite and pilot remain subsequent tasks",
+    "P5B full study: not launched; signed-supervision development screen failed its prespecified promising-signal heuristic",
     "P5C",
     "G5"
   ],
-  "real_training_or_benchmark": "Classifier prerequisite complete. Removal audit: 987 confidence-fit patients, 21 cells, 82,908 pairs; clean 61 patients with repairs and 79 with damages, 95.19% unchanged pairs; MSP clean AUROC 0.7061 versus raw sensitivity 0.5063. No learned confidence-method benchmark yet.",
+  "real_training_or_benchmark": "Completed original classifier, 987-patient support audit, and 9-run learned confidence screen. Tune-selected balanced AURC: signed 0.15408, error only 0.14280, unsigned 0.14988, MSP 0.11504. Signed raw effect prediction collapses to unchanged. No pilot/test outcomes accessed.",
   "test_outcomes_locked": true,
   "resource_task_publication": "accepted, pushed, CI passed and completed resources cleaned",
   "resource_publication_commit": "2695f0424e386535b33343df9522cf68262151ed",
@@ -33,7 +33,7 @@
   "audit_data_task_cleanup": "complete; named session and all task-owned orchestration scratch removed",
   "audit_result_publication_commit": "2bc46850aab12b4136a54deaecb626d7a5c31364",
   "audit_result_publication": "pushed; both release CI checks passed; cleanup complete",
-  "next_task": "Execute the authorized three-method, three-seed signed-supervision development screen; full P5B eligibility remains pending",
+  "next_task": "User research decision: bounded training sanity check or pause/redesign; do not launch full P5B from the failed signed-target screen",
   "active_schedule_worktree": null,
   "active_schedule_launch": null,
   "active_schedule_thread": null,
@@ -84,6 +84,11 @@
   "support_audit_results": "evidence/phase5/view-removal-audit/results.md",
   "support_audit_private_run": "/home/tianqini/research/mmdc_ivr_private/p5b/support-audit-20260930-v1",
   "screening_evidence": "evidence/phase5/signed-screening",
-  "screening_state": "implementation reviewed and accepted; real execution next",
-  "screening_reviewed_commit": "817dbafd02362ed6f8ed886ec1baab0003f3dc33"
+  "screening_state": "complete and artifact-verified; prespecified promising signal failed",
+  "screening_reviewed_commit": "817dbafd02362ed6f8ed886ec1baab0003f3dc33",
+  "screening_private_run": "/home/tianqini/research/mmdc_ivr_private/p5b/signed-screening-20260930-v1",
+  "screening_results": "evidence/phase5/signed-screening/results.md",
+  "screening_source_commit": "f5f259165225efcf10522d2c879aa2d4f2b921a8",
+  "screening_active_pid": null,
+  "screening_completed_runs": 9
 }

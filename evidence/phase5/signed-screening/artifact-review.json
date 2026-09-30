@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "execution_source_commit": "f5f259165225efcf10522d2c879aa2d4f2b921a8",
+  "cache_bindings_verified": 77,
+  "checkpoint_states_and_metrics_verified": 180,
+  "selected_or_final_checkpoint_inferences_reproduced": 16,
+  "completed_runs": 9,
+  "total_verified_optimizer_updates": 29700,
+  "parameter_counts": {
+    "candidate": 433436,
+    "no_effect_supervision": 433436,
+    "magnitude_effects": 433307
+  },
+  "role_scope": [
+    "confidence_fit",
+    "tune"
+  ],
+  "pilot_or_test_outcomes_accessed": false,
+  "historical_source_hash_verified": true,
+  "clean_accuracy_matches_previous_classifier_tune_result": true,
+  "elapsed_seconds": 11.849434292991646,
+  "limitation": "Orchestrator artifact review; not an independent external review or full pilot eligibility."
+}

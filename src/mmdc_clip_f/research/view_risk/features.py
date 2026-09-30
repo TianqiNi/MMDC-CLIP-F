@@ -404,7 +404,6 @@ class VerifiedFrozenEncoder:
         """Encode only supplied named tensors, which must already be normalized."""
 
         views = _validate_normalized_views(normalized_views)
-        observed = tuple(views)
         self._assert_text_inputs_unchanged()
         self._assert_weights_unchanged(verify_content=True)
         result = self._extract_normalized_unchecked(views)

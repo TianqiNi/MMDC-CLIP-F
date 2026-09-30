@@ -1,0 +1,37 @@
+{
+  "pid": 830830,
+  "started_utc": "2026-09-30T21:40:57.600032+00:00",
+  "source_commit": "f5f259165225efcf10522d2c879aa2d4f2b921a8",
+  "private_run": "/home/tianqini/research/mmdc_ivr_private/p5b/signed-screening-20260930-v1",
+  "command": [
+    "/home/tianqini/research/MMDC-CLIP-IVR/.venv/bin/python",
+    "/home/tianqini/research/MMDC-CLIP-IVR/evidence/phase5/signed-screening/run_screening.py",
+    "--config",
+    "/home/tianqini/research/MMDC-CLIP-IVR/configs/research/rsna_vit_b_32_p5a.yaml",
+    "--plan",
+    "/home/tianqini/research/MMDC-CLIP-IVR/evidence/phase5/signed-screening/plan.json",
+    "--selected",
+    "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-classifier-original-20260928-v1/selected-classifier.json",
+    "--role-root",
+    "/home/tianqini/research/mmdc_ivr_private/p5a/rsna-workflow-inputs-20260925-v1",
+    "--image-root",
+    "/home/tianqini/research/MMDC-CLIP_original/MMDC-CLIP/RSNA/train_images",
+    "--private-output",
+    "/home/tianqini/research/mmdc_ivr_private/p5b/signed-screening-20260930-v1",
+    "--summary-output",
+    "/home/tianqini/research/MMDC-CLIP-IVR/.cache/screening-real-summary.json",
+    "--device",
+    "cuda:0",
+    "--workers",
+    "12",
+    "--max-seconds",
+    "12500"
+  ],
+  "maximum_execution_seconds": 12500,
+  "role_scope": [
+    "confidence_fit",
+    "tune"
+  ],
+  "pilot_or_test_outcomes_authorized": false,
+  "monitoring": "No scheduled monitor or AI sub-agents. Check this task-owned process only during active work."
+}

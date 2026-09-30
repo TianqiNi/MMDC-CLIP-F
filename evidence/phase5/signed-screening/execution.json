@@ -1,0 +1,11 @@
+{
+  "completed_runs": 9,
+  "elapsed_seconds": 1170.436444416002,
+  "status": "PASS",
+  "summary_sha256": "75f13a3433453a4d9f91bd8333adb17110e42bd0c325109a6846f8520ea0adfb",
+  "process_status": "exited; no live PID at acceptance",
+  "private_run": "/home/tianqini/research/mmdc_ivr_private/p5b/signed-screening-20260930-v1",
+  "source_commit": "f5f259165225efcf10522d2c879aa2d4f2b921a8",
+  "privacy": "Only confidence_fit and tune accessed; patient-bearing artifacts retained outside Git",
+  "agents_or_schedules_created": false
+}

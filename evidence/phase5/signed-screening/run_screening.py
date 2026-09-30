@@ -11,7 +11,6 @@ import subprocess
 import time
 import traceback
 
-import numpy as np
 import torch
 from safetensors.torch import load_file
 from torchvision import transforms
