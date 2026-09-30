@@ -1,0 +1,15 @@
+{
+  "status": "complete",
+  "implementation_commit": "b806c4aa55746337627d45a7009693b342f35170",
+  "result_commit": "0f2a0e6",
+  "publication": "commits pushed to origin; draft PR 1 updated with measured results and limitations",
+  "source_ci_runs": [
+    36764155982,
+    36764161141
+  ],
+  "source_ci_status": "both passed; later changes are aggregate evidence and documentation only",
+  "cleanup": "task-owned .cache/p5b-support and new bytecode artifacts removed; no worktrees, temporary directories outside this cache, or AI agents were created",
+  "private_evidence": "private bound logits, row identities, removal results, command and execution logs preserved for reproducibility",
+  "next": "Decision on bounded matched learning pilot; no confidence fitting started",
+  "monitoring": "disabled"
+}
