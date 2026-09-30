@@ -90,5 +90,6 @@
   "screening_results": "evidence/phase5/signed-screening/results.md",
   "screening_source_commit": "f5f259165225efcf10522d2c879aa2d4f2b921a8",
   "screening_active_pid": null,
-  "screening_completed_runs": 9
+  "screening_completed_runs": 9,
+  "screening_cleanup": "complete; essential private artifacts retained; no active process, AI sub-agents or schedule"
 }
