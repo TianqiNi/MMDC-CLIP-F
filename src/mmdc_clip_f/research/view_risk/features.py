@@ -407,6 +407,65 @@ class VerifiedFrozenEncoder:
         observed = tuple(views)
         self._assert_text_inputs_unchanged()
         self._assert_weights_unchanged(verify_content=True)
+        result = self._extract_normalized_unchecked(views)
+        self._assert_text_inputs_unchanged()
+        self._assert_weights_unchanged(verify_content=False)
+        return result
+
+    def extract_normalized_batches(
+        self, normalized_batches: Sequence[Mapping[str, Tensor]], *, max_images: int = 12,
+    ) -> tuple[FrozenViewFeatures, ...]:
+        """Atomically extract bounded vision batches, retaining exact state guards.
+
+        Every mapping is a homogeneous observed mask; mappings may have different
+        masks and batch sizes. Full content checks bracket the entire operation,
+        and cheap version/frozen/text checks run after every chunk. No results or
+        caller callbacks are released between the full checks. This amortizes
+        checkpoint hashing without allowing unversioned mutations to pass.
+        """
+        if isinstance(max_images, bool) or not isinstance(max_images, int) or max_images < 4:
+            raise ValueError("max_images must be an integer of at least four")
+        batches = tuple(_validate_normalized_views(x) for x in normalized_batches)
+        if not batches:
+            raise ValueError("normalized_batches must be nonempty")
+        self._assert_text_inputs_unchanged()
+        self._assert_weights_unchanged(verify_content=True)
+        self.classifier.eval()
+        results = []
+        with torch.no_grad():
+            text = self.classifier._text_features(self._input_ids).detach()
+            for views in batches:
+                observed = tuple(views)
+                size = next(iter(views.values())).shape[0]
+                step = max_images // len(observed)
+                chunks = []
+                for start in range(0, size, step):
+                    chunks.append(self._extract_normalized_unchecked(
+                        {v: x[start:start + step] for v, x in views.items()}, text=text,
+                    ))
+                    self._assert_text_inputs_unchanged()
+                    self._assert_weights_unchanged(verify_content=False)
+                results.append(FrozenViewFeatures(
+                    logits_by_view={v: torch.cat([x.logits_by_view[v] for x in chunks])
+                                    for v in observed},
+                    hidden_by_view={v: torch.cat([x.hidden_by_view[v] for x in chunks])
+                                    for v in observed},
+                    projected_by_view={v: torch.cat([x.projected_by_view[v] for x in chunks])
+                                       for v in observed},
+                    normalized_text_embeddings=text,
+                    scores=torch.cat([x.scores for x in chunks]),
+                    probabilities=torch.cat([x.probabilities for x in chunks]),
+                    observed_views=observed, fusion_pairs=self.identity.fusion_pairs,
+                ))
+        self._assert_text_inputs_unchanged()
+        self._assert_weights_unchanged(verify_content=True)
+        return tuple(results)
+
+    def _extract_normalized_unchecked(
+        self, views: Mapping[str, Tensor], *, text: Tensor | None = None,
+    ) -> FrozenViewFeatures:
+        """Internal forward; public entry points own the state/content guards."""
+        observed = tuple(views)
         self.classifier.eval()
         with torch.no_grad():
             batch_size = next(iter(views.values())).shape[0]
@@ -425,7 +484,8 @@ class VerifiedFrozenEncoder:
 
             projected = dict(zip(observed, projected_all.split(batch_size, dim=0)))
             hidden = dict(zip(observed, hidden_all.split(batch_size, dim=0)))
-            text = self.classifier._text_features(self._input_ids)
+            if text is None:
+                text = self.classifier._text_features(self._input_ids)
             if text.ndim != 2 or text.shape[0] != NUM_CLASSES:
                 raise ValueError("classifier must provide four class text embeddings")
             scale = self.classifier.clip_model.logit_scale.exp()
@@ -438,8 +498,6 @@ class VerifiedFrozenEncoder:
             scores = fused.scores
             probabilities = torch.softmax(scores, dim=1)
 
-        self._assert_text_inputs_unchanged()
-        self._assert_weights_unchanged(verify_content=False)
         return FrozenViewFeatures(
             logits_by_view={view: logits[view].detach() for view in observed},
             hidden_by_view={view: hidden[view].detach() for view in observed},

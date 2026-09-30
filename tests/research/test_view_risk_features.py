@@ -210,6 +210,33 @@ def test_data_weight_mutation_is_refused_before_encoding(verified_encoder) -> No
     assert len(clip.vision_model.calls) == calls
 
 
+def test_bulk_extraction_matches_individual_masks_and_bounds_images(verified_encoder):
+    encoder, clip, _ = verified_encoder
+    inputs = [_normalized_views(5), {"R_MLO": _normalized_views(3)["R_MLO"]},
+              {v: x for v, x in _normalized_views(2).items() if v in ("L_CC", "R_CC")}]
+    reference = [encoder.extract_normalized(x) for x in inputs]
+    clip.vision_model.calls.clear()
+    result = encoder.extract_normalized_batches(inputs, max_images=8)
+    assert max(x.shape[0] for x in clip.vision_model.calls) <= 8
+    assert len(result) == len(reference)
+    for actual, expected in zip(result, reference):
+        assert actual.observed_views == expected.observed_views
+        for a, b in zip(actual.all_tensors(), expected.all_tensors()):
+            torch.testing.assert_close(a, b, atol=1e-6, rtol=1e-6)
+
+
+def test_bulk_extraction_detects_unversioned_mutation_before_releasing_results(verified_encoder):
+    encoder, clip, _ = verified_encoder
+    def mutate(module, arguments, output):
+        clip.visual_projection.weight.data.add_(1)
+    handle = clip.vision_model.register_forward_hook(mutate)
+    try:
+        with pytest.raises(RuntimeError, match="weights changed"):
+            encoder.extract_normalized_batches([_normalized_views(3)], max_images=4)
+    finally:
+        handle.remove()
+
+
 def test_factory_owns_text_inputs_so_caller_mutation_cannot_change_predictions(tmp_path) -> None:
     clip = TextSensitiveCLIP(BACKBONES["vit_b_32"].hidden_size)
     classifier = MultiViewCLIPClassifier(

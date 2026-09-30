@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "tests": 314,
+  "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python -m pytest -q tests --basetemp=.cache/screening-final-tests --tb=short",
+  "elapsed_seconds": 55.12,
+  "red_green_evidence": [
+    "Four bulk-extraction tests failed for the absent API before implementation; all passed after implementation.",
+    "Screening helper tests failed at collection for absent APIs before implementation; mixed-mask loss/gradient, initialization, target-integrity and balanced-selection checks now pass.",
+    "The runner interruption test exposed missing history after a saved epoch. Resume now verifies the saved state and completes the interrupted callback without another optimizer step; the full 20-checkpoint history and 20-update toy budget are checked for all nine runs."
+  ],
+  "environment": {
+    "cuda_tensor_computation": "PASS on NVIDIA GeForce RTX 4090 with torch 2.3.1+cu121",
+    "nvml": "System driver/library version mismatch; CUDA computations work, utilization reporting is unavailable.",
+    "private_output_guards": "Unchanged. An unrelated /tmp/.git marker makes generic temporary output appear inside a worktree; tests use task-owned ignored storage. The initial default-temporary-location suite failed on these destination checks, not on scientific computations."
+  },
+  "validated_invariants": [
+    "Full/subset/singleton extraction equivalence and bounded vision chunks",
+    "Frozen-state content validation, including unversioned mutation during extraction",
+    "Mixed-mask original row order and per-parent loss/gradient equivalence",
+    "Identical shared initialization across all three methods",
+    "Targets checked against current labels and omission predictions",
+    "Equal cell weighting and deterministic earliest-checkpoint tie break",
+    "Role-bound one-per-exam optimizer exposure and interrupted callback recovery",
+    "All nine miniature runs complete their unchanged 20-epoch budgets"
+  ],
+  "scope": "Software validation only. Real screening outcomes are not yet available."
+}
