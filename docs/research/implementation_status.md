@@ -14,11 +14,14 @@ reproduced NLL 0.5234 and measured accuracy 78.38%, macro-F1 0.6583 and quadrati
 weighted kappa 0.7812. Class-D recall is weak: 4/19 (21.05%). These are tune
 selection diagnostics, not held-out or uncertainty-method results. See
 [evidence and interpretation](../../evidence/phase5/classifier-selection/results.md).
-P5B confidence fitting and P5C uncertainty comparisons remain pending. First,
-audit clean/stressed view-removal target support on confidence-fit data: shared
-labels do not guarantee unchanged predictions, but redundancy may make the
-proposed auxiliary signal too sparse. MINI-DDSM patient mapping remains blocked.
-Test outcomes remain locked; monitoring and AI subagents remain disabled.
+P5B confidence fitting and P5C uncertainty comparisons remain pending. The
+987-patient confidence-fit removal-support audit is complete: 95.19% of clean
+removals leave correctness unchanged, with repair support from 61 patients and
+damage support from 79. Raw sensitivity ranks failures worse than MSP. The
+signal exists but its learned benefit is unproven; only a bounded matched pilot
+is justified next. See [audit results](../../evidence/phase5/view-removal-audit/results.md).
+MINI-DDSM patient mapping remains blocked. Test outcomes remain locked;
+monitoring and AI subagents remain disabled.
 Current handoff: `evidence/phase5/handoff.json`.
 
 Scope is the single intervention-supervised confidence project described in
@@ -583,3 +586,18 @@ exact commit; no independent-agent review is claimed because the user prohibited
 further agents. Final-fit, selection and tune diagnostics passed; aggregate
 evidence is under `evidence/phase5/classifier-selection/`. Historical entries
 above describe earlier states. No pilot or locked test outcomes were used.
+
+## P5B prerequisite support audit — 2026-09-30
+
+The predeclared audit at `b806c4aa55746337627d45a7009693b342f35170` completed
+all 987 confidence-fit patients, 21 conditions and 82,908 removals. Exact original
+preprocessing/forward/fusion checks and frozen-state checks passed. Both source
+CI runs passed; all original tests plus four new audit regressions pass. Private
+cache hashes and signed effects were independently recounted by the orchestrator
+without subagents. Results are under `evidence/phase5/view-removal-audit/`.
+
+This is descriptive support evidence, not learned uncertainty performance. Clean
+repair/damage targets are sparse, and 158/219 clean errors have no repairing
+removal. Stresses broaden support, but MSP beats the simple sensitivity controls.
+A bounded same-input matched learning pilot is the proposed next decision; no
+confidence model has been trained and no scientific settings were changed.

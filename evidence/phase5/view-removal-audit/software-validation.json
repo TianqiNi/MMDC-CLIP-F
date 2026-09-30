@@ -6,5 +6,13 @@
   "ruff": "passed",
   "compileall": "passed",
   "review_mode": "orchestrator self-review; no AI subagents",
-  "scope": "No classifier, optimizer, transform parameters, protocol target, pilot/test access or training budget changed."
+  "scope": "No classifier, optimizer, transform parameters, protocol target, pilot/test access or training budget changed.",
+  "source_ci": {
+    "commit": "b806c4aa55746337627d45a7009693b342f35170",
+    "runs": [
+      36764155982,
+      36764161141
+    ],
+    "result": "both passed"
+  }
 }

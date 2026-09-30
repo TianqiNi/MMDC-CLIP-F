@@ -1,6 +1,6 @@
 {
-  "status": "P5A complete and validated for RSNA ViT-B/32; epoch 38 selected; aggregate tune diagnostics complete",
-  "recorded_at_utc": "2026-09-30T14:54:38.342315+00:00",
+  "status": "P5A complete; 987-patient confidence-fit removal-support audit complete and validated",
+  "recorded_at_utc": "2026-09-30T19:24:05.482289+00:00",
   "base_phase4": "9fc8eb758288e196c31f22469d734aa96bb02ee7",
   "resource_reviewed_commit": "182d5c08124311b254d5fc9199643cf64f110fde",
   "active_audit_worktree": "/home/tianqini/research/MMDC-CLIP-IVR",
@@ -10,11 +10,11 @@
   "herdr_session": "mmdc-ivr-p5-schedule",
   "private_artifact_root": "/home/tianqini/research/mmdc_ivr_private/p5a",
   "pending": [
-    "P5B: first audit view-removal target support on authorized confidence-fit data; then matched confidence/control fitting and freeze",
+    "P5B: bounded matched confidence/control learning pilot remains unstarted; review audit interpretation before proceeding",
     "P5C",
     "G5"
   ],
-  "real_training_or_benchmark": "Classifier tune diagnostics: 370 patients, accuracy 0.7837838, macro-F1 0.6583176, QWK 0.7811557, NLL 0.52339594; no confidence-method benchmark yet",
+  "real_training_or_benchmark": "Classifier prerequisite complete. Removal audit: 987 confidence-fit patients, 21 cells, 82,908 pairs; clean 61 patients with repairs and 79 with damages, 95.19% unchanged pairs; MSP clean AUROC 0.7061 versus raw sensitivity 0.5063. No learned confidence-method benchmark yet.",
   "test_outcomes_locked": true,
   "resource_task_publication": "accepted, pushed, CI passed and completed resources cleaned",
   "resource_publication_commit": "2695f0424e386535b33343df9522cf68262151ed",
@@ -33,7 +33,7 @@
   "audit_data_task_cleanup": "complete; named session and all task-owned orchestration scratch removed",
   "audit_result_publication_commit": "2bc46850aab12b4136a54deaecb626d7a5c31364",
   "audit_result_publication": "pushed; both release CI checks passed; cleanup complete",
-  "next_task": "P5B prerequisite: measure clean/stressed repair, damage and unchanged support before full confidence fitting; shared-label/redundancy concern remains empirically unresolved",
+  "next_task": "Decide whether to proceed with the bounded matched P5B learning pilot; sparse signed targets and weaker raw sensitivity are documented in the audit report",
   "active_schedule_worktree": null,
   "active_schedule_launch": null,
   "active_schedule_thread": null,
@@ -76,5 +76,11 @@
   "classifier_selection_source_commit": "d3d6a4de43d327e0a8a0d3f0cee1b5dcf848a407",
   "classifier_selection_evidence": "evidence/phase5/classifier-selection",
   "classifier_tune_metrics": "evidence/phase5/classifier-selection/tune-metrics.json",
-  "classifier_fit_selection_accepted": true
+  "classifier_fit_selection_accepted": true,
+  "support_audit_source_commit": "b806c4aa55746337627d45a7009693b342f35170",
+  "support_audit_launch": null,
+  "support_audit_evidence": "evidence/phase5/view-removal-audit",
+  "support_audit_complete": true,
+  "support_audit_results": "evidence/phase5/view-removal-audit/results.md",
+  "support_audit_private_run": "/home/tianqini/research/mmdc_ivr_private/p5b/support-audit-20260930-v1"
 }

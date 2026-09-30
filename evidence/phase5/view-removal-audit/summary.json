@@ -1,0 +1,3405 @@
+{
+  "patients": 987,
+  "exams": 987,
+  "cells": {
+    "clean": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 103,
+        "unique_patients_any_damage": 79,
+        "unchanged": 3758,
+        "unique_patients_any_unchanged": 987,
+        "repair": 87,
+        "unique_patients_any_repair": 61
+      },
+      "accuracy": 0.7781155015197568,
+      "prediction_flips": 190,
+      "all_removals_unchanged_and_parent_wrong": 158,
+      "same_prediction_tv": {
+        "count": 3758,
+        "mean": 0.12117112427949905,
+        "median": 0.11316776275634766,
+        "p90": 0.20741650462150574
+      },
+      "same_prediction_tv_gt_1e_6": 3758,
+      "same_prediction_tv_at_least_0_05": 3313,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.11040951311588287,
+        "median": -0.10787802934646606,
+        "p90": -0.024298958480358124
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.0800873339176178,
+        "median": 0.07846421748399734,
+        "p90": 0.1105739027261734
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 28,
+          "unique_patients_any_damage": 28,
+          "unchanged": 938,
+          "unique_patients_any_unchanged": 938,
+          "repair": 21,
+          "unique_patients_any_repair": 21
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 27,
+          "unique_patients_any_damage": 27,
+          "unchanged": 938,
+          "unique_patients_any_unchanged": 938,
+          "repair": 22,
+          "unique_patients_any_repair": 22
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 22,
+          "unique_patients_any_damage": 22,
+          "unchanged": 951,
+          "unique_patients_any_unchanged": 951,
+          "repair": 14,
+          "unique_patients_any_repair": 14
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 26,
+          "unique_patients_any_damage": 26,
+          "unchanged": 931,
+          "unique_patients_any_unchanged": 931,
+          "repair": 30,
+          "unique_patients_any_repair": 30
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 13,
+          "unique_patients_any_damage": 11,
+          "unchanged": 348,
+          "unique_patients_any_unchanged": 95,
+          "repair": 19,
+          "unique_patients_any_repair": 15
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 50,
+          "unique_patients_any_damage": 37,
+          "unchanged": 1611,
+          "unique_patients_any_unchanged": 425,
+          "repair": 39,
+          "unique_patients_any_repair": 24
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 36,
+          "unique_patients_any_damage": 28,
+          "unchanged": 1605,
+          "unique_patients_any_unchanged": 416,
+          "repair": 23,
+          "unique_patients_any_repair": 18
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 4,
+          "unique_patients_any_damage": 3,
+          "unchanged": 194,
+          "unique_patients_any_unchanged": 51,
+          "repair": 6,
+          "unique_patients_any_repair": 4
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.7061453576864535,
+          "error_ap": 0.39199894088761494,
+          "aurc": 0.12112607286443756,
+          "error_count": 219,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.5062666476407913,
+          "error_ap": 0.24032886345131466,
+          "aurc": 0.2168452384401696,
+          "error_count": 219,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.516695205479452,
+          "error_ap": 0.23668625006792618,
+          "aurc": 0.20297043518402416,
+          "error_count": 219,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.589695110350076,
+          "error_ap": 0.29271081793253584,
+          "aurc": 0.18884930185712165,
+          "error_count": 219,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_noise/mild/L_CC": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 103,
+        "unique_patients_any_damage": 77,
+        "unchanged": 3757,
+        "unique_patients_any_unchanged": 987,
+        "repair": 88,
+        "unique_patients_any_repair": 64
+      },
+      "accuracy": 0.7771023302938196,
+      "prediction_flips": 191,
+      "all_removals_unchanged_and_parent_wrong": 156,
+      "same_prediction_tv": {
+        "count": 3757,
+        "mean": 0.12164043635129929,
+        "median": 0.11250290274620056,
+        "p90": 0.2070862054824829
+      },
+      "same_prediction_tv_gt_1e_6": 3757,
+      "same_prediction_tv_at_least_0_05": 3312,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.1110474243760109,
+        "median": -0.10745033621788025,
+        "p90": -0.024481916800141335
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07969953119754791,
+        "median": 0.07846152037382126,
+        "p90": 0.1095462366938591
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 30,
+          "unique_patients_any_damage": 30,
+          "unchanged": 933,
+          "unique_patients_any_unchanged": 933,
+          "repair": 24,
+          "unique_patients_any_repair": 24
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 27,
+          "unique_patients_any_damage": 27,
+          "unchanged": 944,
+          "unique_patients_any_unchanged": 944,
+          "repair": 16,
+          "unique_patients_any_repair": 16
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 22,
+          "unique_patients_any_damage": 22,
+          "unchanged": 944,
+          "unique_patients_any_unchanged": 944,
+          "repair": 21,
+          "unique_patients_any_repair": 21
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 24,
+          "unique_patients_any_damage": 24,
+          "unchanged": 936,
+          "unique_patients_any_unchanged": 936,
+          "repair": 27,
+          "unique_patients_any_repair": 27
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 15,
+          "unique_patients_any_damage": 12,
+          "unchanged": 351,
+          "unique_patients_any_unchanged": 95,
+          "repair": 14,
+          "unique_patients_any_repair": 11
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 42,
+          "unique_patients_any_damage": 31,
+          "unchanged": 1620,
+          "unique_patients_any_unchanged": 425,
+          "repair": 38,
+          "unique_patients_any_repair": 27
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 40,
+          "unique_patients_any_damage": 30,
+          "unchanged": 1597,
+          "unique_patients_any_unchanged": 416,
+          "repair": 27,
+          "unique_patients_any_repair": 19
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 6,
+          "unique_patients_any_damage": 4,
+          "unchanged": 189,
+          "unique_patients_any_unchanged": 51,
+          "repair": 9,
+          "unique_patients_any_repair": 7
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.7108924973331752,
+          "error_ap": 0.41232291158750467,
+          "aurc": 0.11891000268111727,
+          "error_count": 220,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.48798743629252106,
+          "error_ap": 0.23442488650540108,
+          "aurc": 0.22547149618545445,
+          "error_count": 220,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5243273675477066,
+          "error_ap": 0.2507183767715453,
+          "aurc": 0.197789665787168,
+          "error_count": 220,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5956204812137016,
+          "error_ap": 0.29332228055632315,
+          "aurc": 0.18724170132372572,
+          "error_count": 220,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_noise/mild/L_MLO": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 126,
+        "unique_patients_any_damage": 91,
+        "unchanged": 3740,
+        "unique_patients_any_unchanged": 987,
+        "repair": 82,
+        "unique_patients_any_repair": 60
+      },
+      "accuracy": 0.78419452887538,
+      "prediction_flips": 209,
+      "all_removals_unchanged_and_parent_wrong": 153,
+      "same_prediction_tv": {
+        "count": 3739,
+        "mean": 0.12156796455383301,
+        "median": 0.11373649537563324,
+        "p90": 0.20773407816886902
+      },
+      "same_prediction_tv_gt_1e_6": 3739,
+      "same_prediction_tv_at_least_0_05": 3299,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.11129613220691681,
+        "median": -0.10906869173049927,
+        "p90": -0.024561088532209396
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07980751991271973,
+        "median": 0.07813017815351486,
+        "p90": 0.11086128652095795
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 36,
+          "unique_patients_any_damage": 36,
+          "unchanged": 934,
+          "unique_patients_any_unchanged": 934,
+          "repair": 17,
+          "unique_patients_any_repair": 17
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 31,
+          "unique_patients_any_damage": 31,
+          "unchanged": 936,
+          "unique_patients_any_unchanged": 936,
+          "repair": 20,
+          "unique_patients_any_repair": 20
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 24,
+          "unique_patients_any_damage": 24,
+          "unchanged": 947,
+          "unique_patients_any_unchanged": 947,
+          "repair": 16,
+          "unique_patients_any_repair": 16
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 35,
+          "unique_patients_any_damage": 35,
+          "unchanged": 923,
+          "unique_patients_any_unchanged": 923,
+          "repair": 29,
+          "unique_patients_any_repair": 29
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 13,
+          "unique_patients_any_damage": 11,
+          "unchanged": 349,
+          "unique_patients_any_unchanged": 95,
+          "repair": 18,
+          "unique_patients_any_repair": 13
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 61,
+          "unique_patients_any_damage": 42,
+          "unchanged": 1609,
+          "unique_patients_any_unchanged": 425,
+          "repair": 30,
+          "unique_patients_any_repair": 21
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 49,
+          "unique_patients_any_damage": 35,
+          "unchanged": 1593,
+          "unique_patients_any_unchanged": 416,
+          "repair": 22,
+          "unique_patients_any_repair": 17
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 3,
+          "unique_patients_any_damage": 3,
+          "unchanged": 189,
+          "unique_patients_any_unchanged": 51,
+          "repair": 12,
+          "unique_patients_any_repair": 9
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.696600793390836,
+          "error_ap": 0.3603128708378747,
+          "aurc": 0.1187511081151756,
+          "error_count": 213,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.5062658465868424,
+          "error_ap": 0.23530556420130527,
+          "aurc": 0.2169627435046152,
+          "error_count": 213,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5317841588722689,
+          "error_ap": 0.23285132296473385,
+          "aurc": 0.18792351663199017,
+          "error_count": 213,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5840187550800062,
+          "error_ap": 0.26750918264056445,
+          "aurc": 0.1848688952701799,
+          "error_count": 213,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_noise/mild/R_CC": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 120,
+        "unique_patients_any_damage": 90,
+        "unchanged": 3745,
+        "unique_patients_any_unchanged": 987,
+        "repair": 83,
+        "unique_patients_any_repair": 61
+      },
+      "accuracy": 0.7791286727456941,
+      "prediction_flips": 203,
+      "all_removals_unchanged_and_parent_wrong": 157,
+      "same_prediction_tv": {
+        "count": 3745,
+        "mean": 0.12085604667663574,
+        "median": 0.11319683492183685,
+        "p90": 0.20663140714168549
+      },
+      "same_prediction_tv_gt_1e_6": 3745,
+      "same_prediction_tv_at_least_0_05": 3271,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.10940676927566528,
+        "median": -0.10751914978027344,
+        "p90": -0.02240527607500553
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.0793653279542923,
+        "median": 0.07799028605222702,
+        "p90": 0.10856668651103973
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 30,
+          "unique_patients_any_damage": 30,
+          "unchanged": 939,
+          "unique_patients_any_unchanged": 939,
+          "repair": 18,
+          "unique_patients_any_repair": 18
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 27,
+          "unique_patients_any_damage": 27,
+          "unchanged": 941,
+          "unique_patients_any_unchanged": 941,
+          "repair": 19,
+          "unique_patients_any_repair": 19
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 26,
+          "unique_patients_any_damage": 26,
+          "unchanged": 944,
+          "unique_patients_any_unchanged": 944,
+          "repair": 17,
+          "unique_patients_any_repair": 17
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 37,
+          "unique_patients_any_damage": 37,
+          "unchanged": 921,
+          "unique_patients_any_unchanged": 921,
+          "repair": 29,
+          "unique_patients_any_repair": 29
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 16,
+          "unique_patients_any_damage": 15,
+          "unchanged": 349,
+          "unique_patients_any_unchanged": 95,
+          "repair": 15,
+          "unique_patients_any_repair": 12
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 46,
+          "unique_patients_any_damage": 33,
+          "unchanged": 1617,
+          "unique_patients_any_unchanged": 425,
+          "repair": 37,
+          "unique_patients_any_repair": 26
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 49,
+          "unique_patients_any_damage": 36,
+          "unchanged": 1589,
+          "unique_patients_any_unchanged": 416,
+          "repair": 26,
+          "unique_patients_any_repair": 19
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 9,
+          "unique_patients_any_damage": 6,
+          "unchanged": 190,
+          "unique_patients_any_unchanged": 51,
+          "repair": 5,
+          "unique_patients_any_repair": 4
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.7002004271006071,
+          "error_ap": 0.37010067688706616,
+          "aurc": 0.12168204567530819,
+          "error_count": 218,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.49398718698178257,
+          "error_ap": 0.2361257410705544,
+          "aurc": 0.22127405241936635,
+          "error_count": 218,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5293243936483697,
+          "error_ap": 0.24955173297404507,
+          "aurc": 0.19429146917127604,
+          "error_count": 218,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5820707221340714,
+          "error_ap": 0.27574204250616174,
+          "aurc": 0.19035856781761115,
+          "error_count": 218,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_noise/mild/R_MLO": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 110,
+        "unique_patients_any_damage": 83,
+        "unchanged": 3745,
+        "unique_patients_any_unchanged": 987,
+        "repair": 93,
+        "unique_patients_any_repair": 64
+      },
+      "accuracy": 0.7781155015197568,
+      "prediction_flips": 204,
+      "all_removals_unchanged_and_parent_wrong": 155,
+      "same_prediction_tv": {
+        "count": 3744,
+        "mean": 0.12165625393390656,
+        "median": 0.11339320242404938,
+        "p90": 0.20979689061641693
+      },
+      "same_prediction_tv_gt_1e_6": 3744,
+      "same_prediction_tv_at_least_0_05": 3316,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.1105182096362114,
+        "median": -0.10733991861343384,
+        "p90": -0.02340538427233696
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07961387187242508,
+        "median": 0.0768803209066391,
+        "p90": 0.11256611347198486
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 34,
+          "unique_patients_any_damage": 34,
+          "unchanged": 936,
+          "unique_patients_any_unchanged": 936,
+          "repair": 17,
+          "unique_patients_any_repair": 17
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 26,
+          "unique_patients_any_damage": 26,
+          "unchanged": 942,
+          "unique_patients_any_unchanged": 942,
+          "repair": 19,
+          "unique_patients_any_repair": 19
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 21,
+          "unique_patients_any_damage": 21,
+          "unchanged": 942,
+          "unique_patients_any_unchanged": 942,
+          "repair": 24,
+          "unique_patients_any_repair": 24
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 29,
+          "unique_patients_any_damage": 29,
+          "unchanged": 925,
+          "unique_patients_any_unchanged": 925,
+          "repair": 33,
+          "unique_patients_any_repair": 33
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 13,
+          "unique_patients_any_damage": 12,
+          "unchanged": 349,
+          "unique_patients_any_unchanged": 95,
+          "repair": 18,
+          "unique_patients_any_repair": 13
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 58,
+          "unique_patients_any_damage": 38,
+          "unchanged": 1608,
+          "unique_patients_any_unchanged": 425,
+          "repair": 34,
+          "unique_patients_any_repair": 25
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 35,
+          "unique_patients_any_damage": 30,
+          "unchanged": 1598,
+          "unique_patients_any_unchanged": 416,
+          "repair": 31,
+          "unique_patients_any_repair": 21
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 4,
+          "unique_patients_any_damage": 3,
+          "unchanged": 190,
+          "unique_patients_any_unchanged": 51,
+          "repair": 10,
+          "unique_patients_any_repair": 5
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.7057470034246575,
+          "error_ap": 0.38458632363660855,
+          "aurc": 0.11984582332339373,
+          "error_count": 219,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.5145072298325724,
+          "error_ap": 0.23904635350023365,
+          "aurc": 0.21055458049473824,
+          "error_count": 219,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5175454242770167,
+          "error_ap": 0.23584122172955221,
+          "aurc": 0.1995899656402839,
+          "error_count": 219,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5958517646499238,
+          "error_ap": 0.29636733790041864,
+          "aurc": 0.18632677741559012,
+          "error_count": 219,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_noise/mild/common": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 121,
+        "unique_patients_any_damage": 95,
+        "unchanged": 3738,
+        "unique_patients_any_unchanged": 987,
+        "repair": 89,
+        "unique_patients_any_repair": 66
+      },
+      "accuracy": 0.7700101317122594,
+      "prediction_flips": 212,
+      "all_removals_unchanged_and_parent_wrong": 161,
+      "same_prediction_tv": {
+        "count": 3736,
+        "mean": 0.1206912249326706,
+        "median": 0.11108291149139404,
+        "p90": 0.21057140827178955
+      },
+      "same_prediction_tv_gt_1e_6": 3736,
+      "same_prediction_tv_at_least_0_05": 3250,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.11051218956708908,
+        "median": -0.10610181093215942,
+        "p90": -0.021852299571037292
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07815268635749817,
+        "median": 0.07654237747192383,
+        "p90": 0.10885865986347198
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 36,
+          "unique_patients_any_damage": 36,
+          "unchanged": 930,
+          "unique_patients_any_unchanged": 930,
+          "repair": 21,
+          "unique_patients_any_repair": 21
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 33,
+          "unique_patients_any_damage": 33,
+          "unchanged": 938,
+          "unique_patients_any_unchanged": 938,
+          "repair": 16,
+          "unique_patients_any_repair": 16
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 19,
+          "unique_patients_any_damage": 19,
+          "unchanged": 950,
+          "unique_patients_any_unchanged": 950,
+          "repair": 18,
+          "unique_patients_any_repair": 18
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 33,
+          "unique_patients_any_damage": 33,
+          "unchanged": 920,
+          "unique_patients_any_unchanged": 920,
+          "repair": 34,
+          "unique_patients_any_repair": 34
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 16,
+          "unique_patients_any_damage": 12,
+          "unchanged": 343,
+          "unique_patients_any_unchanged": 95,
+          "repair": 21,
+          "unique_patients_any_repair": 14
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 49,
+          "unique_patients_any_damage": 36,
+          "unchanged": 1616,
+          "unique_patients_any_unchanged": 425,
+          "repair": 35,
+          "unique_patients_any_repair": 27
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 48,
+          "unique_patients_any_damage": 40,
+          "unchanged": 1590,
+          "unique_patients_any_unchanged": 416,
+          "repair": 26,
+          "unique_patients_any_repair": 19
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 8,
+          "unique_patients_any_damage": 7,
+          "unchanged": 189,
+          "unique_patients_any_unchanged": 51,
+          "repair": 7,
+          "unique_patients_any_repair": 6
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.7070368652909809,
+          "error_ap": 0.39639379769715666,
+          "aurc": 0.12386992446200641,
+          "error_count": 227,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.509477162068166,
+          "error_ap": 0.25682365027732107,
+          "aurc": 0.228789036469029,
+          "error_count": 227,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5321122188731742,
+          "error_ap": 0.2527285818537296,
+          "aurc": 0.19838751839421345,
+          "error_count": 227,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5864363552051937,
+          "error_ap": 0.2921693409800922,
+          "aurc": 0.1968340841812173,
+          "error_count": 227,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_noise/moderate/L_CC": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 124,
+        "unique_patients_any_damage": 97,
+        "unchanged": 3736,
+        "unique_patients_any_unchanged": 987,
+        "repair": 88,
+        "unique_patients_any_repair": 66
+      },
+      "accuracy": 0.7781155015197568,
+      "prediction_flips": 213,
+      "all_removals_unchanged_and_parent_wrong": 153,
+      "same_prediction_tv": {
+        "count": 3735,
+        "mean": 0.11864353716373444,
+        "median": 0.10874750465154648,
+        "p90": 0.20812861621379852
+      },
+      "same_prediction_tv_gt_1e_6": 3735,
+      "same_prediction_tv_at_least_0_05": 3197,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.10743670165538788,
+        "median": -0.10331806540489197,
+        "p90": -0.018439466133713722
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07715682685375214,
+        "median": 0.07583033293485641,
+        "p90": 0.10680674016475677
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 31,
+          "unique_patients_any_damage": 31,
+          "unchanged": 932,
+          "unique_patients_any_unchanged": 932,
+          "repair": 24,
+          "unique_patients_any_repair": 24
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 33,
+          "unique_patients_any_damage": 33,
+          "unchanged": 936,
+          "unique_patients_any_unchanged": 936,
+          "repair": 18,
+          "unique_patients_any_repair": 18
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 27,
+          "unique_patients_any_damage": 27,
+          "unchanged": 946,
+          "unique_patients_any_unchanged": 946,
+          "repair": 14,
+          "unique_patients_any_repair": 14
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 33,
+          "unique_patients_any_damage": 33,
+          "unchanged": 922,
+          "unique_patients_any_unchanged": 922,
+          "repair": 32,
+          "unique_patients_any_repair": 32
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 20,
+          "unique_patients_any_damage": 17,
+          "unchanged": 348,
+          "unique_patients_any_unchanged": 95,
+          "repair": 12,
+          "unique_patients_any_repair": 9
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 44,
+          "unique_patients_any_damage": 35,
+          "unchanged": 1618,
+          "unique_patients_any_unchanged": 425,
+          "repair": 38,
+          "unique_patients_any_repair": 27
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 52,
+          "unique_patients_any_damage": 40,
+          "unchanged": 1584,
+          "unique_patients_any_unchanged": 416,
+          "repair": 28,
+          "unique_patients_any_repair": 21
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 8,
+          "unique_patients_any_damage": 5,
+          "unchanged": 186,
+          "unique_patients_any_unchanged": 51,
+          "repair": 10,
+          "unique_patients_any_repair": 9
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.7039217085235921,
+          "error_ap": 0.3706512013631902,
+          "aurc": 0.12243651149674863,
+          "error_count": 219,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.505642361111111,
+          "error_ap": 0.24043332695144634,
+          "aurc": 0.21522728866615437,
+          "error_count": 219,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5655025209284628,
+          "error_ap": 0.2677371736421932,
+          "aurc": 0.17426067859226965,
+          "error_count": 219,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.590783152587519,
+          "error_ap": 0.283050872743692,
+          "aurc": 0.1878060707642524,
+          "error_count": 219,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_noise/moderate/L_MLO": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 140,
+        "unique_patients_any_damage": 105,
+        "unchanged": 3722,
+        "unique_patients_any_unchanged": 987,
+        "repair": 86,
+        "unique_patients_any_repair": 66
+      },
+      "accuracy": 0.78419452887538,
+      "prediction_flips": 226,
+      "all_removals_unchanged_and_parent_wrong": 147,
+      "same_prediction_tv": {
+        "count": 3722,
+        "mean": 0.12278559058904648,
+        "median": 0.113233782351017,
+        "p90": 0.21229766309261322
+      },
+      "same_prediction_tv_gt_1e_6": 3722,
+      "same_prediction_tv_at_least_0_05": 3278,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.11134669184684753,
+        "median": -0.1078597903251648,
+        "p90": -0.019510552287101746
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07832463085651398,
+        "median": 0.07408751547336578,
+        "p90": 0.11724797636270523
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 38,
+          "unique_patients_any_damage": 38,
+          "unchanged": 926,
+          "unique_patients_any_unchanged": 926,
+          "repair": 23,
+          "unique_patients_any_repair": 23
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 35,
+          "unique_patients_any_damage": 35,
+          "unchanged": 928,
+          "unique_patients_any_unchanged": 928,
+          "repair": 24,
+          "unique_patients_any_repair": 24
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 34,
+          "unique_patients_any_damage": 34,
+          "unchanged": 934,
+          "unique_patients_any_unchanged": 934,
+          "repair": 19,
+          "unique_patients_any_repair": 19
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 33,
+          "unique_patients_any_damage": 33,
+          "unchanged": 934,
+          "unique_patients_any_unchanged": 934,
+          "repair": 20,
+          "unique_patients_any_repair": 20
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 22,
+          "unique_patients_any_damage": 18,
+          "unchanged": 346,
+          "unique_patients_any_unchanged": 95,
+          "repair": 12,
+          "unique_patients_any_repair": 9
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 60,
+          "unique_patients_any_damage": 42,
+          "unchanged": 1607,
+          "unique_patients_any_unchanged": 425,
+          "repair": 33,
+          "unique_patients_any_repair": 25
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 52,
+          "unique_patients_any_damage": 41,
+          "unchanged": 1585,
+          "unique_patients_any_unchanged": 416,
+          "repair": 27,
+          "unique_patients_any_repair": 21
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 6,
+          "unique_patients_any_damage": 4,
+          "unchanged": 184,
+          "unique_patients_any_unchanged": 51,
+          "repair": 14,
+          "unique_patients_any_repair": 11
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.6875022746296903,
+          "error_ap": 0.3625902295168658,
+          "aurc": 0.12247179705249796,
+          "error_count": 213,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.507806529097063,
+          "error_ap": 0.2451667973045193,
+          "aurc": 0.2190943928272084,
+          "error_count": 213,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5261248802028363,
+          "error_ap": 0.23527861944433553,
+          "aurc": 0.18850618019784518,
+          "error_count": 213,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5863904356370783,
+          "error_ap": 0.26674453202437265,
+          "aurc": 0.18358035805003312,
+          "error_count": 213,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_noise/moderate/R_CC": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 141,
+        "unique_patients_any_damage": 106,
+        "unchanged": 3710,
+        "unique_patients_any_unchanged": 987,
+        "repair": 97,
+        "unique_patients_any_repair": 70
+      },
+      "accuracy": 0.7781155015197568,
+      "prediction_flips": 238,
+      "all_removals_unchanged_and_parent_wrong": 149,
+      "same_prediction_tv": {
+        "count": 3710,
+        "mean": 0.11909722536802292,
+        "median": 0.11069739609956741,
+        "p90": 0.20780029892921448
+      },
+      "same_prediction_tv_gt_1e_6": 3710,
+      "same_prediction_tv_at_least_0_05": 3181,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.10660526156425476,
+        "median": -0.10368038713932037,
+        "p90": -0.016916610300540924
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07686305791139603,
+        "median": 0.0756036713719368,
+        "p90": 0.10659831762313843
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 38,
+          "unique_patients_any_damage": 38,
+          "unchanged": 927,
+          "unique_patients_any_unchanged": 927,
+          "repair": 22,
+          "unique_patients_any_repair": 22
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 33,
+          "unique_patients_any_damage": 33,
+          "unchanged": 938,
+          "unique_patients_any_unchanged": 938,
+          "repair": 16,
+          "unique_patients_any_repair": 16
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 31,
+          "unique_patients_any_damage": 31,
+          "unchanged": 933,
+          "unique_patients_any_unchanged": 933,
+          "repair": 23,
+          "unique_patients_any_repair": 23
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 39,
+          "unique_patients_any_damage": 39,
+          "unchanged": 912,
+          "unique_patients_any_unchanged": 912,
+          "repair": 36,
+          "unique_patients_any_repair": 36
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 22,
+          "unique_patients_any_damage": 18,
+          "unchanged": 344,
+          "unique_patients_any_unchanged": 95,
+          "repair": 14,
+          "unique_patients_any_repair": 10
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 55,
+          "unique_patients_any_damage": 39,
+          "unchanged": 1610,
+          "unique_patients_any_unchanged": 425,
+          "repair": 35,
+          "unique_patients_any_repair": 24
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 55,
+          "unique_patients_any_damage": 41,
+          "unchanged": 1580,
+          "unique_patients_any_unchanged": 416,
+          "repair": 29,
+          "unique_patients_any_repair": 23
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 9,
+          "unique_patients_any_damage": 8,
+          "unchanged": 176,
+          "unique_patients_any_unchanged": 51,
+          "repair": 19,
+          "unique_patients_any_repair": 13
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.6983269121004566,
+          "error_ap": 0.36148086038045885,
+          "aurc": 0.12804397747315582,
+          "error_count": 219,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.5092513318112633,
+          "error_ap": 0.23815156797326512,
+          "aurc": 0.21428227929136862,
+          "error_count": 219,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5686596270928462,
+          "error_ap": 0.2798132516093956,
+          "aurc": 0.18097023173138607,
+          "error_count": 219,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.591865249238965,
+          "error_ap": 0.2825219664371314,
+          "aurc": 0.18716976913345418,
+          "error_count": 219,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_noise/moderate/R_MLO": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 127,
+        "unique_patients_any_damage": 93,
+        "unchanged": 3731,
+        "unique_patients_any_unchanged": 987,
+        "repair": 90,
+        "unique_patients_any_repair": 63
+      },
+      "accuracy": 0.7821681864235056,
+      "prediction_flips": 221,
+      "all_removals_unchanged_and_parent_wrong": 152,
+      "same_prediction_tv": {
+        "count": 3727,
+        "mean": 0.123646080493927,
+        "median": 0.11413360387086868,
+        "p90": 0.21396687626838684
+      },
+      "same_prediction_tv_gt_1e_6": 3727,
+      "same_prediction_tv_at_least_0_05": 3316,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.11160972714424133,
+        "median": -0.10784411430358887,
+        "p90": -0.02125055156648159
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07810583710670471,
+        "median": 0.07218361645936966,
+        "p90": 0.1198747530579567
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 35,
+          "unique_patients_any_damage": 35,
+          "unchanged": 929,
+          "unique_patients_any_unchanged": 929,
+          "repair": 23,
+          "unique_patients_any_repair": 23
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 27,
+          "unique_patients_any_damage": 27,
+          "unchanged": 941,
+          "unique_patients_any_unchanged": 941,
+          "repair": 19,
+          "unique_patients_any_repair": 19
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 35,
+          "unique_patients_any_damage": 35,
+          "unchanged": 934,
+          "unique_patients_any_unchanged": 934,
+          "repair": 18,
+          "unique_patients_any_repair": 18
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 30,
+          "unique_patients_any_damage": 30,
+          "unchanged": 927,
+          "unique_patients_any_unchanged": 927,
+          "repair": 30,
+          "unique_patients_any_repair": 30
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 17,
+          "unique_patients_any_damage": 13,
+          "unchanged": 350,
+          "unique_patients_any_unchanged": 95,
+          "repair": 13,
+          "unique_patients_any_repair": 10
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 49,
+          "unique_patients_any_damage": 38,
+          "unchanged": 1619,
+          "unique_patients_any_unchanged": 425,
+          "repair": 32,
+          "unique_patients_any_repair": 21
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 55,
+          "unique_patients_any_damage": 37,
+          "unchanged": 1572,
+          "unique_patients_any_unchanged": 416,
+          "repair": 37,
+          "unique_patients_any_repair": 26
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 6,
+          "unique_patients_any_damage": 5,
+          "unchanged": 190,
+          "unique_patients_any_unchanged": 51,
+          "repair": 8,
+          "unique_patients_any_repair": 6
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.6790396433305217,
+          "error_ap": 0.3472182004940193,
+          "aurc": 0.12590996700074913,
+          "error_count": 215,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.5263766718881793,
+          "error_ap": 0.24271588312146034,
+          "aurc": 0.20492844600534846,
+          "error_count": 215,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5410591637546693,
+          "error_ap": 0.2518849414757165,
+          "aurc": 0.1857517575445083,
+          "error_count": 215,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5927220147005664,
+          "error_ap": 0.2860537920252061,
+          "aurc": 0.18375115980975093,
+          "error_count": 215,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_noise/moderate/common": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 131,
+        "unique_patients_any_damage": 101,
+        "unchanged": 3695,
+        "unique_patients_any_unchanged": 987,
+        "repair": 122,
+        "unique_patients_any_repair": 89
+      },
+      "accuracy": 0.7355623100303952,
+      "prediction_flips": 256,
+      "all_removals_unchanged_and_parent_wrong": 172,
+      "same_prediction_tv": {
+        "count": 3692,
+        "mean": 0.12179579585790634,
+        "median": 0.11067080497741699,
+        "p90": 0.22230695188045502
+      },
+      "same_prediction_tv_gt_1e_6": 3692,
+      "same_prediction_tv_at_least_0_05": 3071,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.10834725946187973,
+        "median": -0.10332748293876648,
+        "p90": -0.008869526907801628
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.06897832453250885,
+        "median": 0.06760524958372116,
+        "p90": 0.0977829322218895
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 32,
+          "unique_patients_any_damage": 32,
+          "unchanged": 921,
+          "unique_patients_any_unchanged": 921,
+          "repair": 34,
+          "unique_patients_any_repair": 34
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 34,
+          "unique_patients_any_damage": 34,
+          "unchanged": 924,
+          "unique_patients_any_unchanged": 924,
+          "repair": 29,
+          "unique_patients_any_repair": 29
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 31,
+          "unique_patients_any_damage": 31,
+          "unchanged": 931,
+          "unique_patients_any_unchanged": 931,
+          "repair": 25,
+          "unique_patients_any_repair": 25
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 34,
+          "unique_patients_any_damage": 34,
+          "unchanged": 919,
+          "unique_patients_any_unchanged": 919,
+          "repair": 34,
+          "unique_patients_any_repair": 34
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 18,
+          "unique_patients_any_damage": 15,
+          "unchanged": 344,
+          "unique_patients_any_unchanged": 95,
+          "repair": 18,
+          "unique_patients_any_repair": 12
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 51,
+          "unique_patients_any_damage": 38,
+          "unchanged": 1600,
+          "unique_patients_any_unchanged": 425,
+          "repair": 49,
+          "unique_patients_any_repair": 36
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 54,
+          "unique_patients_any_damage": 41,
+          "unchanged": 1566,
+          "unique_patients_any_unchanged": 416,
+          "repair": 44,
+          "unique_patients_any_repair": 32
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 8,
+          "unique_patients_any_damage": 7,
+          "unchanged": 185,
+          "unique_patients_any_unchanged": 51,
+          "repair": 11,
+          "unique_patients_any_repair": 9
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.6839581816070844,
+          "error_ap": 0.43832206877859314,
+          "aurc": 0.17338279739845064,
+          "error_count": 261,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.530756889691059,
+          "error_ap": 0.31520822624094225,
+          "aurc": 0.2539847984846652,
+          "error_count": 261,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5652185385727706,
+          "error_ap": 0.31747523567131225,
+          "aurc": 0.21938223975795426,
+          "error_count": 261,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.6042240587695132,
+          "error_ap": 0.3454561489201132,
+          "aurc": 0.21970606111675386,
+          "error_count": 261,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_blur/mild/L_CC": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 109,
+        "unique_patients_any_damage": 81,
+        "unchanged": 3758,
+        "unique_patients_any_unchanged": 987,
+        "repair": 81,
+        "unique_patients_any_repair": 63
+      },
+      "accuracy": 0.7760891590678825,
+      "prediction_flips": 191,
+      "all_removals_unchanged_and_parent_wrong": 158,
+      "same_prediction_tv": {
+        "count": 3757,
+        "mean": 0.12257154285907745,
+        "median": 0.11386044323444366,
+        "p90": 0.21061670780181885
+      },
+      "same_prediction_tv_gt_1e_6": 3757,
+      "same_prediction_tv_at_least_0_05": 3300,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.11237988620996475,
+        "median": -0.10990044474601746,
+        "p90": -0.024964308366179466
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.08012945204973221,
+        "median": 0.07833309471607208,
+        "p90": 0.11205293983221054
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 25,
+          "unique_patients_any_damage": 25,
+          "unchanged": 942,
+          "unique_patients_any_unchanged": 942,
+          "repair": 20,
+          "unique_patients_any_repair": 20
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 33,
+          "unique_patients_any_damage": 33,
+          "unchanged": 934,
+          "unique_patients_any_unchanged": 934,
+          "repair": 20,
+          "unique_patients_any_repair": 20
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 25,
+          "unique_patients_any_damage": 25,
+          "unchanged": 945,
+          "unique_patients_any_unchanged": 945,
+          "repair": 17,
+          "unique_patients_any_repair": 17
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 26,
+          "unique_patients_any_damage": 26,
+          "unchanged": 937,
+          "unique_patients_any_unchanged": 937,
+          "repair": 24,
+          "unique_patients_any_repair": 24
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 16,
+          "unique_patients_any_damage": 12,
+          "unchanged": 356,
+          "unique_patients_any_unchanged": 95,
+          "repair": 8,
+          "unique_patients_any_repair": 8
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 58,
+          "unique_patients_any_damage": 43,
+          "unchanged": 1603,
+          "unique_patients_any_unchanged": 425,
+          "repair": 39,
+          "unique_patients_any_repair": 29
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 31,
+          "unique_patients_any_damage": 23,
+          "unchanged": 1610,
+          "unique_patients_any_unchanged": 416,
+          "repair": 23,
+          "unique_patients_any_repair": 17
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 4,
+          "unique_patients_any_damage": 3,
+          "unchanged": 189,
+          "unique_patients_any_unchanged": 51,
+          "repair": 11,
+          "unique_patients_any_repair": 9
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.7094739080609146,
+          "error_ap": 0.37855276720282666,
+          "aurc": 0.12128375256100404,
+          "error_count": 221,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.4950320758952305,
+          "error_ap": 0.23704965666891337,
+          "aurc": 0.22261415668823184,
+          "error_count": 221,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5164160060489349,
+          "error_ap": 0.23818109733880366,
+          "aurc": 0.19611246699658028,
+          "error_count": 221,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5910530108809943,
+          "error_ap": 0.2830667164761607,
+          "aurc": 0.1895378707662101,
+          "error_count": 221,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_blur/mild/L_MLO": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 123,
+        "unique_patients_any_damage": 88,
+        "unchanged": 3722,
+        "unique_patients_any_unchanged": 987,
+        "repair": 103,
+        "unique_patients_any_repair": 77
+      },
+      "accuracy": 0.7710233029381965,
+      "prediction_flips": 227,
+      "all_removals_unchanged_and_parent_wrong": 149,
+      "same_prediction_tv": {
+        "count": 3721,
+        "mean": 0.122972771525383,
+        "median": 0.11400659382343292,
+        "p90": 0.21126049757003784
+      },
+      "same_prediction_tv_gt_1e_6": 3721,
+      "same_prediction_tv_at_least_0_05": 3258,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.1109907478094101,
+        "median": -0.1082836389541626,
+        "p90": -0.020075831562280655
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07960706949234009,
+        "median": 0.07752183824777603,
+        "p90": 0.11138129979372025
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 32,
+          "unique_patients_any_damage": 32,
+          "unchanged": 935,
+          "unique_patients_any_unchanged": 935,
+          "repair": 20,
+          "unique_patients_any_repair": 20
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 39,
+          "unique_patients_any_damage": 39,
+          "unchanged": 907,
+          "unique_patients_any_unchanged": 907,
+          "repair": 41,
+          "unique_patients_any_repair": 41
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 29,
+          "unique_patients_any_damage": 29,
+          "unchanged": 941,
+          "unique_patients_any_unchanged": 941,
+          "repair": 17,
+          "unique_patients_any_repair": 17
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 23,
+          "unique_patients_any_damage": 23,
+          "unchanged": 939,
+          "unique_patients_any_unchanged": 939,
+          "repair": 25,
+          "unique_patients_any_repair": 25
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 17,
+          "unique_patients_any_damage": 14,
+          "unchanged": 345,
+          "unique_patients_any_unchanged": 95,
+          "repair": 18,
+          "unique_patients_any_repair": 13
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 64,
+          "unique_patients_any_damage": 41,
+          "unchanged": 1587,
+          "unique_patients_any_unchanged": 425,
+          "repair": 49,
+          "unique_patients_any_repair": 38
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 37,
+          "unique_patients_any_damage": 29,
+          "unchanged": 1599,
+          "unique_patients_any_unchanged": 416,
+          "repair": 28,
+          "unique_patients_any_repair": 21
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 5,
+          "unique_patients_any_damage": 4,
+          "unchanged": 191,
+          "unique_patients_any_unchanged": 51,
+          "repair": 8,
+          "unique_patients_any_repair": 5
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.716837416999058,
+          "error_ap": 0.40940359659530373,
+          "aurc": 0.12302137040955685,
+          "error_count": 226,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.49310408986777987,
+          "error_ap": 0.24014633037266295,
+          "aurc": 0.22826772253619404,
+          "error_count": 226,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5581849685439513,
+          "error_ap": 0.2690715783357088,
+          "aurc": 0.1849131044304093,
+          "error_count": 226,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.6136109915923389,
+          "error_ap": 0.30739082540937374,
+          "aurc": 0.18485672660730895,
+          "error_count": 226,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_blur/mild/R_CC": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 120,
+        "unique_patients_any_damage": 91,
+        "unchanged": 3750,
+        "unique_patients_any_unchanged": 987,
+        "repair": 78,
+        "unique_patients_any_repair": 61
+      },
+      "accuracy": 0.7801418439716312,
+      "prediction_flips": 199,
+      "all_removals_unchanged_and_parent_wrong": 156,
+      "same_prediction_tv": {
+        "count": 3749,
+        "mean": 0.12349124997854233,
+        "median": 0.11355453729629517,
+        "p90": 0.21441759169101715
+      },
+      "same_prediction_tv_gt_1e_6": 3749,
+      "same_prediction_tv_at_least_0_05": 3297,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.11240861564874649,
+        "median": -0.10867469012737274,
+        "p90": -0.022468652576208115
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07998853921890259,
+        "median": 0.07839860022068024,
+        "p90": 0.11181017011404037
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 37,
+          "unique_patients_any_damage": 37,
+          "unchanged": 928,
+          "unique_patients_any_unchanged": 928,
+          "repair": 22,
+          "unique_patients_any_repair": 22
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 31,
+          "unique_patients_any_damage": 31,
+          "unchanged": 940,
+          "unique_patients_any_unchanged": 940,
+          "repair": 16,
+          "unique_patients_any_repair": 16
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 28,
+          "unique_patients_any_damage": 28,
+          "unchanged": 941,
+          "unique_patients_any_unchanged": 941,
+          "repair": 18,
+          "unique_patients_any_repair": 18
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 24,
+          "unique_patients_any_damage": 24,
+          "unchanged": 941,
+          "unique_patients_any_unchanged": 941,
+          "repair": 22,
+          "unique_patients_any_repair": 22
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 19,
+          "unique_patients_any_damage": 15,
+          "unchanged": 348,
+          "unique_patients_any_unchanged": 95,
+          "repair": 13,
+          "unique_patients_any_repair": 11
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 57,
+          "unique_patients_any_damage": 42,
+          "unchanged": 1606,
+          "unique_patients_any_unchanged": 425,
+          "repair": 37,
+          "unique_patients_any_repair": 28
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 39,
+          "unique_patients_any_damage": 29,
+          "unchanged": 1604,
+          "unique_patients_any_unchanged": 416,
+          "repair": 21,
+          "unique_patients_any_repair": 16
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 5,
+          "unique_patients_any_damage": 5,
+          "unchanged": 192,
+          "unique_patients_any_unchanged": 51,
+          "repair": 7,
+          "unique_patients_any_repair": 6
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.6940511101801423,
+          "error_ap": 0.3561721667751781,
+          "aurc": 0.12494192379376357,
+          "error_count": 217,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.504374887785026,
+          "error_ap": 0.24034724496126547,
+          "aurc": 0.21491596601803095,
+          "error_count": 217,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.551517146448022,
+          "error_ap": 0.2678064414211294,
+          "aurc": 0.18137554104761613,
+          "error_count": 217,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5829642707522892,
+          "error_ap": 0.2703828687316111,
+          "aurc": 0.1888000648745671,
+          "error_count": 217,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_blur/mild/R_MLO": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 137,
+        "unique_patients_any_damage": 99,
+        "unchanged": 3712,
+        "unique_patients_any_unchanged": 987,
+        "repair": 99,
+        "unique_patients_any_repair": 74
+      },
+      "accuracy": 0.7781155015197568,
+      "prediction_flips": 237,
+      "all_removals_unchanged_and_parent_wrong": 145,
+      "same_prediction_tv": {
+        "count": 3711,
+        "mean": 0.12334220111370087,
+        "median": 0.11384644359350204,
+        "p90": 0.21459972858428955
+      },
+      "same_prediction_tv_gt_1e_6": 3711,
+      "same_prediction_tv_at_least_0_05": 3264,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.11125384271144867,
+        "median": -0.10804295539855957,
+        "p90": -0.019135063514113426
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.0795392394065857,
+        "median": 0.07735307514667511,
+        "p90": 0.11150294542312622
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 36,
+          "unique_patients_any_damage": 36,
+          "unchanged": 932,
+          "unique_patients_any_unchanged": 932,
+          "repair": 19,
+          "unique_patients_any_repair": 19
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 35,
+          "unique_patients_any_damage": 35,
+          "unchanged": 928,
+          "unique_patients_any_unchanged": 928,
+          "repair": 24,
+          "unique_patients_any_repair": 24
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 28,
+          "unique_patients_any_damage": 28,
+          "unchanged": 945,
+          "unique_patients_any_unchanged": 945,
+          "repair": 14,
+          "unique_patients_any_repair": 14
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 38,
+          "unique_patients_any_damage": 38,
+          "unchanged": 907,
+          "unique_patients_any_unchanged": 907,
+          "repair": 42,
+          "unique_patients_any_repair": 42
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 14,
+          "unique_patients_any_damage": 12,
+          "unchanged": 347,
+          "unique_patients_any_unchanged": 95,
+          "repair": 19,
+          "unique_patients_any_repair": 16
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 73,
+          "unique_patients_any_damage": 50,
+          "unchanged": 1584,
+          "unique_patients_any_unchanged": 425,
+          "repair": 43,
+          "unique_patients_any_repair": 33
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 43,
+          "unique_patients_any_damage": 32,
+          "unchanged": 1587,
+          "unique_patients_any_unchanged": 416,
+          "repair": 34,
+          "unique_patients_any_repair": 22
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 7,
+          "unique_patients_any_damage": 5,
+          "unchanged": 194,
+          "unique_patients_any_unchanged": 51,
+          "repair": 3,
+          "unique_patients_any_repair": 3
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.7040287290715372,
+          "error_ap": 0.3821501694746259,
+          "aurc": 0.12046212823726905,
+          "error_count": 219,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.504976455479452,
+          "error_ap": 0.23129296611198152,
+          "aurc": 0.21497070111759267,
+          "error_count": 219,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5631123953576864,
+          "error_ap": 0.2769922331731871,
+          "aurc": 0.18012795946371818,
+          "error_count": 219,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.6060127711187215,
+          "error_ap": 0.2901229959274093,
+          "aurc": 0.18148737286314218,
+          "error_count": 219,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_blur/mild/common": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 78,
+        "unique_patients_any_damage": 61,
+        "unchanged": 3785,
+        "unique_patients_any_unchanged": 987,
+        "repair": 85,
+        "unique_patients_any_repair": 64
+      },
+      "accuracy": 0.7264437689969605,
+      "prediction_flips": 169,
+      "all_removals_unchanged_and_parent_wrong": 206,
+      "same_prediction_tv": {
+        "count": 3779,
+        "mean": 0.11894053965806961,
+        "median": 0.10993720591068268,
+        "p90": 0.20530368387699127
+      },
+      "same_prediction_tv_gt_1e_6": 3779,
+      "same_prediction_tv_at_least_0_05": 3263,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.1101624071598053,
+        "median": -0.10417664051055908,
+        "p90": -0.02593470923602581
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07919333875179291,
+        "median": 0.07699128240346909,
+        "p90": 0.11285439878702164
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 17,
+          "unique_patients_any_damage": 17,
+          "unchanged": 951,
+          "unique_patients_any_unchanged": 951,
+          "repair": 19,
+          "unique_patients_any_repair": 19
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 22,
+          "unique_patients_any_damage": 22,
+          "unchanged": 942,
+          "unique_patients_any_unchanged": 942,
+          "repair": 23,
+          "unique_patients_any_repair": 23
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 16,
+          "unique_patients_any_damage": 16,
+          "unchanged": 955,
+          "unique_patients_any_unchanged": 955,
+          "repair": 16,
+          "unique_patients_any_repair": 16
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 23,
+          "unique_patients_any_damage": 23,
+          "unchanged": 937,
+          "unique_patients_any_unchanged": 937,
+          "repair": 27,
+          "unique_patients_any_repair": 27
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 9,
+          "unique_patients_any_damage": 7,
+          "unchanged": 351,
+          "unique_patients_any_unchanged": 95,
+          "repair": 20,
+          "unique_patients_any_repair": 12
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 48,
+          "unique_patients_any_damage": 35,
+          "unchanged": 1612,
+          "unique_patients_any_unchanged": 425,
+          "repair": 40,
+          "unique_patients_any_repair": 31
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 15,
+          "unique_patients_any_damage": 13,
+          "unchanged": 1633,
+          "unique_patients_any_unchanged": 416,
+          "repair": 16,
+          "unique_patients_any_repair": 14
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 6,
+          "unique_patients_any_damage": 6,
+          "unchanged": 189,
+          "unique_patients_any_unchanged": 51,
+          "repair": 9,
+          "unique_patients_any_repair": 7
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.6932279559894622,
+          "error_ap": 0.4387225627468643,
+          "aurc": 0.16426071913349094,
+          "error_count": 270,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.45534893331267107,
+          "error_ap": 0.2597850586783827,
+          "aurc": 0.30057004944575244,
+          "error_count": 270,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.584715119582623,
+          "error_ap": 0.33073831878065396,
+          "aurc": 0.20910421683424693,
+          "error_count": 270,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5837982333798233,
+          "error_ap": 0.34271686096690224,
+          "aurc": 0.2379724982587157,
+          "error_count": 270,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_blur/moderate/L_CC": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 111,
+        "unique_patients_any_damage": 82,
+        "unchanged": 3741,
+        "unique_patients_any_unchanged": 987,
+        "repair": 96,
+        "unique_patients_any_repair": 68
+      },
+      "accuracy": 0.7669706180344478,
+      "prediction_flips": 208,
+      "all_removals_unchanged_and_parent_wrong": 162,
+      "same_prediction_tv": {
+        "count": 3740,
+        "mean": 0.12502726912498474,
+        "median": 0.11596666276454926,
+        "p90": 0.21666143834590912
+      },
+      "same_prediction_tv_gt_1e_6": 3740,
+      "same_prediction_tv_at_least_0_05": 3254,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.11294084787368774,
+        "median": -0.11087638139724731,
+        "p90": -0.018802644684910774
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07903087884187698,
+        "median": 0.07756238430738449,
+        "p90": 0.10898862779140472
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 24,
+          "unique_patients_any_damage": 24,
+          "unchanged": 935,
+          "unique_patients_any_unchanged": 935,
+          "repair": 28,
+          "unique_patients_any_repair": 28
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 33,
+          "unique_patients_any_damage": 33,
+          "unchanged": 927,
+          "unique_patients_any_unchanged": 927,
+          "repair": 27,
+          "unique_patients_any_repair": 27
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 29,
+          "unique_patients_any_damage": 29,
+          "unchanged": 941,
+          "unique_patients_any_unchanged": 941,
+          "repair": 17,
+          "unique_patients_any_repair": 17
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 25,
+          "unique_patients_any_damage": 25,
+          "unchanged": 938,
+          "unique_patients_any_unchanged": 938,
+          "repair": 24,
+          "unique_patients_any_repair": 24
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 17,
+          "unique_patients_any_damage": 12,
+          "unchanged": 352,
+          "unique_patients_any_unchanged": 95,
+          "repair": 11,
+          "unique_patients_any_repair": 8
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 54,
+          "unique_patients_any_damage": 42,
+          "unchanged": 1600,
+          "unique_patients_any_unchanged": 425,
+          "repair": 46,
+          "unique_patients_any_repair": 34
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 37,
+          "unique_patients_any_damage": 25,
+          "unchanged": 1597,
+          "unique_patients_any_unchanged": 416,
+          "repair": 30,
+          "unique_patients_any_repair": 19
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 3,
+          "unique_patients_any_damage": 3,
+          "unchanged": 192,
+          "unique_patients_any_unchanged": 51,
+          "repair": 9,
+          "unique_patients_any_repair": 7
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.7225317328125898,
+          "error_ap": 0.4117974774233831,
+          "aurc": 0.12390668408641053,
+          "error_count": 230,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.4995462638561829,
+          "error_ap": 0.23985086662908842,
+          "aurc": 0.23004378973980177,
+          "error_count": 230,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.524616621675952,
+          "error_ap": 0.2491611338207801,
+          "aurc": 0.197847022044076,
+          "error_count": 230,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5964993394980185,
+          "error_ap": 0.30458967829504063,
+          "aurc": 0.19574304131181344,
+          "error_count": 230,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_blur/moderate/L_MLO": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 134,
+        "unique_patients_any_damage": 96,
+        "unchanged": 3703,
+        "unique_patients_any_unchanged": 987,
+        "repair": 111,
+        "unique_patients_any_repair": 84
+      },
+      "accuracy": 0.7619047619047619,
+      "prediction_flips": 246,
+      "all_removals_unchanged_and_parent_wrong": 151,
+      "same_prediction_tv": {
+        "count": 3702,
+        "mean": 0.1267113983631134,
+        "median": 0.11692611873149872,
+        "p90": 0.22076000273227692
+      },
+      "same_prediction_tv_gt_1e_6": 3702,
+      "same_prediction_tv_at_least_0_05": 3235,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.11295537650585175,
+        "median": -0.1093771755695343,
+        "p90": -0.014768597669899464
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07843314111232758,
+        "median": 0.07454858720302582,
+        "p90": 0.11489582806825638
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 35,
+          "unique_patients_any_damage": 35,
+          "unchanged": 931,
+          "unique_patients_any_unchanged": 931,
+          "repair": 21,
+          "unique_patients_any_repair": 21
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 43,
+          "unique_patients_any_damage": 43,
+          "unchanged": 890,
+          "unique_patients_any_unchanged": 890,
+          "repair": 54,
+          "unique_patients_any_repair": 54
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 24,
+          "unique_patients_any_damage": 24,
+          "unchanged": 949,
+          "unique_patients_any_unchanged": 949,
+          "repair": 14,
+          "unique_patients_any_repair": 14
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 32,
+          "unique_patients_any_damage": 32,
+          "unchanged": 933,
+          "unique_patients_any_unchanged": 933,
+          "repair": 22,
+          "unique_patients_any_repair": 22
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 17,
+          "unique_patients_any_damage": 12,
+          "unchanged": 339,
+          "unique_patients_any_unchanged": 95,
+          "repair": 24,
+          "unique_patients_any_repair": 17
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 71,
+          "unique_patients_any_damage": 46,
+          "unchanged": 1573,
+          "unique_patients_any_unchanged": 425,
+          "repair": 56,
+          "unique_patients_any_repair": 44
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 39,
+          "unique_patients_any_damage": 32,
+          "unchanged": 1602,
+          "unique_patients_any_unchanged": 416,
+          "repair": 23,
+          "unique_patients_any_repair": 17
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 7,
+          "unique_patients_any_damage": 6,
+          "unchanged": 189,
+          "unique_patients_any_unchanged": 51,
+          "repair": 8,
+          "unique_patients_any_repair": 6
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.7104515617926664,
+          "error_ap": 0.4005183016688872,
+          "aurc": 0.13058185156153124,
+          "error_count": 235,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.4959087822544138,
+          "error_ap": 0.25562177730877156,
+          "aurc": 0.23511466536070075,
+          "error_count": 235,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5798381620642825,
+          "error_ap": 0.29370446060742184,
+          "aurc": 0.18801535277764128,
+          "error_count": 235,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.6158725667722952,
+          "error_ap": 0.31693106635166735,
+          "aurc": 0.19144323905162225,
+          "error_count": 235,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_blur/moderate/R_CC": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 131,
+        "unique_patients_any_damage": 103,
+        "unchanged": 3725,
+        "unique_patients_any_unchanged": 987,
+        "repair": 92,
+        "unique_patients_any_repair": 71
+      },
+      "accuracy": 0.7710233029381965,
+      "prediction_flips": 225,
+      "all_removals_unchanged_and_parent_wrong": 155,
+      "same_prediction_tv": {
+        "count": 3723,
+        "mean": 0.12634460628032684,
+        "median": 0.1150653064250946,
+        "p90": 0.22197064757347107
+      },
+      "same_prediction_tv_gt_1e_6": 3723,
+      "same_prediction_tv_at_least_0_05": 3255,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.1129370629787445,
+        "median": -0.10950002074241638,
+        "p90": -0.01674722135066986
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07893840968608856,
+        "median": 0.07793141156435013,
+        "p90": 0.1090555265545845
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 43,
+          "unique_patients_any_damage": 43,
+          "unchanged": 922,
+          "unique_patients_any_unchanged": 922,
+          "repair": 22,
+          "unique_patients_any_repair": 22
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 29,
+          "unique_patients_any_damage": 29,
+          "unchanged": 938,
+          "unique_patients_any_unchanged": 938,
+          "repair": 20,
+          "unique_patients_any_repair": 20
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 30,
+          "unique_patients_any_damage": 30,
+          "unchanged": 928,
+          "unique_patients_any_unchanged": 928,
+          "repair": 29,
+          "unique_patients_any_repair": 29
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 29,
+          "unique_patients_any_damage": 29,
+          "unchanged": 937,
+          "unique_patients_any_unchanged": 937,
+          "repair": 21,
+          "unique_patients_any_repair": 21
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 23,
+          "unique_patients_any_damage": 18,
+          "unchanged": 347,
+          "unique_patients_any_unchanged": 95,
+          "repair": 10,
+          "unique_patients_any_repair": 8
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 66,
+          "unique_patients_any_damage": 49,
+          "unchanged": 1591,
+          "unique_patients_any_unchanged": 425,
+          "repair": 43,
+          "unique_patients_any_repair": 35
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 35,
+          "unique_patients_any_damage": 30,
+          "unchanged": 1596,
+          "unique_patients_any_unchanged": 416,
+          "repair": 33,
+          "unique_patients_any_repair": 23
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 7,
+          "unique_patients_any_damage": 6,
+          "unchanged": 191,
+          "unique_patients_any_unchanged": 51,
+          "repair": 6,
+          "unique_patients_any_repair": 5
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.6900154663751701,
+          "error_ap": 0.37310793156646094,
+          "aurc": 0.13308927176863133,
+          "error_count": 226,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.5098263812170758,
+          "error_ap": 0.2585239317372252,
+          "aurc": 0.21927640841921564,
+          "error_count": 226,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5584466177479563,
+          "error_ap": 0.28074278516497453,
+          "aurc": 0.18669057730072622,
+          "error_count": 226,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5941094042538346,
+          "error_ap": 0.29027210433136813,
+          "aurc": 0.1924532682100899,
+          "error_count": 226,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_blur/moderate/R_MLO": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 138,
+        "unique_patients_any_damage": 104,
+        "unchanged": 3694,
+        "unique_patients_any_unchanged": 987,
+        "repair": 116,
+        "unique_patients_any_repair": 82
+      },
+      "accuracy": 0.7740628166160081,
+      "prediction_flips": 256,
+      "all_removals_unchanged_and_parent_wrong": 141,
+      "same_prediction_tv": {
+        "count": 3692,
+        "mean": 0.12680141627788544,
+        "median": 0.1158653125166893,
+        "p90": 0.22287288308143616
+      },
+      "same_prediction_tv_gt_1e_6": 3692,
+      "same_prediction_tv_at_least_0_05": 3214,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.11283764988183975,
+        "median": -0.10906824469566345,
+        "p90": -0.01562618464231491
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.07849179953336716,
+        "median": 0.07495692372322083,
+        "p90": 0.11550962924957275
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 35,
+          "unique_patients_any_damage": 35,
+          "unchanged": 930,
+          "unique_patients_any_unchanged": 930,
+          "repair": 22,
+          "unique_patients_any_repair": 22
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 32,
+          "unique_patients_any_damage": 32,
+          "unchanged": 933,
+          "unique_patients_any_unchanged": 933,
+          "repair": 22,
+          "unique_patients_any_repair": 22
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 25,
+          "unique_patients_any_damage": 25,
+          "unchanged": 944,
+          "unique_patients_any_unchanged": 944,
+          "repair": 18,
+          "unique_patients_any_repair": 18
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 46,
+          "unique_patients_any_damage": 46,
+          "unchanged": 887,
+          "unique_patients_any_unchanged": 887,
+          "repair": 54,
+          "unique_patients_any_repair": 54
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 17,
+          "unique_patients_any_damage": 14,
+          "unchanged": 340,
+          "unique_patients_any_unchanged": 95,
+          "repair": 23,
+          "unique_patients_any_repair": 18
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 72,
+          "unique_patients_any_damage": 49,
+          "unchanged": 1573,
+          "unique_patients_any_unchanged": 425,
+          "repair": 55,
+          "unique_patients_any_repair": 41
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 42,
+          "unique_patients_any_damage": 35,
+          "unchanged": 1591,
+          "unique_patients_any_unchanged": 416,
+          "repair": 31,
+          "unique_patients_any_repair": 18
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 7,
+          "unique_patients_any_damage": 6,
+          "unchanged": 190,
+          "unique_patients_any_unchanged": 51,
+          "repair": 7,
+          "unique_patients_any_repair": 5
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.6995104829432066,
+          "error_ap": 0.38456804798021627,
+          "aurc": 0.12624414350210109,
+          "error_count": 223,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.5077418824689504,
+          "error_ap": 0.23898140480924165,
+          "aurc": 0.21447634608285673,
+          "error_count": 223,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.5731869086469606,
+          "error_ap": 0.2828432125795023,
+          "aurc": 0.1777907702957724,
+          "error_count": 223,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.6225964360340901,
+          "error_ap": 0.31815445978936197,
+          "aurc": 0.17884415814813664,
+          "error_count": 223,
+          "parents": 987
+        }
+      }
+    },
+    "gaussian_blur/moderate/common": {
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 91,
+        "unique_patients_any_damage": 68,
+        "unchanged": 3788,
+        "unique_patients_any_unchanged": 987,
+        "repair": 69,
+        "unique_patients_any_repair": 50
+      },
+      "accuracy": 0.6413373860182371,
+      "prediction_flips": 178,
+      "all_removals_unchanged_and_parent_wrong": 304,
+      "same_prediction_tv": {
+        "count": 3770,
+        "mean": 0.11554282158613205,
+        "median": 0.10625821352005005,
+        "p90": 0.20530852675437927
+      },
+      "same_prediction_tv_gt_1e_6": 3770,
+      "same_prediction_tv_at_least_0_05": 3137,
+      "msp_delta": {
+        "count": 3948,
+        "mean": -0.10679318010807037,
+        "median": -0.10046988725662231,
+        "p90": -0.02345794066786766
+      },
+      "evidential_uncertainty_delta": {
+        "count": 3948,
+        "mean": 0.0751965343952179,
+        "median": 0.0722019150853157,
+        "p90": 0.11017661541700363
+      },
+      "by_removed_view": {
+        "L_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 20,
+          "unique_patients_any_damage": 20,
+          "unchanged": 955,
+          "unique_patients_any_unchanged": 955,
+          "repair": 12,
+          "unique_patients_any_repair": 12
+        },
+        "L_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 24,
+          "unique_patients_any_damage": 24,
+          "unchanged": 942,
+          "unique_patients_any_unchanged": 942,
+          "repair": 21,
+          "unique_patients_any_repair": 21
+        },
+        "R_CC": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 23,
+          "unique_patients_any_damage": 23,
+          "unchanged": 949,
+          "unique_patients_any_unchanged": 949,
+          "repair": 15,
+          "unique_patients_any_repair": 15
+        },
+        "R_MLO": {
+          "parents": 987,
+          "removals": 987,
+          "unique_patients": 987,
+          "damage": 24,
+          "unique_patients_any_damage": 24,
+          "unchanged": 942,
+          "unique_patients_any_unchanged": 942,
+          "repair": 21,
+          "unique_patients_any_repair": 21
+        }
+      },
+      "by_density": {
+        "0": {
+          "parents": 95,
+          "removals": 380,
+          "unique_patients": 95,
+          "damage": 3,
+          "unique_patients_any_damage": 2,
+          "unchanged": 373,
+          "unique_patients_any_unchanged": 95,
+          "repair": 4,
+          "unique_patients_any_repair": 3
+        },
+        "1": {
+          "parents": 425,
+          "removals": 1700,
+          "unique_patients": 425,
+          "damage": 52,
+          "unique_patients_any_damage": 40,
+          "unchanged": 1596,
+          "unique_patients_any_unchanged": 425,
+          "repair": 52,
+          "unique_patients_any_repair": 40
+        },
+        "2": {
+          "parents": 416,
+          "removals": 1664,
+          "unique_patients": 416,
+          "damage": 24,
+          "unique_patients_any_damage": 17,
+          "unchanged": 1631,
+          "unique_patients_any_unchanged": 416,
+          "repair": 9,
+          "unique_patients_any_repair": 4
+        },
+        "3": {
+          "parents": 51,
+          "removals": 204,
+          "unique_patients": 51,
+          "damage": 12,
+          "unique_patients_any_damage": 9,
+          "unchanged": 188,
+          "unique_patients_any_unchanged": 51,
+          "repair": 4,
+          "unique_patients_any_repair": 3
+        }
+      },
+      "rankings": {
+        "msp": {
+          "error_auroc": 0.6558491980614239,
+          "error_ap": 0.4941168953947548,
+          "aurc": 0.24616631273381126,
+          "error_count": 354,
+          "parents": 987
+        },
+        "score_sensitivity": {
+          "error_auroc": 0.40134638212797097,
+          "error_ap": 0.3132752252372915,
+          "aurc": 0.4311719916134798,
+          "error_count": 354,
+          "parents": 987
+        },
+        "probability_tv": {
+          "error_auroc": 0.6078980016244053,
+          "error_ap": 0.43796128510677673,
+          "aurc": 0.26510611910713094,
+          "error_count": 354,
+          "parents": 987
+        },
+        "prediction_flip_fraction": {
+          "error_auroc": 0.5353776742442499,
+          "error_ap": 0.3846333419266804,
+          "aurc": 0.3412387185999374,
+          "error_count": 354,
+          "parents": 987
+        }
+      }
+    }
+  },
+  "strata": {
+    "clean": {
+      "cells": 1,
+      "support": {
+        "parents": 987,
+        "removals": 3948,
+        "unique_patients": 987,
+        "damage": 103,
+        "unique_patients_any_damage": 79,
+        "unchanged": 3758,
+        "unique_patients_any_unchanged": 987,
+        "repair": 87,
+        "unique_patients_any_repair": 61
+      },
+      "mean_cell_aurc": {
+        "msp": 0.12112607286443756,
+        "score_sensitivity": 0.2168452384401696,
+        "probability_tv": 0.20297043518402416,
+        "prediction_flip_fraction": 0.18884930185712165
+      }
+    },
+    "single_view_stress": {
+      "cells": 16,
+      "support": {
+        "parents": 15792,
+        "removals": 63168,
+        "unique_patients": 987,
+        "damage": 1994,
+        "unique_patients_any_damage": 302,
+        "unchanged": 59691,
+        "unique_patients_any_unchanged": 987,
+        "repair": 1483,
+        "unique_patients_any_repair": 230
+      },
+      "mean_cell_aurc": {
+        "msp": 0.12384889742115088,
+        "score_sensitivity": 0.21921718970980492,
+        "probability_tv": 0.18762226622832917,
+        "prediction_flip_fraction": 0.187141815088593
+      }
+    },
+    "common_mode_stress": {
+      "cells": 4,
+      "support": {
+        "parents": 3948,
+        "removals": 15792,
+        "unique_patients": 987,
+        "damage": 421,
+        "unique_patients_any_damage": 259,
+        "unchanged": 15006,
+        "unique_patients_any_unchanged": 987,
+        "repair": 365,
+        "unique_patients_any_repair": 228
+      },
+      "mean_cell_aurc": {
+        "msp": 0.17691993843193982,
+        "score_sensitivity": 0.3036289690032316,
+        "probability_tv": 0.2229950235233864,
+        "prediction_flip_fraction": 0.24893784053915605
+      }
+    }
+  },
+  "provenance": {
+    "role": "confidence_fit",
+    "selected_epoch": 38,
+    "selected_artifact_sha256": "71886fe190017f056ca13e68d72d8b903dc5e037720e90b67d70d60e2928337a",
+    "checkpoint_sha256": "36ac4403b5db4c1d30b4f268b68fff28f888f7d4ec734ba9aa72fb66e29d68c9",
+    "manifest_sha256": "9e704119168018cdca73bb89fa3eed5a6b53633a15c8bba2500fb7524b14aa3f",
+    "config_sha256": "d29d7a373ecb6739af0f5923588314da451d8b69c39a66e43b83138b373a3d8a",
+    "plan_sha256": "7ba2d88a3bedd9eb1cc04f52d79bb7a18bc386c3332db15bdf16ff68da4291fb",
+    "source_commit": "b806c4aa55746337627d45a7009693b342f35170",
+    "frozen_model_unchanged": true,
+    "clean_preprocessing_exact": true,
+    "first_batch_original_forward_exact_all_five_variants": true,
+    "all_clean_fused_scores_equal_original_minibatches": true,
+    "private_logits_sha256": "33478ae808dad6027f83a68fb2da556fe343d02fccc7760bd8764b29e6ce2932",
+    "private_rows_sha256": "d71f12c9628481b051d45ca20727ce1a9e7fbf5682a55a82b3d9e31ac5bd5575",
+    "private_removal_results_sha256": "109ce90d64f2658cc15b3dc76d8248ed33ea752d28ccd8cca182ce1da3498fa7",
+    "pilot_or_test_outcomes_accessed": false,
+    "elapsed_seconds": 414.89019043999724
+  }
+}

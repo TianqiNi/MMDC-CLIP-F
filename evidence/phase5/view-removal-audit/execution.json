@@ -1,0 +1,10 @@
+{
+  "exit_code": 0,
+  "source_commit": "b806c4aa55746337627d45a7009693b342f35170",
+  "started_at_utc": "2026-09-30T19:13:01.404375+00:00",
+  "ended_at_utc": "2026-09-30T19:19:58.049651+00:00",
+  "elapsed_seconds": 416.64530292496784,
+  "subagents": false,
+  "role": "confidence_fit",
+  "pilot_or_test_outcomes_accessed": false
+}

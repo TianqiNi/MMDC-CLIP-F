@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "reviewed_source_commit": "b806c4aa55746337627d45a7009693b342f35170",
+  "exact_private_hashes_verified": true,
+  "patient_exam_count": 987,
+  "cells": 21,
+  "removals": 82908,
+  "correctness_effects_recomputed_from_predictions_and_labels": true,
+  "patient_support_and_class_counts_verified": true,
+  "review_mode": "orchestrator; no independent subagent",
+  "source_ci_runs": [
+    36764155982,
+    36764161141
+  ],
+  "source_ci": "both passed",
+  "real_run_exit_code": 0
+}
