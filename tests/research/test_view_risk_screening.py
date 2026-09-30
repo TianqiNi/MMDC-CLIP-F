@@ -190,3 +190,6 @@ def test_private_screening_runner_resumes_saved_epoch_and_finishes_all_nine_runs
         assert run['training']['completed_epoch'] == 20
         assert run['training']['update_count'] == 20
         assert [x['epoch'] for x in run['history']] == list(range(1, 21))
+    runner.main()  # accepted completed runs must retain all shared cache evidence
+    cache_bindings = json.loads((private / 'cache-bindings.json').read_text())
+    assert len(cache_bindings) == 17 + 3 * 20

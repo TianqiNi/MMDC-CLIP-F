@@ -381,6 +381,25 @@ def main():
                     raise TimeoutError('screening time budget reached after a completed method')
         encoder._assert_text_inputs_unchanged()
         encoder._assert_weights_unchanged(verify_content=True)
+        # A continuation may skip already-completed methods. Rebind every shared
+        # training cache independently of which loaders ran in this invocation.
+        for seed in plan['seeds']:
+            for epoch in range(1, plan['epochs'] + 1):
+                name = f'fit-seed-{seed}-epoch-{epoch:02d}'
+                draws = build_training_schedule(fit, epoch=epoch, seed=seed)
+                expected = {**run_binding, 'role': 'confidence_fit',
+                    'manifest_sha256': manifests['confidence-fit'].manifest_sha256,
+                    'seed': seed, 'epoch': epoch,
+                    'ordered_rows_sha256': digest([r.exam_key for r in fit]),
+                    'draws_sha256': digest([x.draw.to_dict() for x in draws])}
+                metadata = json.loads((cache / f'{name}.json').read_text())
+                if metadata['binding'] != expected or metadata['tensors_sha256'] != sha256_file(
+                    cache / f'{name}.safetensors'
+                ):
+                    raise ValueError('final training cache evidence is stale or incomplete')
+                cache_bindings[name] = metadata
+        if len(cache_bindings) != 17 + len(plan['seeds']) * plan['epochs']:
+            raise ValueError('final screening cache evidence count is incomplete')
         write_json(private / 'cache-bindings.json', cache_bindings)
         summary = {'version': plan['version'], 'evidence_kind': 'development_screening_only',
             'provenance': {**run_binding, 'source_commit': source,
