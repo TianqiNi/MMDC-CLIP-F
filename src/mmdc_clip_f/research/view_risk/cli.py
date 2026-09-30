@@ -224,6 +224,10 @@ def add_view_risk_subparsers(subparsers: argparse._SubParsersAction) -> None:
     classifier_select.add_argument("--image-root", required=True)
     classifier_select.add_argument("--output", required=True)
     classifier_select.add_argument("--device", default="cpu")
+    classifier_select.add_argument("--image-workers", type=int, default=0)
+    classifier_select.add_argument("--prefetch-batches", type=int, default=2)
+    classifier_select.add_argument("--tune-cache-mib", type=int, default=0,
+                                   help="RAM budget for reusing deterministic tune tensors; 0 disables")
 
     control = subparsers.add_parser(
         "view-risk-fit-control",
@@ -1533,6 +1537,9 @@ def run_view_risk_command(args: argparse.Namespace) -> dict[str, object] | None:
             image_root=args.image_root,
             config=config,
             device=args.device,
+            image_workers=args.image_workers,
+            prefetch_batches=args.prefetch_batches,
+            tune_cache_bytes=args.tune_cache_mib * 1024 * 1024,
         )
         return {
             "status": "classifier_selected",

@@ -1,0 +1,14 @@
+{
+  "base_commit": "406ba08",
+  "red": "New exact tune-cache regression failed because tune_cache_bytes was not implemented.",
+  "green": "All 299 research tests passed in 55.15 seconds, including exact 50-checkpoint NLL equality, one-time decoding, memory bounds, empty tune rejection and the parallel cached selection CLI.",
+  "ruff": "passed",
+  "compileall": "passed",
+  "scientific_changes": "none; original 50 candidates, tune cohort, batch size, transforms and multiclass-NLL selection are unchanged",
+  "execution_options": {
+    "image_workers": 12,
+    "prefetch_batches": 2,
+    "tune_cache_mib": 1024
+  },
+  "subagents": false
+}

@@ -44,6 +44,7 @@ from mmdc_clip_f.research.view_risk.production import (
     load_tensor_checkpoint_state,
     reload_verified_public_classifier,
     role_image_batch_loader,
+    evaluate_classifier_checkpoints_with_role_access,
     save_classifier_fit_artifact,
     save_confidence_fit_artifact,
     save_public_initialization_artifact,
@@ -189,6 +190,56 @@ def _software_fixture(tmp_path, *, namespace="RSNA-SMBC"):
         )
     audit = audit_software_fixture(tuple(manifests))
     return tuple(manifests), audit
+
+
+def test_tune_tensor_reuse_preserves_all_nlls_and_checks_budget_and_role(tmp_path):
+    from mmdc_clip_f.research.view_risk.production import default_private_image_reader
+
+    manifests, _ = _software_fixture(tmp_path)
+    tune = manifests[2]
+    config = ResearchRunConfig.default("RSNA")
+
+    class Tiny(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.bias = nn.Parameter(torch.arange(4, dtype=torch.float32))
+
+        def forward(self, views, _tokens):
+            feature = torch.stack([v.mean((1, 2, 3)) for v in views.values()]).mean(0)
+            return feature[:, None] * self.bias[None, :]
+
+    model = Tiny()
+    checkpoints = {}
+    for epoch in config.classifier_schedule.checkpoint_epochs:
+        with torch.no_grad():
+            model.bias.add_(0.01 * torch.arange(4))
+        checkpoints[epoch] = save_tensor_checkpoint(model, tmp_path / f"epoch-{epoch}.safetensors")
+    reads = []
+
+    def reader(record, view, root):
+        reads.append((record.exam_key, view))
+        return default_private_image_reader(record, view, root)
+
+    kwargs = dict(model=model, input_ids=torch.zeros(4, 1, dtype=torch.long),
+                  checkpoint_paths=checkpoints, image_root=tmp_path, config=config,
+                  image_reader=reader)
+    serial = evaluate_classifier_checkpoints_with_role_access(manifest=tune, **kwargs)
+    assert len(reads) == 50 * 4
+    reads.clear()
+    cached = evaluate_classifier_checkpoints_with_role_access(
+        manifest=tune, tune_cache_bytes=4 * 3 * 224 * 224 * 4 + 8, **kwargs,
+    )
+    assert serial == cached
+    assert len(reads) == 4
+    reads.clear()
+    with pytest.raises(ValueError, match="cache budget"):
+        evaluate_classifier_checkpoints_with_role_access(manifest=tune, tune_cache_bytes=1, **kwargs)
+    assert reads == []
+    with pytest.raises(PermissionError):
+        evaluate_classifier_checkpoints_with_role_access(
+            manifest=manifests[0], tune_cache_bytes=10_000_000, **kwargs,
+        )
+    assert reads == []
 
 
 def test_self_hashed_status_cannot_forge_real_readiness(tmp_path) -> None:
@@ -765,6 +816,8 @@ def test_role_bound_image_fit_and_tune_selection_are_connected(tmp_path, monkeyp
                 "--private-root", str(tmp_path),
                 "--image-root", str(tmp_path),
                 "--output", str(tmp_path / "workflow-selected.json"),
+                "--image-workers", "2",
+                "--tune-cache-mib", "4",
             ]
         )
     )

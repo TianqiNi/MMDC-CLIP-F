@@ -1544,6 +1544,9 @@ def evaluate_classifier_checkpoints_with_role_access(
     checkpoint_paths: Mapping[int, str | Path],
     image_root: str | Path,
     config: ResearchRunConfig,
+    image_workers: int = 0,
+    prefetch_batches: int = 2,
+    tune_cache_bytes: int = 0,
     image_reader: Callable[
         [PrivateExamRecord, str, str | Path], Image.Image
     ] = default_private_image_reader,
@@ -1561,7 +1564,29 @@ def evaluate_classifier_checkpoints_with_role_access(
         raise ValueError("classifier model has no parameters") from exc
     input_ids = input_ids.to(device)
 
-    def authorized(records: tuple[PrivateExamRecord, ...]) -> tuple[ClassifierTuneCheckpoint, ...]:
+    def evaluate(records, pool) -> tuple[ClassifierTuneCheckpoint, ...]:
+        if not records:
+            raise PermissionError("classifier selection requires authorized tune records")
+        image_size = pinned_public_clip_configuration(config.backbone).image_size
+        if (isinstance(tune_cache_bytes, bool) or not isinstance(tune_cache_bytes, int)
+                or tune_cache_bytes < 0):
+            raise ValueError("tune cache budget must be a nonnegative integer")
+        # Float32 RGB tensors for four views, plus int64 labels. No raw images
+        # or checkpoint-dependent features are retained in this optional cache.
+        required_bytes = len(records) * (4 * 3 * image_size * image_size * 4 + 8)
+        if tune_cache_bytes and required_bytes > tune_cache_bytes:
+            raise ValueError("tune images exceed the requested cache budget")
+
+        def batches(epoch):
+            return role_image_batch_loader(
+                records, image_root=image_root, image_size=image_size,
+                optimizer=schedule.optimizer, augmentation=schedule.augmentation,
+                epoch=epoch, seed=schedule.seed, training=False, image_reader=image_reader,
+                image_workers=image_workers, prefetch_batches=prefetch_batches,
+                pin_memory=device.type == "cuda" and image_workers > 0, _image_pool=pool,
+            )
+
+        cached = tuple(batches(1)) if tune_cache_bytes else None
         expected_keys = {record.exam_key for record in records}
         results = []
         for epoch in schedule.checkpoint_epochs:
@@ -1573,27 +1598,18 @@ def evaluate_classifier_checkpoints_with_role_access(
             count = 0
             seen: set[str] = set()
             with torch.no_grad():
-                for batch in role_image_batch_loader(
-                    records,
-                    image_root=image_root,
-                    image_size=pinned_public_clip_configuration(config.backbone).image_size,
-                    optimizer=schedule.optimizer,
-                    augmentation=schedule.augmentation,
-                    epoch=epoch,
-                    seed=schedule.seed,
-                    training=False,
-                    image_reader=image_reader,
-                ):
+                for batch in cached if cached is not None else batches(epoch):
                     if not isinstance(batch.payload, ClassifierImageBatch):
                         raise TypeError("classifier tune batch is invalid")
                     if any(key in seen for key in batch.exam_keys):
                         raise ValueError("classifier tune cohort contains duplicate exposure")
                     seen.update(batch.exam_keys)
                     logits = model(
-                        {name: value.to(device) for name, value in batch.payload.views.items()},
+                        {name: value.to(device, non_blocking=image_workers > 0)
+                         for name, value in batch.payload.views.items()},
                         input_ids,
                     )
-                    labels = batch.payload.labels.to(device)
+                    labels = batch.payload.labels.to(device, non_blocking=image_workers > 0)
                     total += float(F.cross_entropy(logits, labels, reduction="sum"))
                     count += labels.numel()
             if seen != expected_keys or count != len(records):
@@ -1602,6 +1618,10 @@ def evaluate_classifier_checkpoints_with_role_access(
                 ClassifierTuneCheckpoint(epoch, sha256_file(checkpoint), total / count)
             )
         return tuple(results)
+
+    def authorized(records):
+        with image_worker_pool(image_workers) as pool:
+            return evaluate(records, pool)
 
     return run_with_role_access(
         manifest,
@@ -1620,6 +1640,9 @@ def select_classifier_from_images_with_role_access(
     image_root: str | Path,
     config: ResearchRunConfig,
     device: str | torch.device = "cpu",
+    image_workers: int = 0,
+    prefetch_batches: int = 2,
+    tune_cache_bytes: int = 0,
     image_reader: Callable[
         [PrivateExamRecord, str, str | Path], Image.Image
     ] = default_private_image_reader,
@@ -1642,6 +1665,9 @@ def select_classifier_from_images_with_role_access(
         image_root=image_root,
         config=config,
         image_reader=image_reader,
+        image_workers=image_workers,
+        prefetch_batches=prefetch_batches,
+        tune_cache_bytes=tune_cache_bytes,
     )
     selected = select_fresh_classifier_on_tune(
         tune_manifest,
