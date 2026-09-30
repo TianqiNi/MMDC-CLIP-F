@@ -1,0 +1,12 @@
+{
+  "exit_code": 0,
+  "started_at_utc": "2026-09-30T14:37:13.817251+00:00",
+  "ended_at_utc": "2026-09-30T14:45:51.001873+00:00",
+  "elapsed_seconds": 517.1846274989657,
+  "source_commit": "d3d6a4de43d327e0a8a0d3f0cee1b5dcf848a407",
+  "image_workers": 12,
+  "prefetch_batches": 2,
+  "tune_cache_mib": 1024,
+  "role": "tune",
+  "test_outcomes_accessed": false
+}

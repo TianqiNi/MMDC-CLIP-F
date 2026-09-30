@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "selected_epoch": 38,
+  "selected_artifact_sha256": "71886fe190017f056ca13e68d72d8b903dc5e037720e90b67d70d60e2928337a",
+  "selected_checkpoint_sha256": "36ac4403b5db4c1d30b4f268b68fff28f888f7d4ec734ba9aa72fb66e29d68c9",
+  "selection_metric": "multiclass_nll",
+  "selected_tune_nll": 0.5233959398962356,
+  "candidate_count": 50,
+  "tie_break": "earlier epoch",
+  "tune_manifest_sha256": "ca7e9cb6bb9cf5ad92b955f23e7c3a1d6fb90eb38d2ae7e08fd977b353bf14b8",
+  "development_only": true,
+  "pilot_or_test_outcomes_accessed": false
+}

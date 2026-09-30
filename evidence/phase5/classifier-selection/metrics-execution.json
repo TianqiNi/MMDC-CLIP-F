@@ -1,0 +1,9 @@
+{
+  "exit_code": 0,
+  "started_at_utc": "2026-09-30T14:46:11.724160+00:00",
+  "ended_at_utc": "2026-09-30T14:51:33.056735+00:00",
+  "elapsed_seconds": 321.33257856202545,
+  "source_commit": "d3d6a4de43d327e0a8a0d3f0cee1b5dcf848a407",
+  "role": "tune",
+  "test_outcomes_accessed": false
+}

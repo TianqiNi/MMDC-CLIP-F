@@ -8,14 +8,18 @@ source, tests, CI and dependencies are unchanged by integration. Publication, pa
 `evidence/phase4/p4-publication.json`; the current handoff is
 `evidence/phase4/handoff.json`.
 
-**P5A is in progress.** RSNA readiness and the original classifier schedule are
-accepted. Fifteen classifier epochs have saved checkpoints; training resumed from
-epoch 15 with validated parallel preprocessing on 2026-09-29. The short real CUDA
-benchmark was 5.9 times faster with identical final model, Adam and RNG state.
-Full training, tune-only selection, confidence fitting and the uncertainty pilot
-remain pending. MINI-DDSM patient mapping is still blocked; test outcomes remain
-locked. The hourly monitor is disabled and no further AI subagents are authorized.
-Current continuation: `evidence/phase5/handoff.json`.
+**P5A is complete for RSNA ViT-B/32.** All 50 classifier epochs were validated;
+epoch 38 was selected by minimum NLL on 370 tune patients. A separate pass
+reproduced NLL 0.5234 and measured accuracy 78.38%, macro-F1 0.6583 and quadratic
+weighted kappa 0.7812. Class-D recall is weak: 4/19 (21.05%). These are tune
+selection diagnostics, not held-out or uncertainty-method results. See
+[evidence and interpretation](../../evidence/phase5/classifier-selection/results.md).
+P5B confidence fitting and P5C uncertainty comparisons remain pending. First,
+audit clean/stressed view-removal target support on confidence-fit data: shared
+labels do not guarantee unchanged predictions, but redundancy may make the
+proposed auxiliary signal too sparse. MINI-DDSM patient mapping remains blocked.
+Test outcomes remain locked; monitoring and AI subagents remain disabled.
+Current handoff: `evidence/phase5/handoff.json`.
 
 Scope is the single intervention-supervised confidence project described in
 [view_risk_protocol.md](view_risk_protocol.md). Related evidence-gating and
@@ -101,7 +105,7 @@ not failed or complete.
 | P4A — metrics and paired inference | AURC/tie policy, both AP orientations, risk at coverage, Brier, effects, patient-paired bootstrap and seed summaries; depends on accepted P3. | Hand-computable ranking/tie/sign fixtures; one-class AP handling; all variants retained within patient clusters; paired difference and seed/patient separation. | Accepted task: fresh review PASS at `6d2da0f`; 223 tests at task acceptance; G4 passed at `9984a16`. |
 | P4B — training/evaluation/CLI | Explicit role access, fresh-classifier initialization path, confidence fitting, tune selection, immutable pilot plan and lock enforcement; depends on P4A and P2/P3 artifacts. | Forbidden-role negative tests; deterministic resume/provenance; regenerated targets; fresh public CLIP versus diagnostic checkpoint distinction; no test-selection bypass. | Accepted task: fresh review8 PASS at `94c0e4a`; 261 tests; source integrated at `02c5223`. P4C and G4 are now accepted. |
 | P4C — smoke integration and costs | End-to-end synthetic tiny run plus external-resource preflight; depends on P4B. | Synthetic nonempty masks and corruptions flow through target/head/control/metrics; CLI/config sanity; CPU smoke feasible without downloading weights; latency/memory procedure ready. Smoke outputs labeled non-scientific. | Accepted: fresh review PASS at `4a4ce51`; 269 research tests; G4 PASS at `9984a16`. |
-| P5A — fresh classifier pilot prerequisite | Audit real external resources; fit classifier only on classifier-fit, select on tune, freeze checkpoint; depends on accepted P4. | Public pinned initialization, permitted-role exposure log, actual counts, checkpoint/manifest hashes, verified predictions; original checkpoint results diagnostic only. | In progress: RSNA readiness and original schedule accepted; classifier resumed from epoch 15 with validated parallel preprocessing; full fit and tune selection pending. |
+| P5A — fresh classifier pilot prerequisite | Audit real external resources; fit classifier only on classifier-fit, select on tune, freeze checkpoint; depends on accepted P4. | Public pinned initialization, permitted-role exposure log, actual counts, checkpoint/manifest hashes, verified predictions; original checkpoint results diagnostic only. | Accepted for RSNA ViT-B/32: 50 epochs validated; epoch 38 selected on tune; diagnostic NLL reproduced. MINI-DDSM prerequisite remains blocked. |
 | P5B — confidence/control fitting and freeze | Fit candidate and mandatory controls with matched draws/budgets, tune only, freeze evaluation table; depends on P5A. | Actual run/seed completion; candidate/control selections and hashes; no pilot/test exposure; incomplete controls disclosed. | Pending. |
 | P5C — measured pilot and go/no-go | Run frozen non-test pilot; report primary/clean/secondary endpoints, paired intervals, seed spread, cost and limitations; depends on P5B. | Actual measurements against all mandatory controls; apply 10% target/0.005 clean guardrail and validity rules; go/no-go/inconclusive justified without test inspection. | Pending; no measured pilot or success claim. |
 
@@ -569,3 +573,13 @@ optimized detached trainer resumes epoch 16 and targets epoch 50 with 12 workers
 and two prefetched batches. Its launch is recorded in
 `evidence/phase5/hardware-pipeline/launch.json`. Scheduled monitoring remains
 disabled. Final fit validation, tune selection and P5B/P5C are still pending.
+
+## P5A completed classifier and tune selection — 2026-09-30
+
+Source commit `d3d6a4de43d327e0a8a0d3f0cee1b5dcf848a407` preserves the original
+selection rule while optionally reusing deterministic tune tensors. All 299
+research tests and both remote CI runs passed. The orchestrator reviewed the
+exact commit; no independent-agent review is claimed because the user prohibited
+further agents. Final-fit, selection and tune diagnostics passed; aggregate
+evidence is under `evidence/phase5/classifier-selection/`. Historical entries
+above describe earlier states. No pilot or locked test outcomes were used.

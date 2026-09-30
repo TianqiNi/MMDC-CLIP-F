@@ -1,0 +1,31 @@
+{
+  "status": "PASS",
+  "checked_at_utc": "2026-09-30T14:36:59.178308+00:00",
+  "review_mode": "orchestrator; no subagents",
+  "completed_epoch": 50,
+  "update_count": 53500,
+  "classifier_fit_patients": 3209,
+  "fit_artifact_sha256": "8ce302531df43597c97cc39dd3aff02dcbfbc912362b5c573464a6ede558ce85",
+  "config_sha256": "d29d7a373ecb6739af0f5923588314da451d8b69c39a66e43b83138b373a3d8a",
+  "classifier_schedule_sha256": "0b94cef276cf26903a6bafd1a1ee89d5823fd2d9decc5f5f941421a97e72358b",
+  "checkpoint_count": 50,
+  "finite_model_tensors_across_checkpoints": 19900,
+  "latest_model_resume_equal": true,
+  "latest_model_tensor_count": 398,
+  "finite_optimizer_tensors": 1194,
+  "resume_sha256": "42aee763852d6e9f4414d8ee1b2ee90e81b9b1d8d43534a9265a26518459dbbb",
+  "next_epoch": 51,
+  "rng_components": [
+    "cuda",
+    "numpy_cached_gaussian",
+    "numpy_has_gauss",
+    "numpy_keys",
+    "numpy_name",
+    "numpy_position",
+    "python",
+    "torch"
+  ],
+  "parallel_run_seconds": 21191.918204998015,
+  "validation_seconds": 151.45660114398925,
+  "selection_or_test_outcomes_accessed": false
+}
